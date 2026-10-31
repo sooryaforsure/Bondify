@@ -139,12 +139,8 @@ function showDashboard() {
   document.getElementById('auth-view').classList.add('hidden');
   document.getElementById('dashboard-view').classList.remove('hidden');
 
-  // Activate Super Admin Royal Amethyst theme if role is SUPER_ADMIN
-  if (currentUser.role === 'SUPER_ADMIN') {
-    document.body.classList.add('theme-super-admin');
-  } else {
-    document.body.classList.remove('theme-super-admin');
-  }
+  // Unified 3-color palette applied everywhere
+  document.body.classList.remove('theme-super-admin');
 
   // Update Top Bar Profile Info
   document.getElementById('user-display-name').textContent = currentUser.fullName;
@@ -180,13 +176,13 @@ function showDashboard() {
         <i class="fa-solid fa-shuffle"></i><span>Random Audio/Video</span>
       </button>
       <button onclick="switchNormalTab('events')" id="norm-tab-events" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-calendar-days text-amber-400"></i><span>Nearby Events</span>
+        <i class="fa-solid fa-calendar-days text-blue-400"></i><span>Nearby Events</span>
       </button>
       <button onclick="switchNormalTab('celebrity')" id="norm-tab-celebrity" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-star text-pink-400"></i><span>Celebrity Hub</span>
+        <i class="fa-solid fa-star text-blue-400"></i><span>Celebrity Hub</span>
       </button>
       <button onclick="switchNormalTab('support')" id="norm-tab-support" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-comments text-emerald-400"></i><span>Customer Care</span>
+        <i class="fa-solid fa-comments text-blue-400"></i><span>Customer Care</span>
       </button>
     `;
 
@@ -202,14 +198,14 @@ function showDashboard() {
     celebEarningsArea.classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <button onclick="switchCelebrityTab('calls')" id="celeb-tab-btn-calls" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-pink-600 text-white flex items-center gap-1.5 shadow-lg shadow-pink-900/40 transition">
+      <button onclick="switchCelebrityTab('calls')" id="celeb-tab-btn-calls" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white flex items-center gap-1.5 shadow transition">
         <i class="fa-solid fa-phone-volume"></i><span>Fan Calls Desk</span>
       </button>
       <button onclick="switchCelebrityTab('feed')" id="celeb-tab-btn-feed" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-photo-film text-purple-400"></i><span>Fan Media Feed</span>
+        <i class="fa-solid fa-photo-film text-blue-400"></i><span>Fan Media Feed</span>
       </button>
       <button onclick="switchCelebrityTab('support')" id="celeb-tab-btn-support" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-headset text-emerald-400"></i><span>VIP Helpdesk (Rahul)</span>
+        <i class="fa-solid fa-headset text-blue-400"></i><span>VIP Helpdesk (Rahul)</span>
       </button>
     `;
 
@@ -221,11 +217,11 @@ function showDashboard() {
     document.getElementById('dashboard-organization').classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-950/40 border border-amber-500/30 flex items-center gap-1.5 shadow">
-        <i class="fa-solid fa-building"></i><span>Event Organizer Console</span>
+      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 flex items-center gap-1.5 shadow">
+        <i class="fa-solid fa-building text-blue-400"></i><span>Event Organizer Console</span>
       </span>
       <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
-        <i class="fa-solid fa-ticket text-amber-400"></i>
+        <i class="fa-solid fa-ticket text-blue-400"></i>
         <span>Publish events & scan gate QR codes</span>
       </span>
     `;
@@ -238,8 +234,8 @@ function showDashboard() {
     document.getElementById('dashboard-support').classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-1.5 shadow">
-        <i class="fa-solid fa-headset"></i><span>Helpdesk Executive</span>
+      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 flex items-center gap-1.5 shadow">
+        <i class="fa-solid fa-headset text-blue-400"></i><span>Helpdesk Executive</span>
       </span>
       <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
         <span>Active Live Queries Stream</span>
@@ -254,11 +250,11 @@ function showDashboard() {
     document.getElementById('dashboard-admin').classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-purple-950/60 border border-purple-500/40 flex items-center gap-2 shadow">
-        <i class="fa-solid fa-crown text-amber-400"></i><span>Super Admin Control Terminal</span>
+      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 flex items-center gap-2 shadow">
+        <i class="fa-solid fa-crown text-blue-400"></i><span>Super Admin Control Terminal</span>
       </span>
-      <span class="text-xs text-purple-300/80 flex items-center gap-1 py-1.5 font-medium">
-        <i class="fa-solid fa-shield-halved text-purple-400"></i>
+      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5 font-medium">
+        <i class="fa-solid fa-shield-halved text-blue-400"></i>
         <span>Root System Security • High Privilege Mode</span>
       </span>
     `;
@@ -324,35 +320,35 @@ function renderCelebrityCallControls() {
 
   if (!currentUser.isPremium) {
     container.innerHTML = `
-      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-left">
-        <p class="text-xs font-bold text-amber-400 mb-1 flex items-center gap-1">
+      <div class="bg-blue-950/30 border border-blue-500/30 rounded-xl p-3 text-left">
+        <p class="text-xs font-bold text-blue-400 mb-1 flex items-center gap-1">
           <i class="fa-solid fa-lock"></i>
           <span>VIP Calling Locked (പ്രീമിയം ലോക്ക്ഡ്)</span>
         </p>
         <p class="text-[11px] text-slate-300 leading-snug mb-3">
           സെലിബ്രിറ്റികളെ നേരിട്ട് ഓഡിയോ/വീഡിയോ കോളിൽ വിളിക്കാൻ പ്രീമിയം സബ്‌സ്‌ക്രിപ്ഷൻ ആവശ്യമാണ്.
         </p>
-        <button onclick="unlockPremiumSubscription()" class="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition">
+        <button onclick="unlockPremiumSubscription()" class="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition">
           Unlock VIP Calls (₹199 / Month)
         </button>
       </div>
     `;
   } else {
     container.innerHTML = `
-      <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-left mb-2">
-        <p class="text-xs font-bold text-emerald-400 flex items-center gap-1">
+      <div class="bg-blue-950/30 border border-blue-500/30 rounded-xl p-3 text-left mb-2">
+        <p class="text-xs font-bold text-blue-400 flex items-center gap-1">
           <i class="fa-solid fa-crown"></i>
           <span>VIP Direct Access Unlocked!</span>
         </p>
         <p class="text-[10px] text-slate-300">You have full access to connect with Dulquer Sithara.</p>
       </div>
       <div class="flex gap-2">
-        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_AUDIO')" class="flex-1 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
+        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_AUDIO')" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
           <i class="fa-solid fa-phone"></i>
           <span>VIP Audio</span>
         </button>
-        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_VIDEO')" class="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
-          <i class="fa-solid fa-video"></i>
+        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_VIDEO')" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
+          <i class="fa-solid fa-video text-blue-400"></i>
           <span>VIP Video</span>
         </button>
       </div>
@@ -611,7 +607,7 @@ function switchCelebrityTab(tabId) {
   });
   const activeBtn = document.getElementById(`celeb-tab-btn-${tabId}`);
   if (activeBtn) {
-    activeBtn.className = 'celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-pink-600 text-white flex items-center gap-1.5 shadow-lg shadow-pink-900/40 transition';
+    activeBtn.className = 'celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white flex items-center gap-1.5 shadow transition';
   }
 
   document.querySelectorAll('.celeb-section').forEach(sec => sec.classList.add('hidden'));
@@ -999,89 +995,89 @@ async function loadAdminMetrics() {
     if (data.success) {
       const m = data.metrics;
       document.getElementById('admin-metrics-grid').innerHTML = `
-        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
           <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Total Ecosystem Users</span>
-            <span class="w-8 h-8 rounded-xl bg-purple-600/30 text-purple-300 flex items-center justify-center text-sm border border-purple-400/30">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Ecosystem Users</span>
+            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
               <i class="fa-solid fa-users"></i>
             </span>
           </div>
           <p class="text-2xl font-black text-white mt-1">${m.totalUsers}</p>
-          <p class="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
+          <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
             <i class="fa-solid fa-arrow-trend-up"></i>
             <span>+100% Verified Accounts</span>
           </p>
         </div>
 
-        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
           <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Active Geo Events</span>
-            <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm border border-amber-400/30">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Active Geo Events</span>
+            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
               <i class="fa-solid fa-calendar-days"></i>
             </span>
           </div>
-          <p class="text-2xl font-black text-amber-400 mt-1">${m.totalEvents}</p>
-          <p class="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
+          <p class="text-2xl font-black text-white mt-1">${m.totalEvents}</p>
+          <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
             <i class="fa-solid fa-ticket"></i>
             <span>${m.totalBookings} Passes Sold</span>
           </p>
         </div>
 
-        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
           <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Verified Celebrities</span>
-            <span class="w-8 h-8 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center text-sm border border-pink-400/30">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Verified Celebrities</span>
+            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
               <i class="fa-solid fa-star"></i>
             </span>
           </div>
-          <p class="text-2xl font-black text-pink-400 mt-1">${m.totalCelebrities}</p>
-          <p class="text-[10px] text-pink-400/80 mt-1 flex items-center gap-1">
+          <p class="text-2xl font-black text-white mt-1">${m.totalCelebrities}</p>
+          <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
             <i class="fa-solid fa-shield-halved"></i>
             <span>VIP Video Channels Live</span>
           </p>
         </div>
 
-        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
           <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Gross Platform Revenue</span>
-            <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm border border-emerald-400/30">
+            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Gross Platform Revenue</span>
+            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
               <i class="fa-solid fa-coins"></i>
             </span>
           </div>
-          <p class="text-2xl font-black text-emerald-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
-          <p class="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-            <i class="fa-solid fa-circle-check"></i>
+          <p class="text-2xl font-black text-blue-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
+          <p class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-circle-check text-blue-400"></i>
             <span>Settlement Verified</span>
           </p>
         </div>
       `;
 
       document.getElementById('admin-users-table').innerHTML = allUsers.map(u => `
-        <tr class="hover:bg-purple-950/20 transition">
+        <tr class="hover:bg-blue-950/20 transition">
           <td class="px-5 py-3.5 flex items-center gap-2.5 font-medium">
-            <img src="${u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}" class="w-7 h-7 rounded-full object-cover border border-purple-500/40">
+            <img src="${u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}" class="w-7 h-7 rounded-full object-cover border border-slate-700">
             <div>
               <p class="font-bold text-white text-xs">${u.fullName}</p>
-              <span class="text-[10px] text-purple-300/60 font-mono">${u.id}</span>
+              <span class="text-[10px] text-slate-400 font-mono">${u.id}</span>
             </div>
           </td>
           <td class="px-5 py-3.5 font-mono text-[11px] text-slate-300">${u.phoneNumber}</td>
           <td class="px-5 py-3.5">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'SUPER_ADMIN' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : u.role === 'CELEBRITY' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40' : u.role === 'ORGANIZATION' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'}">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/40 text-blue-300 border border-blue-500/30">
               ${u.role}
             </span>
           </td>
           <td class="px-5 py-3.5">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.isBanned ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.isBanned ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-blue-950/40 text-blue-400 border border-blue-500/30'}">
               ${u.isBanned ? 'Suspended' : 'Active'}
             </span>
           </td>
           <td class="px-5 py-3.5 text-right">
             ${u.role !== 'SUPER_ADMIN' ? `
-              <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-3 py-1 rounded-lg text-[11px] font-bold shadow transition ${u.isBanned ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30'}">
+              <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-3 py-1 rounded-lg text-[11px] font-bold shadow transition ${u.isBanned ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white border border-slate-700'}">
                 ${u.isBanned ? '<i class="fa-solid fa-user-check mr-1"></i>Unban' : '<i class="fa-solid fa-ban mr-1"></i>Ban'}
               </button>
-            ` : '<span class="text-[10px] text-purple-400 font-bold uppercase tracking-wider">Root Protected</span>'}
+            ` : '<span class="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Root Protected</span>'}
           </td>
         </tr>
       `).join('');
