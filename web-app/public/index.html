@@ -11,7 +11,7 @@
   <!-- QR Code Scanning Engine (Camera & File Decoding) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <link rel="stylesheet" href="/style.css?v=12">
+  <link rel="stylesheet" href="/style.css?v=13">
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-white selection:text-black relative">
 
@@ -213,12 +213,16 @@
 
               <!-- Connected State -->
               <div id="call-state-connected" class="hidden flex flex-col items-center py-2">
-                <div id="video-call-viewport" class="hidden w-full max-w-md mb-4 relative rounded-2xl overflow-hidden bg-black aspect-video shadow-xl">
+                <div id="video-call-viewport" class="hidden w-full max-w-md mb-4 relative rounded-2xl overflow-hidden bg-black aspect-video shadow-xl border border-white/20">
                   <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
-                  <div id="remote-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950">
-                    <img id="remote-peer-video-avatar" src="" class="w-16 h-16 rounded-full object-cover border-2 border-purple-500 mb-2">
+                  <div id="remote-video-fallback" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950">
+                    <img id="remote-peer-video-avatar" src="" class="w-16 h-16 rounded-full object-cover border-2 border-white/40 mb-2">
                     <p id="remote-peer-video-name" class="text-xs font-bold text-slate-200">Online Friend</p>
                     <span class="text-[10px] text-emerald-400 mt-1">Live Video Feed</span>
+                  </div>
+                  <div class="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] text-white flex items-center gap-1.5 border border-white/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span id="remote-video-badge-title" class="font-bold">Live Video Feed</span>
                   </div>
                   <div class="absolute bottom-2 right-2 w-24 h-32 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-md">
                     <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
@@ -515,29 +519,51 @@
                 </div>
 
                 <!-- State 4: Active Call Session -->
-                <div id="celeb-active-call-box" class="hidden bg-black/90 rounded-2xl p-5 text-center border border-blue-500/50 shadow-2xl">
+                <div id="celeb-active-call-box" class="hidden bg-black/95 rounded-2xl p-5 text-center border border-white/20 shadow-2xl relative">
                   <div class="flex items-center justify-between mb-3 text-xs">
-                    <span class="text-blue-400 font-bold flex items-center gap-1.5">
-                      <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-                      <span>VIP Video Call Active (Approved)</span>
+                    <span class="text-white font-bold flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      <span>VIP Video Call Active (Live Connected)</span>
                     </span>
-                    <span id="celeb-active-call-timer" class="px-2.5 py-0.5 rounded-full bg-slate-900 text-blue-300 font-mono font-bold text-xs border border-blue-500/30">
+                    <span id="celeb-active-call-timer" class="px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-mono font-bold text-xs border border-white/20">
                       00:00
                     </span>
                   </div>
-                  <div class="w-full h-48 rounded-xl bg-slate-900 overflow-hidden mb-4 relative flex items-center justify-center border border-slate-800">
-                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=250" class="w-24 h-24 rounded-full object-cover border-2 border-blue-400 shadow-xl">
-                    <div class="absolute bottom-2 left-3 bg-black/70 px-2.5 py-1 rounded-md text-[10px] text-slate-200">
-                      Connected: Arjun Nair (Kochi) • VIP Gold
+
+                  <!-- Live Video Viewport for Celebrity -->
+                  <div class="w-full h-72 rounded-xl bg-black overflow-hidden mb-4 relative flex items-center justify-center border border-white/20 shadow-xl">
+                    <!-- Fan's Live Video Feed -->
+                    <video id="celeb-remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
+
+                    <!-- Top Floating Live HUD -->
+                    <div class="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white flex items-center gap-2 border border-white/20 shadow">
+                      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      <span id="celeb-fan-caller-label" class="font-bold">Arjun Nair (VIP Gold Fan)</span>
                     </div>
-                    <div class="absolute top-2 right-3 bg-blue-950/80 border border-blue-500/40 px-2 py-0.5 rounded-md text-[10px] text-blue-300 font-mono font-bold">
+
+                    <div class="absolute top-2 right-2 bg-black/70 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] text-slate-200 border border-white/20 font-mono shadow">
                       75 Coins / Min
                     </div>
+
+                    <!-- Picture-in-Picture: Celebrity's Own Camera Preview -->
+                    <div class="absolute bottom-2 right-2 w-24 h-32 rounded-xl overflow-hidden border border-white/30 bg-slate-900 shadow-2xl">
+                      <video id="celeb-local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                      <div id="celeb-camera-off-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 text-xs">
+                        <i class="fa-solid fa-video-slash mb-1"></i>
+                        <span class="text-[9px]">Camera Off</span>
+                      </div>
+                    </div>
                   </div>
+
+                  <!-- In-Call Control Buttons -->
                   <div class="flex items-center gap-3">
                     <button onclick="toggleCelebrityCallMute()" id="btn-celeb-call-mute" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
                       <i class="fa-solid fa-microphone"></i>
                       <span>Mute</span>
+                    </button>
+                    <button onclick="toggleCelebrityCamera()" id="btn-celeb-camera" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
+                      <i class="fa-solid fa-video"></i>
+                      <span>Camera</span>
                     </button>
                     <button onclick="endCelebrityCall()" class="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 flex items-center justify-center gap-1.5 transition">
                       <i class="fa-solid fa-phone-slash"></i>
@@ -1308,6 +1334,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=12"></script>
+  <script src="/app.js?v=13"></script>
 </body>
 </html>
