@@ -85,16 +85,16 @@
   <div id="dashboard-view" class="hidden flex-1 flex flex-col">
     
     <!-- TOP HEADER -->
-    <header class="bg-[#111928] border-b border-slate-800 sticky top-0 z-50">
+    <header class="bg-[#0e172a]/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 transition-colors duration-300">
       <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         
         <!-- Brand Logo -->
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow">
+          <div id="header-brand-icon" class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md transition-all duration-300">
             FC
           </div>
           <div>
-            <h1 class="text-base font-bold text-white leading-tight">Friends Connect</h1>
+            <h1 id="header-brand-title" class="text-base font-bold text-white leading-tight">Friends Connect</h1>
             <p id="header-role-title" class="text-[11px] text-blue-400 font-semibold"></p>
           </div>
         </div>
@@ -378,127 +378,263 @@
       <div id="dashboard-celebrity" class="hidden space-y-6">
         
         <!-- Celebrity Banner -->
-        <div class="bg-gradient-to-r from-pink-950/40 via-purple-950/30 to-[#111928] border border-pink-500/30 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="fc-glass-card p-6 flex flex-col md:flex-row items-center justify-between gap-4 border border-pink-500/30 bg-gradient-to-r from-pink-950/40 via-purple-950/20 to-[#0d1629]">
           <div class="flex items-center gap-4">
-            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-16 h-16 rounded-full object-cover border-2 border-pink-500 shadow-lg">
+            <div class="relative">
+              <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-16 h-16 rounded-full object-cover border-2 border-pink-500 shadow-xl">
+              <span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-emerald-400 border-2 border-[#111928]"></span>
+            </div>
             <div>
               <div class="flex items-center gap-1.5">
                 <h2 class="text-xl font-bold text-white">Dulquer Sithara</h2>
                 <i class="fa-solid fa-circle-check text-sky-400 text-sm"></i>
               </div>
               <p class="text-xs text-slate-300">Verified Celebrity Artist Console • 350K Followers</p>
-              <p class="text-[11px] text-pink-400 mt-1 font-semibold">സെലിബ്രിറ്റി അക്കൗണ്ട്: ആരാധകരുടെ ഇൻകമിംഗ് കോളുകൾ സ്വീകരിക്കാം</p>
+              <div class="flex items-center gap-3 mt-1.5 text-[11px]">
+                <span class="text-amber-400 font-semibold"><i class="fa-solid fa-coins mr-1"></i>Fan Earnings: ₹18,450</span>
+                <span class="text-pink-400 font-semibold"><i class="fa-solid fa-heart mr-1"></i>3.8K Likes</span>
+              </div>
             </div>
           </div>
 
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400">Call Receiving:</span>
-            <button onclick="toggleCelebrityAvailability()" id="celeb-status-btn" class="px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5">
+          <!-- Call Receiving Toggle -->
+          <div class="flex items-center gap-3 bg-slate-900/80 p-2 rounded-2xl border border-slate-800">
+            <span class="text-xs text-slate-300 font-medium pl-2">Call Receiving:</span>
+            <button onclick="toggleCelebrityAvailability()" id="celeb-status-btn" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5 transition">
               <i class="fa-solid fa-circle text-[8px] animate-pulse"></i>
               <span id="celeb-status-label">Online (Accepting Calls)</span>
             </button>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          <!-- Column 1: Live Incoming Fan Calls Receiver Console -->
-          <div class="lg:col-span-1 space-y-4">
-            <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5">
-              <h3 class="text-sm font-bold text-white mb-1 flex items-center gap-2">
-                <i class="fa-solid fa-phone-volume text-emerald-400"></i>
-                Incoming Fan Calls Desk
-              </h3>
-              <p class="text-[11px] text-slate-400 mb-4">പ്രീമിയം ആരാധകരിൽ നിന്നുള്ള ഇൻകമിംഗ് കോളുകൾ ഇവിടെ സ്വീകരിക്കാം</p>
-
-              <!-- State 1: OFFLINE Notice (Shown when Call Receiving is OFF) -->
-              <div id="celeb-offline-box" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center">
-                <div class="w-12 h-12 rounded-full bg-slate-800 text-slate-500 flex items-center justify-center mx-auto mb-3 text-xl">
-                  <i class="fa-solid fa-phone-slash"></i>
+        <!-- ============================================== -->
+        <!-- CELEBRITY SECTION 1: FAN CALLS DESK            -->
+        <!-- ============================================== -->
+        <div id="celeb-section-calls" class="celeb-section space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Column 1: Live Call Receptor Console -->
+            <div class="lg:col-span-2 space-y-4">
+              <div class="fc-glass-card p-6">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                  <div>
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                      <i class="fa-solid fa-phone-volume text-emerald-400"></i>
+                      VIP Fan Call Terminal
+                    </h3>
+                    <p class="text-xs text-slate-400">പ്രീമിയം ആരാധകരിൽ നിന്നുള്ള ലൈവ് ഇൻകമിംഗ് വീഡിയോ കോളുകൾ ഇവിടെ സ്വീകരിക്കാം</p>
+                  </div>
+                  <span class="text-xs px-2.5 py-1 rounded-full bg-pink-950/40 border border-pink-500/30 text-pink-300 font-bold">
+                    Rate: 75 Coins / Min
+                  </span>
                 </div>
-                <h4 class="text-xs font-bold text-slate-300 mb-1">Call Receiving is Turned OFF</h4>
-                <p class="text-[11px] text-slate-400 mb-3">നിങ്ങൾ ഇപ്പോൾ ഓഫ്‍ലൈൻ ആണ്. ആരാധകരിൽ നിന്നുള്ള കോളുകൾ താൽക്കാലികമായി നിർത്തിവെച്ചിരിക്കുന്നു.</p>
-                <span class="inline-block px-3 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 mb-3">
-                  Status: Offline (No Fan Calls)
-                </span>
-                <button onclick="toggleCelebrityAvailability()" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow transition">
-                  <i class="fa-solid fa-circle text-[8px] mr-1 text-emerald-300"></i>
-                  Turn Call Receiving ON
-                </button>
-              </div>
 
-              <!-- State 2: ONLINE Waiting (Shown when Call Receiving is ON and idle) -->
-              <div id="celeb-online-waiting-box" class="bg-slate-900/60 border border-emerald-500/30 rounded-2xl p-5 text-center">
-                <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-2 text-xl">
-                  <i class="fa-solid fa-wifi animate-pulse"></i>
-                </div>
-                <h4 class="text-xs font-bold text-white mb-1">Online & Accepting Fan Calls</h4>
-                <p class="text-[11px] text-emerald-400 mb-4">ആരാധകർ വിളിക്കുമ്പോൾ ഇൻകമിംഗ് കോൾ സ്ക്രീൻ ഇവിടെ കാണിക്കും</p>
-                <button onclick="simulateIncomingFanCall()" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow flex items-center justify-center gap-1.5 mx-auto transition">
-                  <i class="fa-solid fa-phone-volume"></i>
-                  <span>Simulate Incoming Fan Call</span>
-                </button>
-              </div>
-
-              <!-- State 3: Incoming Call Ringing (Only pops up when Online) -->
-              <div id="incoming-fan-call-box" class="hidden bg-gradient-to-b from-purple-950/40 to-slate-900 border border-purple-500/40 rounded-2xl p-4 text-center">
-                <div class="w-12 h-12 rounded-full bg-purple-600/30 text-purple-300 flex items-center justify-center mx-auto mb-2 text-xl animate-pulse">
-                  <i class="fa-solid fa-video"></i>
-                </div>
-                <h4 class="text-xs font-bold text-white">Arjun Nair (VIP Fan)</h4>
-                <p class="text-[10px] text-purple-300 mb-3">Incoming VIP Video Call...</p>
-                <div class="flex gap-2">
-                  <button onclick="acceptIncomingFanCall()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow">
-                    <i class="fa-solid fa-phone mr-1"></i>Accept Call
-                  </button>
-                  <button onclick="declineIncomingFanCall()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-400 text-xs">
-                    Decline
+                <!-- State 1: OFFLINE Notice (Shown when Call Receiving is OFF) -->
+                <div id="celeb-offline-box" class="hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-8 text-center">
+                  <div class="w-14 h-14 rounded-2xl bg-slate-800 text-slate-500 flex items-center justify-center mx-auto mb-3 text-2xl">
+                    <i class="fa-solid fa-phone-slash"></i>
+                  </div>
+                  <h4 class="text-sm font-bold text-slate-200 mb-1">Call Receiving is Currently Turned OFF</h4>
+                  <p class="text-xs text-slate-400 mb-4 max-w-md mx-auto">നിങ്ങൾ ഇപ്പോൾ ഓഫ്‍ലൈൻ ആണ്. ആരാധകരിൽ നിന്നുള്ള കോളുകൾ താൽക്കാലികമായി നിർത്തിവെച്ചിരിക്കുന്നു. കോളുകൾ സ്വീകരിക്കാൻ താഴെയുള്ള ബട്ടൺ ക്ലിക്ക് ചെയ്യുക.</p>
+                  <button onclick="toggleCelebrityAvailability()" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg transition inline-flex items-center gap-2">
+                    <i class="fa-solid fa-circle text-[8px] text-emerald-300"></i>
+                    <span>Turn Call Receiving ON</span>
                   </button>
                 </div>
-              </div>
 
-              <!-- State 4: Active Call Session -->
-              <div id="celeb-active-call-box" class="hidden bg-black rounded-2xl p-4 text-center border border-emerald-500/50 mt-3">
-                <p class="text-[11px] text-emerald-400 font-bold mb-2 flex items-center justify-center gap-1">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  Fan Video Call in Progress
-                </p>
-                <div class="w-full h-32 rounded-xl bg-slate-900 overflow-hidden mb-3 relative flex items-center justify-center">
-                  <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" class="w-16 h-16 rounded-full object-cover border border-purple-400">
-                  <span class="absolute bottom-1 right-2 text-[9px] bg-black/70 text-slate-300 px-1 rounded">Arjun Nair</span>
+                <!-- State 2: ONLINE Waiting (Shown when Call Receiving is ON and idle) -->
+                <div id="celeb-online-waiting-box" class="bg-slate-900/50 border border-emerald-500/30 rounded-2xl p-8 text-center">
+                  <div class="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3 text-2xl border border-emerald-500/30">
+                    <i class="fa-solid fa-wifi animate-pulse"></i>
+                  </div>
+                  <h4 class="text-sm font-bold text-white mb-1">Online & Ready to Receive Fan Calls</h4>
+                  <p class="text-xs text-emerald-400/90 mb-5">ആരാധകർ വിളിക്കുമ്പോൾ ലൈവ് ഇൻകമിംഗ് വീഡിയോ കോൾ സ്ക്രീൻ ഇവിടെ പോപ്പപ്പ് ചെയ്യും</p>
+                  <button onclick="simulateIncomingFanCall()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-purple-950/50 flex items-center justify-center gap-2 mx-auto transition">
+                    <i class="fa-solid fa-phone-volume"></i>
+                    <span>Simulate Incoming Fan Call</span>
+                  </button>
                 </div>
-                <button onclick="endCelebrityCall()" class="w-full py-2 rounded-xl bg-rose-600 text-white text-xs font-bold">
-                  End Call
-                </button>
-              </div>
 
-              <!-- Priority Support Hotline for Celebrity -->
-              <div class="mt-4 pt-4 border-t border-slate-800">
-                <button onclick="openGenericSupportModal('Celebrity VIP Line')" class="w-full py-2.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2">
-                  <i class="fa-solid fa-headset text-pink-400"></i>
-                  <span>Contact Helpdesk (VIP Support)</span>
-                </button>
+                <!-- State 3: Incoming Call Ringing Box -->
+                <div id="incoming-fan-call-box" class="hidden bg-gradient-to-b from-purple-950/60 to-slate-900 border border-purple-500/50 rounded-2xl p-6 text-center shadow-2xl animate-fade-in">
+                  <div class="w-16 h-16 rounded-full bg-purple-600/30 text-purple-300 flex items-center justify-center mx-auto mb-3 text-2xl animate-pulse border border-purple-400/40">
+                    <i class="fa-solid fa-video"></i>
+                  </div>
+                  <h4 class="text-sm font-bold text-white">Arjun Nair (VIP Gold Fan)</h4>
+                  <p class="text-xs text-purple-300 mb-4 flex items-center justify-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>Incoming 1-on-1 VIP Video Call (Ringing...)</span>
+                  </p>
+                  <div class="flex gap-3 max-w-xs mx-auto">
+                    <button onclick="acceptIncomingFanCall()" class="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-1.5 transition">
+                      <i class="fa-solid fa-phone"></i>
+                      <span>Accept Call</span>
+                    </button>
+                    <button onclick="declineIncomingFanCall()" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition">
+                      Decline
+                    </button>
+                  </div>
+                </div>
+
+                <!-- State 4: Active Call Session -->
+                <div id="celeb-active-call-box" class="hidden bg-black/90 rounded-2xl p-5 text-center border border-emerald-500/50 shadow-2xl">
+                  <div class="flex items-center justify-between mb-3 text-xs">
+                    <span class="text-emerald-400 font-bold flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                      <span>Fan Video Call in Progress</span>
+                    </span>
+                    <span class="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-400 font-mono font-bold text-[11px] border border-slate-700">
+                      75 Coins / Min Active
+                    </span>
+                  </div>
+                  <div class="w-full h-48 rounded-xl bg-slate-900 overflow-hidden mb-4 relative flex items-center justify-center border border-slate-800">
+                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=250" class="w-24 h-24 rounded-full object-cover border-2 border-purple-400 shadow-xl">
+                    <div class="absolute bottom-2 left-3 bg-black/70 px-2.5 py-1 rounded-md text-[10px] text-slate-200">
+                      Caller: Arjun Nair (Kochi)
+                    </div>
+                  </div>
+                  <button onclick="endCelebrityCall()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-phone-slash"></i>
+                    <span>End Video Call</span>
+                  </button>
+                </div>
+
               </div>
             </div>
-          </div>
 
-          <!-- Column 2 & 3: Celebrity Posts & Media Publisher -->
-          <div class="lg:col-span-2 space-y-4">
-            <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
-              <div>
-                <h3 class="text-sm font-bold text-white">My Media Posts & Feed Updates</h3>
-                <p class="text-[11px] text-slate-400">ആരാധകർക്കായി പുതിയ ചിത്രങ്ങളും വീഡിയോകളും പോസ്റ്റ് ചെയ്യുക</p>
+            <!-- Column 2: Live Call Statistics & Fan Log -->
+            <div class="lg:col-span-1 space-y-4">
+              <div class="fc-glass-card p-5">
+                <h4 class="text-xs font-bold text-white mb-3 flex items-center gap-1.5">
+                  <i class="fa-solid fa-chart-simple text-purple-400"></i>
+                  <span>Call Analytics & Revenue</span>
+                </h4>
+                <div class="space-y-2.5 text-xs">
+                  <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex justify-between items-center">
+                    <span class="text-slate-400">Total VIP Calls</span>
+                    <span class="font-bold text-white">42 Calls</span>
+                  </div>
+                  <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex justify-between items-center">
+                    <span class="text-slate-400">Total Fan Earnings</span>
+                    <span class="font-bold text-amber-400">₹18,450</span>
+                  </div>
+                  <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex justify-between items-center">
+                    <span class="text-slate-400">Avg Call Duration</span>
+                    <span class="font-bold text-white">4m 15s</span>
+                  </div>
+                  <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex justify-between items-center">
+                    <span class="text-slate-400">Fan Satisfaction</span>
+                    <span class="font-bold text-emerald-400">4.9 / 5.0 ★</span>
+                  </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-800">
+                  <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-2">Recent Fan Callers</p>
+                  <div class="space-y-1.5 text-[11px]">
+                    <div class="flex justify-between text-slate-300 py-1">
+                      <span>Arjun Nair (VIP Gold)</span>
+                      <span class="text-emerald-400">Completed</span>
+                    </div>
+                    <div class="flex justify-between text-slate-400 py-1">
+                      <span>Ananya Menon (VIP)</span>
+                      <span class="text-slate-400">3h ago</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <button onclick="openRichCreatePostModal()" class="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow flex items-center gap-1.5 transition">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- CELEBRITY SECTION 2: FAN MEDIA FEED & POSTS    -->
+        <!-- ============================================== -->
+        <div id="celeb-section-feed" class="celeb-section hidden space-y-6">
+          <div class="fc-glass-card p-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800 mb-6">
+              <div>
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                  <i class="fa-solid fa-photo-film text-pink-400"></i>
+                  <span>Fan Media Feed & Backstage Gallery</span>
+                </h3>
+                <p class="text-xs text-slate-400">ആരാധകർക്കായി പുതിയ ഫോട്ടോകളും വീഡിയോകളും പോസ്റ്റ് ചെയ്യുക</p>
+              </div>
+              <button onclick="openRichCreatePostModal()" class="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow-lg shadow-pink-900/50 flex items-center gap-2 transition">
                 <i class="fa-solid fa-cloud-arrow-up"></i>
                 <span>Publish Photo/Video</span>
               </button>
             </div>
 
-            <div id="celeb-own-feed" class="space-y-4"></div>
+            <div id="celeb-own-feed" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
           </div>
-
         </div>
+
+        <!-- ============================================== -->
+        <!-- CELEBRITY SECTION 3: VIP HELPDESK & SUPPORT    -->
+        <!-- ============================================== -->
+        <div id="celeb-section-support" class="celeb-section hidden space-y-6">
+          <div class="fc-glass-card p-6">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
+              <div class="flex items-center gap-3">
+                <div class="relative">
+                  <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" class="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shadow">
+                  <span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#111928]"></span>
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-headset text-pink-400"></i>
+                    <span>Celebrity VIP Priority Helpdesk</span>
+                  </h3>
+                  <p class="text-xs text-emerald-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping"></span>
+                    <span>Executive Rahul (Live Online • Priority Channel)</span>
+                  </p>
+                </div>
+              </div>
+              <button onclick="openGenericSupportModal('Celebrity VIP Line')" class="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+                <span>Open Popout View</span>
+              </button>
+            </div>
+
+            <!-- In-Place Working VoIP Call Card for Celebrity Tab -->
+            <div class="mb-5">
+              <button id="btn-celeb-tab-voip" onclick="startModalSupportVoipCall()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-phone-volume"></i>
+                <span>Start Direct VoIP Voice Call to Rahul</span>
+              </button>
+            </div>
+
+            <!-- Messages Stream -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[340px] mb-4">
+              <div class="px-4 py-2.5 bg-slate-800/60 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300">
+                <span class="font-medium flex items-center gap-1.5">
+                  <i class="fa-solid fa-comments text-blue-400"></i>
+                  <span>Live Support Messages & Replies</span>
+                </span>
+                <button onclick="loadGenericSupportMessages()" class="text-[11px] text-slate-400 hover:text-white flex items-center gap-1">
+                  <i class="fa-solid fa-arrows-rotate"></i> Refresh Thread
+                </button>
+              </div>
+              <div id="modal-support-messages-list-tab" class="flex-1 p-4 overflow-y-auto space-y-3">
+                <!-- Dynamically populated messages -->
+              </div>
+            </div>
+
+            <!-- Send Bar -->
+            <div class="flex gap-2.5">
+              <input type="text" id="celeb-tab-support-input" placeholder="Type your query to Support Executive Rahul..." class="flex-1 bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-blue-500" onkeydown="if(event.key==='Enter') sendCelebTabSupportMessage();">
+              <button onclick="sendCelebTabSupportMessage()" class="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-900/50 flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Send</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
 
       </div>
 
@@ -610,33 +746,54 @@
       <!-- ============================================== -->
       <div id="dashboard-admin" class="hidden space-y-6">
         
-        <div>
-          <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-shield-halved text-purple-400"></i>
-            Super Admin Control Center
-          </h2>
-          <p class="text-xs text-slate-400">മുഴുവൻ സിസ്റ്റം നിയന്ത്രണവും യൂസർ മോഡറേഷനും വരുമാന സ്ഥിതിവിവരക്കണക്കുകളും</p>
+        <!-- Command Center Banner -->
+        <div class="admin-card-surface rounded-3xl p-6 relative overflow-hidden border border-purple-500/40 bg-gradient-to-r from-purple-950/60 via-slate-900 to-[#120626] shadow-2xl">
+          <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-800 text-white flex items-center justify-center text-2xl shadow-xl shadow-purple-950/60 border border-purple-400/40">
+                <i class="fa-solid fa-crown text-amber-300"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-xl font-extrabold text-white tracking-tight">Super Admin Command Center</h2>
+                  <span class="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase tracking-wider">Root Control</span>
+                </div>
+                <p class="text-xs text-purple-200/80 mt-0.5">സിസ്റ്റം അനലിറ്റിക്സ്, വരുമാന മോണിറ്ററിംഗ്, യൂസർ ബാൻ/അൺബാൻ മാനേജ്‌മെന്റ്</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="px-3.5 py-2 rounded-xl bg-purple-950/60 border border-purple-500/40 text-purple-300 text-xs font-semibold flex items-center gap-2 shadow">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping"></span>
+                <span>System Monitoring Active • 100% Operational</span>
+              </span>
+            </div>
+          </div>
         </div>
 
+        <!-- Metrics Grid -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="admin-metrics-grid"></div>
 
         <!-- User Management Table -->
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden">
-          <div class="px-5 py-3.5 bg-slate-800/60 border-b border-slate-800 font-bold text-xs text-slate-200">
-            Platform Users & Roles Moderation (Ban/Unban Control)
+        <div class="admin-card-surface rounded-2xl overflow-hidden border border-purple-500/30 shadow-2xl">
+          <div class="px-6 py-4 bg-purple-950/40 border-b border-purple-500/30 flex items-center justify-between">
+            <span class="font-bold text-xs text-purple-200 flex items-center gap-2">
+              <i class="fa-solid fa-users-gear text-amber-400"></i>
+              <span>Platform Users & Access Control (Ban / Unban Moderation)</span>
+            </span>
+            <span class="text-[11px] text-purple-300/80">Real-time Account State</span>
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-left text-xs">
-              <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+              <thead class="bg-slate-950/80 text-purple-300/70 uppercase tracking-wider border-b border-purple-500/20">
                 <tr>
-                  <th class="px-4 py-3">User</th>
-                  <th class="px-4 py-3">Phone</th>
-                  <th class="px-4 py-3">Role</th>
-                  <th class="px-4 py-3">Status</th>
-                  <th class="px-4 py-3 text-right">Actions</th>
+                  <th class="px-5 py-3">User</th>
+                  <th class="px-5 py-3">Phone</th>
+                  <th class="px-5 py-3">Role</th>
+                  <th class="px-5 py-3">Status</th>
+                  <th class="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody id="admin-users-table" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
+              <tbody id="admin-users-table" class="divide-y divide-purple-500/10 text-slate-200"></tbody>
             </table>
           </div>
         </div>

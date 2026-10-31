@@ -106,6 +106,7 @@ function handleLogout() {
     localStorage.removeItem('fc_session');
     currentUser = null;
     currentToken = null;
+    document.body.classList.remove('theme-super-admin');
     if (socket) {
       socket.close();
       socket = null;
@@ -132,6 +133,13 @@ function showDashboard() {
 
   document.getElementById('auth-view').classList.add('hidden');
   document.getElementById('dashboard-view').classList.remove('hidden');
+
+  // Activate Super Admin Royal Amethyst theme if role is SUPER_ADMIN
+  if (currentUser.role === 'SUPER_ADMIN') {
+    document.body.classList.add('theme-super-admin');
+  } else {
+    document.body.classList.remove('theme-super-admin');
+  }
 
   // Update Top Bar Profile Info
   document.getElementById('user-display-name').textContent = currentUser.fullName;
@@ -163,16 +171,16 @@ function showDashboard() {
 
     // Normal Tabs
     navContainer.innerHTML = `
-      <button onclick="switchNormalTab('connect')" id="norm-tab-connect" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white flex items-center gap-1.5">
+      <button onclick="switchNormalTab('connect')" id="norm-tab-connect" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white flex items-center gap-1.5 shadow">
         <i class="fa-solid fa-shuffle"></i><span>Random Audio/Video</span>
       </button>
-      <button onclick="switchNormalTab('events')" id="norm-tab-events" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5">
+      <button onclick="switchNormalTab('events')" id="norm-tab-events" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
         <i class="fa-solid fa-calendar-days text-amber-400"></i><span>Nearby Events</span>
       </button>
-      <button onclick="switchNormalTab('celebrity')" id="norm-tab-celebrity" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5">
+      <button onclick="switchNormalTab('celebrity')" id="norm-tab-celebrity" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
         <i class="fa-solid fa-star text-pink-400"></i><span>Celebrity Hub</span>
       </button>
-      <button onclick="switchNormalTab('support')" id="norm-tab-support" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5">
+      <button onclick="switchNormalTab('support')" id="norm-tab-support" class="norm-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
         <i class="fa-solid fa-comments text-emerald-400"></i><span>Customer Care</span>
       </button>
     `;
@@ -189,17 +197,18 @@ function showDashboard() {
     celebEarningsArea.classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-pink-400 bg-pink-950/40 border border-pink-500/30 flex items-center gap-1.5">
-        <i class="fa-solid fa-crown"></i><span>Celebrity Console</span>
-      </span>
-      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
-        <i class="fa-solid fa-info-circle text-blue-400"></i>
-        <span>Incoming fan call reception & media updates only (No matchmaking or coin buying needed)</span>
-      </span>
+      <button onclick="switchCelebrityTab('calls')" id="celeb-tab-btn-calls" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-pink-600 text-white flex items-center gap-1.5 shadow-lg shadow-pink-900/40 transition">
+        <i class="fa-solid fa-phone-volume"></i><span>Fan Calls Desk</span>
+      </button>
+      <button onclick="switchCelebrityTab('feed')" id="celeb-tab-btn-feed" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-photo-film text-purple-400"></i><span>Fan Media Feed</span>
+      </button>
+      <button onclick="switchCelebrityTab('support')" id="celeb-tab-btn-support" class="celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-headset text-emerald-400"></i><span>VIP Helpdesk (Rahul)</span>
+      </button>
     `;
 
-    loadCelebrityOwnFeed();
-    updateCelebrityCallUI();
+    switchCelebrityTab('calls');
   }
 
   // 3. ORGANIZATION
@@ -207,7 +216,7 @@ function showDashboard() {
     document.getElementById('dashboard-organization').classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 bg-amber-950/40 border border-amber-500/30 flex items-center gap-1.5">
+      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-400 bg-amber-950/40 border border-amber-500/30 flex items-center gap-1.5 shadow">
         <i class="fa-solid fa-building"></i><span>Event Organizer Console</span>
       </span>
       <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
@@ -224,7 +233,7 @@ function showDashboard() {
     document.getElementById('dashboard-support').classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-1.5">
+      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-1.5 shadow">
         <i class="fa-solid fa-headset"></i><span>Helpdesk Executive</span>
       </span>
       <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
@@ -240,11 +249,12 @@ function showDashboard() {
     document.getElementById('dashboard-admin').classList.remove('hidden');
 
     navContainer.innerHTML = `
-      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-purple-400 bg-purple-950/40 border border-purple-500/30 flex items-center gap-1.5">
-        <i class="fa-solid fa-shield-halved"></i><span>Platform Control</span>
+      <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-purple-950/60 border border-purple-500/40 flex items-center gap-2 shadow">
+        <i class="fa-solid fa-crown text-amber-400"></i><span>Super Admin Control Terminal</span>
       </span>
-      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
-        <span>Root System Moderation & Analytics</span>
+      <span class="text-xs text-purple-300/80 flex items-center gap-1 py-1.5 font-medium">
+        <i class="fa-solid fa-shield-halved text-purple-400"></i>
+        <span>Root System Security • High Privilege Mode</span>
       </span>
     `;
 
@@ -582,6 +592,58 @@ function stopCallTimer() {
 // ----------------- CELEBRITY CONSOLE LOGIC -----------------
 
 let celebAvailable = localStorage.getItem('fc_celeb_available') !== 'false';
+let activeCelebrityTab = 'calls';
+
+function switchCelebrityTab(tabId) {
+  activeCelebrityTab = tabId;
+
+  document.querySelectorAll('.celeb-nav-tab').forEach(btn => {
+    btn.className = 'celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition';
+  });
+  const activeBtn = document.getElementById(`celeb-tab-btn-${tabId}`);
+  if (activeBtn) {
+    activeBtn.className = 'celeb-nav-tab px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-pink-600 text-white flex items-center gap-1.5 shadow-lg shadow-pink-900/40 transition';
+  }
+
+  document.querySelectorAll('.celeb-section').forEach(sec => sec.classList.add('hidden'));
+  document.getElementById(`celeb-section-${tabId}`)?.classList.remove('hidden');
+
+  if (tabId === 'feed') loadCelebrityOwnFeed();
+  if (tabId === 'support') loadCelebrityTabSupportMessages();
+  if (tabId === 'calls') updateCelebrityCallUI();
+}
+
+async function loadCelebrityTabSupportMessages() {
+  await loadGenericSupportMessages();
+}
+
+async function sendCelebTabSupportMessage() {
+  const input = document.getElementById('celeb-tab-support-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  try {
+    const res = await fetch('/api/support/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        ticketId: currentSupportTicketId,
+        content: text
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      input.value = '';
+      await loadGenericSupportMessages();
+    }
+  } catch (err) {
+    console.error('Support send error:', err);
+  }
+}
 
 function updateCelebrityCallUI() {
   const btn = document.getElementById('celeb-status-btn');
@@ -790,6 +852,11 @@ async function loadSupportExecutiveDesk() {
             </div>
           `).join('');
           container.scrollTop = container.scrollHeight;
+      const tabContainer = document.getElementById('modal-support-messages-list-tab');
+      if (tabContainer) {
+        tabContainer.innerHTML = container.innerHTML;
+        tabContainer.scrollTop = tabContainer.scrollHeight;
+      }
         }
       }
     }
@@ -839,36 +906,89 @@ async function loadAdminMetrics() {
     if (data.success) {
       const m = data.metrics;
       document.getElementById('admin-metrics-grid').innerHTML = `
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
-          <span class="text-[10px] text-slate-400 uppercase font-semibold">Total Users</span>
-          <p class="text-xl font-bold text-white mt-1">${m.totalUsers}</p>
+        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Total Ecosystem Users</span>
+            <span class="w-8 h-8 rounded-xl bg-purple-600/30 text-purple-300 flex items-center justify-center text-sm border border-purple-400/30">
+              <i class="fa-solid fa-users"></i>
+            </span>
+          </div>
+          <p class="text-2xl font-black text-white mt-1">${m.totalUsers}</p>
+          <p class="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-arrow-trend-up"></i>
+            <span>+100% Verified Accounts</span>
+          </p>
         </div>
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
-          <span class="text-[10px] text-slate-400 uppercase font-semibold">Live Events</span>
-          <p class="text-xl font-bold text-amber-400 mt-1">${m.totalEvents}</p>
+
+        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Active Geo Events</span>
+            <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm border border-amber-400/30">
+              <i class="fa-solid fa-calendar-days"></i>
+            </span>
+          </div>
+          <p class="text-2xl font-black text-amber-400 mt-1">${m.totalEvents}</p>
+          <p class="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-ticket"></i>
+            <span>${m.totalBookings} Passes Sold</span>
+          </p>
         </div>
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
-          <span class="text-[10px] text-slate-400 uppercase font-semibold">Celebrities</span>
-          <p class="text-xl font-bold text-pink-400 mt-1">${m.totalCelebrities}</p>
+
+        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Verified Celebrities</span>
+            <span class="w-8 h-8 rounded-xl bg-pink-500/20 text-pink-400 flex items-center justify-center text-sm border border-pink-400/30">
+              <i class="fa-solid fa-star"></i>
+            </span>
+          </div>
+          <p class="text-2xl font-black text-pink-400 mt-1">${m.totalCelebrities}</p>
+          <p class="text-[10px] text-pink-400/80 mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-shield-halved"></i>
+            <span>VIP Video Channels Live</span>
+          </p>
         </div>
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
-          <span class="text-[10px] text-slate-400 uppercase font-semibold">Platform Revenue</span>
-          <p class="text-xl font-bold text-emerald-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
+
+        <div class="admin-card-surface rounded-2xl p-5 border border-purple-500/30 transition-all hover:scale-[1.02]">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <span class="text-[11px] text-purple-300/80 font-bold uppercase tracking-wider">Gross Platform Revenue</span>
+            <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm border border-emerald-400/30">
+              <i class="fa-solid fa-coins"></i>
+            </span>
+          </div>
+          <p class="text-2xl font-black text-emerald-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
+          <p class="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Settlement Verified</span>
+          </p>
         </div>
       `;
 
       document.getElementById('admin-users-table').innerHTML = allUsers.map(u => `
-        <tr class="hover:bg-slate-800/40">
-          <td class="px-4 py-3 font-bold text-white text-xs">${u.fullName}</td>
-          <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${u.phoneNumber}</td>
-          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-200">${u.role}</span></td>
-          <td class="px-4 py-3">${u.isBanned ? '<span class="text-rose-400 font-bold">Banned</span>' : '<span class="text-emerald-400 font-bold">Active</span>'}</td>
-          <td class="px-4 py-3 text-right">
+        <tr class="hover:bg-purple-950/20 transition">
+          <td class="px-5 py-3.5 flex items-center gap-2.5 font-medium">
+            <img src="${u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}" class="w-7 h-7 rounded-full object-cover border border-purple-500/40">
+            <div>
+              <p class="font-bold text-white text-xs">${u.fullName}</p>
+              <span class="text-[10px] text-purple-300/60 font-mono">${u.id}</span>
+            </div>
+          </td>
+          <td class="px-5 py-3.5 font-mono text-[11px] text-slate-300">${u.phoneNumber}</td>
+          <td class="px-5 py-3.5">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.role === 'SUPER_ADMIN' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' : u.role === 'CELEBRITY' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/40' : u.role === 'ORGANIZATION' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'}">
+              ${u.role}
+            </span>
+          </td>
+          <td class="px-5 py-3.5">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.isBanned ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}">
+              ${u.isBanned ? 'Suspended' : 'Active'}
+            </span>
+          </td>
+          <td class="px-5 py-3.5 text-right">
             ${u.role !== 'SUPER_ADMIN' ? `
-              <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-2.5 py-1 rounded text-[10px] font-bold border ${u.isBanned ? 'border-emerald-500 text-emerald-300' : 'border-rose-500 text-rose-300'}">
-                ${u.isBanned ? 'Unban' : 'Ban'}
+              <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-3 py-1 rounded-lg text-[11px] font-bold shadow transition ${u.isBanned ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-rose-600/30 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30'}">
+                ${u.isBanned ? '<i class="fa-solid fa-user-check mr-1"></i>Unban' : '<i class="fa-solid fa-ban mr-1"></i>Ban'}
               </button>
-            ` : '<span class="text-slate-500 text-[10px]">Root</span>'}
+            ` : '<span class="text-[10px] text-purple-400 font-bold uppercase tracking-wider">Root Protected</span>'}
           </td>
         </tr>
       `).join('');
@@ -1448,6 +1568,11 @@ async function loadGenericSupportMessages() {
       }).join('');
 
       container.scrollTop = container.scrollHeight;
+      const tabContainer = document.getElementById('modal-support-messages-list-tab');
+      if (tabContainer) {
+        tabContainer.innerHTML = container.innerHTML;
+        tabContainer.scrollTop = tabContainer.scrollHeight;
+      }
     }
   } catch (err) {
     console.error('Support load error:', err);
