@@ -199,6 +199,7 @@ function showDashboard() {
     `;
 
     loadCelebrityOwnFeed();
+    updateCelebrityCallUI();
   }
 
   // 3. ORGANIZATION
@@ -345,6 +346,11 @@ function renderCelebrityCallControls() {
 }
 
 function startNormalToCelebCall(celebId, callType) {
+  const isAvailable = localStorage.getItem('fc_celeb_available') !== 'false';
+  if (!isAvailable) {
+    alert('⚠️ Dulquer Sithara is currently Offline (Call receiving turned OFF). Please try again when the celebrity is Online!');
+    return;
+  }
   const hasVideo = callType === 'CELEBRITY_VIDEO';
   switchNormalTab('connect');
 
@@ -575,39 +581,80 @@ function stopCallTimer() {
 
 // ----------------- CELEBRITY CONSOLE LOGIC -----------------
 
-let celebAvailable = true;
+let celebAvailable = localStorage.getItem('fc_celeb_available') !== 'false';
 
-function toggleCelebrityAvailability() {
-  celebAvailable = !celebAvailable;
+function updateCelebrityCallUI() {
   const btn = document.getElementById('celeb-status-btn');
   const label = document.getElementById('celeb-status-label');
+  const offlineBox = document.getElementById('celeb-offline-box');
+  const waitingBox = document.getElementById('celeb-online-waiting-box');
+  const incomingBox = document.getElementById('incoming-fan-call-box');
+  const activeBox = document.getElementById('celeb-active-call-box');
 
   if (celebAvailable) {
-    btn.className = 'px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5';
-    label.textContent = 'Online (Accepting Calls)';
+    if (btn) btn.className = 'px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5';
+    if (label) label.textContent = 'Online (Accepting Calls)';
+    if (offlineBox) offlineBox.classList.add('hidden');
+    if (activeBox && !activeBox.classList.contains('hidden')) {
+      // In active call, keep active call
+    } else if (incomingBox && !incomingBox.classList.contains('hidden')) {
+      // Incoming call ringing
+    } else {
+      if (waitingBox) waitingBox.classList.remove('hidden');
+    }
   } else {
-    btn.className = 'px-4 py-2 rounded-full bg-slate-700 text-slate-300 font-bold text-xs shadow flex items-center gap-1.5';
-    label.textContent = 'Offline (Busy)';
+    if (btn) btn.className = 'px-4 py-2 rounded-full bg-slate-700 text-slate-300 font-bold text-xs shadow flex items-center gap-1.5';
+    if (label) label.textContent = 'Offline (Busy)';
+    if (offlineBox) offlineBox.classList.remove('hidden');
+    if (waitingBox) waitingBox.classList.add('hidden');
+    if (incomingBox) incomingBox.classList.add('hidden');
+    if (activeBox) activeBox.classList.add('hidden');
   }
 }
 
+function toggleCelebrityAvailability() {
+  celebAvailable = !celebAvailable;
+  localStorage.setItem('fc_celeb_available', celebAvailable ? 'true' : 'false');
+  updateCelebrityCallUI();
+  if (celebAvailable) {
+    alert('🟢 Status: ONLINE! You are now accepting incoming calls from VIP fans.');
+  } else {
+    alert('🔴 Status: OFFLINE! Incoming fan calls are now disabled.');
+  }
+}
+
+function simulateIncomingFanCall() {
+  if (!celebAvailable) {
+    alert('⚠️ Call Receiving is currently OFF. Turn Call Receiving ON to accept fan calls!');
+    return;
+  }
+  document.getElementById('celeb-online-waiting-box')?.classList.add('hidden');
+  document.getElementById('incoming-fan-call-box')?.classList.remove('hidden');
+}
+
 function acceptIncomingFanCall() {
-  document.getElementById('incoming-fan-call-box').classList.add('hidden');
-  document.getElementById('celeb-active-call-box').classList.remove('hidden');
+  document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
+  document.getElementById('celeb-active-call-box')?.classList.remove('hidden');
   alert('Connecting 1-on-1 VIP Video Call with fan Arjun Nair!');
 }
 
 function declineIncomingFanCall() {
-  document.getElementById('incoming-fan-call-box').classList.add('hidden');
+  document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
   alert('Fan call declined.');
-  setTimeout(() => {
-    document.getElementById('incoming-fan-call-box').classList.remove('hidden');
-  }, 5000);
+  if (celebAvailable) {
+    document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
+  } else {
+    document.getElementById('celeb-offline-box')?.classList.remove('hidden');
+  }
 }
 
 function endCelebrityCall() {
-  document.getElementById('celeb-active-call-box').classList.add('hidden');
-  document.getElementById('incoming-fan-call-box').classList.remove('hidden');
+  document.getElementById('celeb-active-call-box')?.classList.add('hidden');
+  if (celebAvailable) {
+    document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
+  } else {
+    document.getElementById('celeb-offline-box')?.classList.remove('hidden');
+  }
   alert('Call completed.');
 }
 
@@ -694,28 +741,66 @@ async function handleScanTicket() {
 
 // ----------------- SUPPORT EXECUTIVE LOGIC -----------------
 
+let activeExecutiveTicketId = 'ticket_celeb_201';
+let executiveAllTickets = [];
+
 async function loadSupportExecutiveDesk() {
   try {
     const res = await fetch('/api/support/tickets', {
       headers: { 'Authorization': `Bearer ${currentToken}` }
     });
     const data = await res.json();
-    if (data.success) {
+    if (data.success && data.tickets) {
+      executiveAllTickets = data.tickets;
+      if (!executiveAllTickets.some(t => t.id === activeExecutiveTicketId) && executiveAllTickets.length > 0) {
+        activeExecutiveTicketId = executiveAllTickets[0].id;
+      }
+
+      // Render Ticket Selector Pills
+      const selector = document.getElementById('support-ticket-selector');
+      if (selector) {
+        selector.innerHTML = executiveAllTickets.map(t => {
+          const isSelected = t.id === activeExecutiveTicketId;
+          const roleBadgeColor = t.userRole === 'CELEBRITY' ? 'text-pink-400' : t.userRole === 'ORGANIZATION' ? 'text-amber-400' : 'text-blue-400';
+          return `
+            <button onclick="selectExecutiveTicket('${t.id}')" class="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${isSelected ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:text-white'}">
+              <span>${t.userName}</span>
+              <span class="text-[10px] font-bold ${isSelected ? 'text-emerald-200' : roleBadgeColor}">(${t.userRole})</span>
+            </button>
+          `;
+        }).join('');
+      }
+
+      // Render Messages for Selected Ticket
+      const activeTicket = executiveAllTickets.find(t => t.id === activeExecutiveTicketId) || executiveAllTickets[0];
       const container = document.getElementById('support-desk-messages');
-      const allMsgs = data.tickets.flatMap(t => t.messages);
-      container.innerHTML = allMsgs.map(msg => `
-        <div class="p-3 rounded-xl border border-slate-800 ${msg.senderRole === 'SUPPORT' ? 'bg-slate-900 border-l-4 border-l-emerald-500' : 'bg-slate-950 border-l-4 border-l-blue-500'}">
-          <div class="flex justify-between text-[10px] text-slate-400 mb-1">
-            <span class="font-bold ${msg.senderRole === 'SUPPORT' ? 'text-emerald-400' : 'text-blue-400'}">${msg.senderRole} (${msg.senderId})</span>
-            <span>${new Date(msg.timestamp).toLocaleTimeString()}</span>
-          </div>
-          <p class="text-xs text-white">${msg.content}</p>
-        </div>
-      `).join('');
+      if (activeTicket && container) {
+        if (!activeTicket.messages || activeTicket.messages.length === 0) {
+          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No messages in ticket for ${activeTicket.userName}.</p>`;
+        } else {
+          container.innerHTML = activeTicket.messages.map(msg => `
+            <div class="p-3.5 rounded-xl border border-slate-800 ${msg.senderRole === 'SUPPORT' ? 'bg-slate-900 border-l-4 border-l-emerald-500' : 'bg-slate-950 border-l-4 border-l-purple-500'}">
+              <div class="flex justify-between text-[11px] text-slate-400 mb-1.5">
+                <span class="font-bold ${msg.senderRole === 'SUPPORT' ? 'text-emerald-400' : 'text-purple-300'}">
+                  ${msg.senderRole === 'SUPPORT' ? 'Rahul (Support Executive)' : activeTicket.userName + ' (' + activeTicket.userRole + ')'}
+                </span>
+                <span>${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <p class="text-xs text-white leading-relaxed">${msg.content}</p>
+            </div>
+          `).join('');
+          container.scrollTop = container.scrollHeight;
+        }
+      }
     }
   } catch (err) {
     console.error('Support desk error:', err);
   }
+}
+
+function selectExecutiveTicket(ticketId) {
+  activeExecutiveTicketId = ticketId;
+  loadSupportExecutiveDesk();
 }
 
 async function sendSupportExecutiveReply() {
@@ -731,7 +816,7 @@ async function sendSupportExecutiveReply() {
         'Authorization': `Bearer ${currentToken}`
       },
       body: JSON.stringify({
-        ticketId: 'ticket_sample_101',
+        ticketId: activeExecutiveTicketId || 'ticket_celeb_201',
         content: text
       })
     });
@@ -1283,22 +1368,96 @@ async function submitRichCreatePost() {
   }
 }
 
-let currentSupportDeskName = 'Support Desk';
+let currentSupportDeskName = 'VIP Helpdesk';
+let genericSupportRefreshTimer = null;
+let modalSupportCallInterval = null;
+let modalSupportCallDuration = 0;
+let isModalSupportMuted = false;
+let currentSupportTicketId = null;
 
-function openGenericSupportModal(deskName) {
-  currentSupportDeskName = deskName || 'Support Desk';
+async function openGenericSupportModal(deskName) {
+  currentSupportDeskName = deskName || 'VIP Helpdesk';
   const titleEl = document.getElementById('generic-support-title');
-  if (titleEl) titleEl.textContent = `Contact ${currentSupportDeskName}`;
+  if (titleEl) titleEl.textContent = `${deskName || 'VIP Helpdesk'}`;
+
+  // Reset VoIP Call UI
+  clearInterval(modalSupportCallInterval);
+  document.getElementById('modal-support-voip-card')?.classList.add('hidden');
+  document.getElementById('btn-modal-support-voip')?.classList.remove('hidden');
+
   document.getElementById('modal-generic-support')?.classList.remove('hidden');
+  await loadGenericSupportMessages();
+
+  // Auto-refresh support thread every 3 seconds while open
+  clearInterval(genericSupportRefreshTimer);
+  genericSupportRefreshTimer = setInterval(loadGenericSupportMessages, 3000);
+}
+
+async function loadGenericSupportMessages() {
+  if (!currentToken) return;
+  const container = document.getElementById('modal-support-messages-list');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/support/tickets', {
+      headers: { 'Authorization': `Bearer ${currentToken}` }
+    });
+    const data = await res.json();
+    if (data.success && data.tickets && data.tickets.length > 0) {
+      const ticket = data.tickets[0];
+      currentSupportTicketId = ticket.id;
+
+      if (!ticket.messages || ticket.messages.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-xs text-slate-400">
+            <i class="fa-solid fa-headset text-2xl text-slate-600 mb-2"></i>
+            <p class="font-bold text-slate-300">Welcome to ${currentSupportDeskName}!</p>
+            <p class="text-[11px] text-slate-500 mt-1">No messages yet. Send your query below to get instant assistance from Rahul.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = ticket.messages.map(msg => {
+        const isMe = msg.senderId === currentUser.id;
+        if (isMe) {
+          return `
+            <div class="flex flex-col items-end">
+              <div class="bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-2xl rounded-tr-none px-3.5 py-2 max-w-[85%] text-xs shadow">
+                ${msg.content}
+              </div>
+              <span class="text-[9px] text-slate-500 mt-0.5">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          `;
+        } else {
+          return `
+            <div class="flex items-start gap-2">
+              <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" class="w-7 h-7 rounded-full object-cover border border-emerald-500 shrink-0 mt-0.5">
+              <div class="flex flex-col items-start max-w-[85%]">
+                <div class="bg-slate-800 text-slate-100 rounded-2xl rounded-tl-none px-3.5 py-2 text-xs shadow border border-slate-700">
+                  <div class="flex items-center gap-1.5 mb-0.5">
+                    <span class="text-[10px] font-bold text-emerald-400">Rahul (Support Officer)</span>
+                  </div>
+                  ${msg.content}
+                </div>
+                <span class="text-[9px] text-slate-500 mt-0.5">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+  } catch (err) {
+    console.error('Support load error:', err);
+  }
 }
 
 async function sendGenericSupportQuery() {
-  const textarea = document.getElementById('generic-support-text');
-  const content = textarea.value.trim();
-  if (!content) {
-    alert('Please enter your query or message.');
-    return;
-  }
+  const input = document.getElementById('generic-support-text');
+  const text = input.value.trim();
+  if (!text) return;
 
   try {
     const res = await fetch('/api/support/messages', {
@@ -1308,25 +1467,104 @@ async function sendGenericSupportQuery() {
         'Authorization': `Bearer ${currentToken}`
       },
       body: JSON.stringify({
-        ticketId: 'ticket_sample_101',
-        content: `[${currentSupportDeskName}] ${content}`
+        ticketId: currentSupportTicketId,
+        content: text
       })
     });
 
     const data = await res.json();
     if (data.success) {
-      alert('✅ Your message has been routed to Rahul (Helpdesk Support Executive). You will receive a response shortly.');
-      textarea.value = '';
-      closeModal('modal-generic-support');
+      input.value = '';
+      await loadGenericSupportMessages();
     } else {
       alert(data.error || 'Failed to send support query.');
     }
   } catch (err) {
     console.error('Support query error:', err);
-    alert('Error sending support query.');
+  }
+}
+
+function startModalSupportVoipCall() {
+  const callCard = document.getElementById('modal-support-voip-card');
+  const btnStart = document.getElementById('btn-modal-support-voip');
+  const statusText = document.getElementById('modal-support-call-status');
+  const timerEl = document.getElementById('modal-support-call-timer');
+  const wavesEl = document.getElementById('modal-support-waves');
+
+  callCard?.classList.remove('hidden');
+  btnStart?.classList.add('hidden');
+
+  if (statusText) statusText.innerHTML = '<i class="fa-solid fa-phone-volume animate-pulse text-amber-400"></i><span>Calling Support Desk... (Ringing)</span>';
+  if (wavesEl) wavesEl.classList.add('opacity-40');
+  if (timerEl) timerEl.textContent = '00:00';
+  modalSupportCallDuration = 0;
+
+  // Simulate prompt connection to Support Officer Rahul after 1.5 seconds
+  setTimeout(() => {
+    if (statusText) statusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping mr-1"></span><span>Connected • HD Voice Audio</span>';
+    if (wavesEl) wavesEl.classList.remove('opacity-40');
+
+    clearInterval(modalSupportCallInterval);
+    modalSupportCallInterval = setInterval(() => {
+      modalSupportCallDuration++;
+      const mins = String(Math.floor(modalSupportCallDuration / 60)).padStart(2, '0');
+      const secs = String(modalSupportCallDuration % 60).padStart(2, '0');
+      if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+    }, 1000);
+  }, 1500);
+}
+
+function toggleModalSupportMute() {
+  isModalSupportMuted = !isModalSupportMuted;
+  const btn = document.getElementById('btn-modal-support-mute');
+  if (btn) {
+    if (isModalSupportMuted) {
+      btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
+      btn.classList.add('bg-rose-950/50', 'border-rose-500/50');
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+      btn.classList.remove('bg-rose-950/50', 'border-rose-500/50');
+    }
+  }
+}
+
+async function endModalSupportVoipCall() {
+  clearInterval(modalSupportCallInterval);
+  const durationSec = modalSupportCallDuration;
+  modalSupportCallDuration = 0;
+
+  document.getElementById('modal-support-voip-card')?.classList.add('hidden');
+  document.getElementById('btn-modal-support-voip')?.classList.remove('hidden');
+
+  const mins = String(Math.floor(durationSec / 60)).padStart(2, '0');
+  const secs = String(durationSec % 60).padStart(2, '0');
+
+  // Insert notification in ticket thread
+  const logMsg = `📞 VoIP Voice Support Call ended • Duration: ${mins}:${secs}`;
+  try {
+    await fetch('/api/support/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        ticketId: currentSupportTicketId,
+        content: logMsg
+      })
+    });
+    await loadGenericSupportMessages();
+  } catch (err) {
+    console.error('Call log error:', err);
   }
 }
 
 function closeModal(id) {
   document.getElementById(id)?.classList.add('hidden');
+  if (id === 'modal-generic-support') {
+    clearInterval(genericSupportRefreshTimer);
+    if (modalSupportCallInterval) {
+      endModalSupportVoipCall();
+    }
+  }
 }

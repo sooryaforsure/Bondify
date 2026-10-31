@@ -267,13 +267,23 @@ export class FrndServer {
     if (path === '/api/support/messages' && method === 'POST') {
       const user = await this.authenticate(req);
       const body = await req.json();
+      let ticketId = body.ticketId;
+      if (!ticketId || !this.supportService.getTicket(ticketId)) {
+        const ticket = this.supportService.getOrCreateTicket(
+          user.id,
+          user.fullName,
+          user.role,
+          user.phoneNumber
+        );
+        ticketId = ticket.id;
+      }
       const msg = this.supportService.sendMessage(
-        body.ticketId,
+        ticketId,
         user.id,
         user.role,
         body.content
       );
-      return this.jsonResponse({ success: true, message: msg });
+      return this.jsonResponse({ success: true, message: msg, ticketId });
     }
 
     // --- SUPER ADMIN ROUTES ---

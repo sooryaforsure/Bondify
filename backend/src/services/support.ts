@@ -13,7 +13,7 @@ export class SupportService {
     const sampleTicket: SupportTicket = {
       id: ticketId,
       userId: 'usr_normal_1',
-      userName: 'Rahul Nair',
+      userName: 'Arjun Nair',
       userRole: 'NORMAL',
       userPhone: '+919876543210',
       status: 'IN_PROGRESS',
@@ -33,7 +33,7 @@ export class SupportService {
           ticketId,
           senderId: 'usr_support_1',
           senderRole: 'SUPPORT',
-          content: 'Hi Rahul! You can request cancellation up to 48 hours prior to the event through the ticket section.',
+          content: 'Hi Arjun! You can request cancellation up to 48 hours prior to the event through the ticket section.',
           timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString()
         }
       ]
@@ -41,6 +41,76 @@ export class SupportService {
 
     this.tickets.set(ticketId, sampleTicket);
     this.userActiveTicket.set('usr_normal_1', ticketId);
+
+    // Seed Celebrity Support Ticket for Dulquer Sithara
+    const celebTicketId = 'ticket_celeb_201';
+    const sampleCelebTicket: SupportTicket = {
+      id: celebTicketId,
+      userId: 'usr_celeb_1',
+      userName: 'Dulquer Sithara',
+      userRole: 'CELEBRITY',
+      userPhone: '+919876543212',
+      status: 'IN_PROGRESS',
+      assignedAgentId: 'usr_support_1',
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      messages: [
+        {
+          id: 'msg_c1',
+          ticketId: celebTicketId,
+          senderId: 'usr_celeb_1',
+          senderRole: 'CELEBRITY',
+          content: 'Hello Support Desk, I wanted to confirm the schedule for the live fan video sessions this weekend.',
+          timestamp: new Date(Date.now() - 3600000).toISOString()
+        },
+        {
+          id: 'msg_c2',
+          ticketId: celebTicketId,
+          senderId: 'usr_support_1',
+          senderRole: 'SUPPORT',
+          content: 'Hi Dulquer Sir! Your VIP Fan Line is configured and active. Fans can only call you when you toggle Call Receiving to Online.',
+          timestamp: new Date(Date.now() - 1800000).toISOString()
+        }
+      ]
+    };
+    this.tickets.set(celebTicketId, sampleCelebTicket);
+    this.userActiveTicket.set('usr_celeb_1', celebTicketId);
+
+    // Seed Organization Support Ticket for Kochi Live Arena
+    const orgTicketId = 'ticket_org_301';
+    const sampleOrgTicket: SupportTicket = {
+      id: orgTicketId,
+      userId: 'usr_org_1',
+      userName: 'Kochi Live Arena Events',
+      userRole: 'ORGANIZATION',
+      userPhone: '+919876543211',
+      status: 'IN_PROGRESS',
+      assignedAgentId: 'usr_support_1',
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      messages: [
+        {
+          id: 'msg_o1',
+          ticketId: orgTicketId,
+          senderId: 'usr_org_1',
+          senderRole: 'ORGANIZATION',
+          content: 'Hi Support, need assistance checking the QR code scanner sensitivity for gate entry.',
+          timestamp: new Date(Date.now() - 3600000).toISOString()
+        },
+        {
+          id: 'msg_o2',
+          ticketId: orgTicketId,
+          senderId: 'usr_support_1',
+          senderRole: 'SUPPORT',
+          content: 'Hello Kochi Arena team! The gate scanner accepts direct camera QR scans or paste of the anti-fraud hash.',
+          timestamp: new Date(Date.now() - 1800000).toISOString()
+        }
+      ]
+    };
+    this.tickets.set(orgTicketId, sampleOrgTicket);
+    this.userActiveTicket.set('usr_org_1', orgTicketId);
+  }
+
+  getTicket(ticketId: string): SupportTicket | undefined {
+    return this.tickets.get(ticketId);
   }
 
   getOrCreateTicket(
