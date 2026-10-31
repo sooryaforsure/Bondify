@@ -256,14 +256,22 @@ export class FrndServer {
     // --- CELEBRITY LIVE CALL SIGNALING ROUTES (Cross-device & Multi-network) ---
     if (path === '/api/celebrities/call/ring' && method === 'POST') {
       const body = await req.json();
+      const celebTargetId = body.celebrityId || 'usr_celeb_1';
       const call = this.celebrityService.ringCelebrity(
         body.callerId || 'usr_normal_1',
         body.callerName || 'Arjun Nair',
         body.callerAvatar,
-        body.celebrityId || 'usr_celeb_1',
+        celebTargetId,
         body.callType || 'CELEBRITY_VIDEO',
         body.offerSdp
       );
+
+      // Instant WebSocket push to celebrity device
+      this.matchmakingService.sendToUser(celebTargetId, {
+        type: 'INCOMING_CELEB_CALL',
+        call
+      });
+
       return this.jsonResponse({ success: true, call });
     }
 
@@ -282,18 +290,45 @@ export class FrndServer {
         body.action || 'APPROVE',
         body.answerSdp
       );
+
+      // Instant WebSocket push to normal user device
+      if (call && call.callerId) {
+        this.matchmakingService.sendToUser(call.callerId, {
+          type: 'CELEB_CALL_RESPONSE',
+          action: body.action,
+          call
+        });
+      }
+
       return this.jsonResponse({ success: true, call });
     }
 
     if (path === '/api/celebrities/call/signal' && method === 'POST') {
       const body = await req.json();
       const call = this.celebrityService.relayCallSignal(body.callId, body.signal);
+
+      // Relay WebRTC signal to target peer via WebSocket
+      const targetUserId = body.signal?.fromRole === 'CELEBRITY' ? call?.callerId : call?.celebrityId;
+      if (targetUserId) {
+        this.matchmakingService.sendToUser(targetUserId, {
+          type: 'CELEB_WEBRTC_SIGNAL',
+          signal: body.signal,
+          callId: body.callId
+        });
+      }
+
       return this.jsonResponse({ success: true, call });
     }
 
     if (path === '/api/celebrities/call/end' && method === 'POST') {
       const body = await req.json();
       const call = this.celebrityService.endLiveCall(body.callId, body.endedBy || 'USER');
+
+      if (call) {
+        this.matchmakingService.sendToUser(call.celebrityId, { type: 'CELEB_CALL_ENDED', call });
+        this.matchmakingService.sendToUser(call.callerId, { type: 'CELEB_CALL_ENDED', call });
+      }
+
       return this.jsonResponse({ success: true, call });
     }
 

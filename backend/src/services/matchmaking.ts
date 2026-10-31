@@ -24,6 +24,19 @@ export class MatchmakingService {
     this.userToSocketId.set(userId, socketId);
   }
 
+  sendToUser(userId: string, message: any): boolean {
+    const socketId = this.userToSocketId.get(userId);
+    if (!socketId) return false;
+    const conn = this.activeConnections.get(socketId);
+    if (!conn || conn.socket.readyState !== WebSocket.OPEN) return false;
+    try {
+      conn.socket.send(JSON.stringify(message));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   unregisterClient(socketId: string) {
     const conn = this.activeConnections.get(socketId);
     if (!conn) return;
