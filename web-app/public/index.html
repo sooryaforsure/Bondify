@@ -11,9 +11,9 @@
   <!-- QR Code Scanning Engine (Camera & File Decoding) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <link rel="stylesheet" href="/style.css?v=11">
+  <link rel="stylesheet" href="/style.css?v=12">
 </head>
-<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white relative">
+<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-white selection:text-black relative">
 
   <!-- Ambient Chrome Floating Glow Orbs (Background Atmospheric Dimension) -->
   <div class="pointer-events-none fixed inset-0 overflow-hidden z-0">
@@ -32,18 +32,18 @@
         
         <!-- Brand Header (FC Icon + Title + Subtitle) -->
         <div class="flex items-center gap-3.5 mb-5">
-          <div class="w-12 h-12 rounded-2xl brand-jewel flex items-center justify-center text-white font-extrabold text-xl shadow-lg">
+          <div class="w-12 h-12 rounded-2xl brand-jewel flex items-center justify-center text-slate-950 font-black text-xl shadow-lg">
             FC
           </div>
           <div>
             <h1 class="text-xl font-extrabold tracking-tight text-white leading-tight chrome-text-silver">Friends Connect</h1>
-            <p class="text-xs text-slate-400 font-medium">Premium Social, Events & VIP Celebrity Platform</p>
+            <p class="text-xs text-slate-300 font-medium">True Chrome Edition • Silver & White Luxury Interface</p>
           </div>
         </div>
 
-        <!-- Informational Banner in 3-Color Theme -->
-        <div class="bg-blue-950/30 border border-blue-500/30 rounded-xl p-3 mb-5 text-left">
-          <p class="text-xs text-blue-200 leading-relaxed font-medium">
+        <!-- Informational Banner in Chrome Theme -->
+        <div class="bg-white/5 border border-white/20 rounded-2xl p-3.5 mb-5 text-left">
+          <p class="text-xs text-slate-200 leading-relaxed font-medium">
             <span class="font-bold text-white">Dummy OTP Ready:</span> മൊബൈൽ നമ്പറും ഡമ്മി OTP 123456 ഉം താഴെ ഓട്ടോമാറ്റിക്കായി പൂരിപ്പിച്ചിട്ടുണ്ട്. നേരിട്ട് <span class="font-bold text-white">"Verify OTP & Enter Website"</span> ക്ലിക്ക് ചെയ്യുക!
           </p>
         </div>
@@ -52,7 +52,7 @@
         <div class="mb-4">
           <label class="block text-xs font-medium text-slate-300 mb-1.5">Select Account to Login (അക്കൗണ്ട് തിരഞ്ഞെടുക്കുക)</label>
           <div class="relative">
-            <select id="select-account-role" onchange="onAccountDropdownChange()" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-3 text-sm text-slate-100 font-medium appearance-none focus:outline-none focus:border-blue-500 cursor-pointer">
+            <select id="select-account-role" onchange="onAccountDropdownChange()" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-3 text-sm text-slate-100 font-medium appearance-none focus:outline-none focus:border-white cursor-pointer">
               <option value="usr_normal_1">1. Normal User (Arjun Nair)</option>
               <option value="usr_celeb_1">2. Celebrity Account (Dulquer Sithara)</option>
               <option value="usr_org_1">3. Organization (Kochi Live Arena Events)</option>
@@ -68,17 +68,17 @@
         <!-- Mobile Number / Identifier Input -->
         <div class="mb-4">
           <label class="block text-xs font-medium text-slate-300 mb-1.5">Mobile Number / Identifier</label>
-          <input type="text" id="input-phone" value="+919876543210" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 font-mono tracking-wide focus:outline-none focus:border-blue-500">
+          <input type="text" id="input-phone" value="+919876543210" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 font-mono tracking-wide focus:outline-none focus:border-white">
         </div>
 
         <!-- 6-Digit Dummy OTP / Password Input -->
         <div class="mb-6">
           <label class="block text-xs font-medium text-slate-300 mb-1.5">6-Digit Dummy OTP / Password</label>
-          <input type="text" id="input-otp" value="123456" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-center font-mono font-bold tracking-[0.3em] text-blue-400 focus:outline-none focus:border-blue-500">
+          <input type="text" id="input-otp" value="123456" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-center font-mono font-bold tracking-[0.3em] text-white focus:outline-none focus:border-white">
         </div>
 
         <!-- Submit Button -->
-        <button onclick="handleSimpleLogin()" class="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2">
+        <button onclick="handleSimpleLogin()" class="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-slate-950 font-black text-sm shadow-lg transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-lock text-xs"></i>
           <span>Verify OTP (123456) & Enter Website</span>
         </button>
@@ -100,12 +100,12 @@
         
         <!-- Brand Logo -->
         <div class="flex items-center gap-3">
-          <div id="header-brand-icon" class="w-9 h-9 rounded-xl brand-jewel flex items-center justify-center text-white font-bold text-sm shadow-md transition-all duration-300">
+          <div id="header-brand-icon" class="w-9 h-9 rounded-xl brand-jewel flex items-center justify-center text-slate-950 font-black text-sm shadow-md transition-all duration-300">
             FC
           </div>
           <div>
             <h1 id="header-brand-title" class="text-base font-extrabold text-white leading-tight chrome-text-silver">Friends Connect</h1>
-            <p id="header-role-title" class="text-[11px] text-blue-400 font-semibold"></p>
+            <p id="header-role-title" class="text-[11px] text-slate-300 font-semibold"></p>
           </div>
         </div>
 
@@ -1308,6 +1308,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=11"></script>
+  <script src="/app.js?v=12"></script>
 </body>
 </html>
