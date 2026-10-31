@@ -682,22 +682,26 @@ function switchNormalTab(tabId) {
   document.getElementById(`normal-tab-${tabId}`)?.classList.remove('hidden');
 
   if (tabId === 'events') loadNearbyEvents();
-  if (tabId === 'celebrity') renderCelebrityCallControls();
+  if (tabId === 'celebrity') checkCelebrityHubAccess();
 }
 
 function updateNormalPremiumUI() {
   const btnUpgrade = document.getElementById('btn-upgrade-premium');
   const badgeActive = document.getElementById('badge-premium-active');
 
-  if (currentUser.isPremium) {
-    btnUpgrade.classList.add('hidden');
-    badgeActive.classList.remove('hidden');
+  const isPremium = currentUser?.isPremium || localStorage.getItem('fc_celeb_hub_premium') === 'true';
+
+  if (isPremium) {
+    btnUpgrade?.classList.add('hidden');
+    badgeActive?.classList.remove('hidden');
   } else {
-    btnUpgrade.classList.remove('hidden');
-    badgeActive.classList.add('hidden');
+    btnUpgrade?.classList.remove('hidden');
+    badgeActive?.classList.add('hidden');
   }
 
-  renderCelebrityCallControls();
+  if (activeNormalTab === 'celebrity') {
+    checkCelebrityHubAccess();
+  }
 }
 
 async function unlockPremiumSubscription() {
@@ -709,61 +713,254 @@ async function unlockPremiumSubscription() {
     const data = await res.json();
     if (data.success) {
       currentUser.isPremium = true;
+      localStorage.setItem('fc_celeb_hub_premium', 'true');
       localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
       updateNormalPremiumUI();
-      alert('🎉 Congratulations! Premium VIP Subscription activated! You can now call Dulquer Sithara directly on VIP Audio & Video call.');
+      alert('🎉 Congratulations! Premium VIP Subscription activated! You now have full VIP access to Celebrity Hub.');
     }
   } catch (err) {
     console.error('Upgrade error:', err);
+    // Fallback local activation
+    currentUser.isPremium = true;
+    localStorage.setItem('fc_celeb_hub_premium', 'true');
+    localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
+    updateNormalPremiumUI();
+    alert('🎉 Premium VIP Subscription activated! Celebrity Hub Unlocked.');
   }
 }
 
-function renderCelebrityCallControls() {
-  const container = document.getElementById('normal-celeb-call-controls');
-  if (!container) return;
+// ----------------- CELEBRITY HUB VIP ACCESS & 1-ON-1 CHAT ENGINE -----------------
 
-  if (!currentUser.isPremium) {
-    container.innerHTML = `
-      <div class="bg-blue-950/30 border border-blue-500/30 rounded-xl p-3 text-left">
-        <p class="text-xs font-bold text-blue-400 mb-1 flex items-center gap-1">
+function checkCelebrityHubAccess() {
+  const isPremium = currentUser?.isPremium || localStorage.getItem('fc_celeb_hub_premium') === 'true';
+  const lockedBox = document.getElementById('normal-celeb-hub-locked');
+  const unlockedBox = document.getElementById('normal-celeb-hub-unlocked');
+
+  if (!isPremium) {
+    lockedBox?.classList.remove('hidden');
+    unlockedBox?.classList.add('hidden');
+  } else {
+    lockedBox?.classList.add('hidden');
+    unlockedBox?.classList.remove('hidden');
+    // Ensure main view is shown by default
+    document.getElementById('celeb-hub-main-view')?.classList.remove('hidden');
+    document.getElementById('normal-celeb-chat-view')?.classList.add('hidden');
+    loadCelebrityHub();
+  }
+}
+
+async function unlockCelebrityHubPremium() {
+  await unlockPremiumSubscription();
+  checkCelebrityHubAccess();
+}
+
+function hasCelebrityFanPass(celebId = 'usr_celeb_1') {
+  return localStorage.getItem('fc_fan_pass_' + celebId) === 'true';
+}
+
+function subscribeCelebrityFanPass(celebId = 'usr_celeb_1') {
+  localStorage.setItem('fc_fan_pass_' + celebId, 'true');
+  playGateBeep(true);
+  alert('🎉 Congratulations! Dulquer Sithara VIP Fan Pass (₹499 / Month) has been activated! You can now send 1-on-1 chat messages and make VIP Video & Audio calls.');
+  renderCelebrityChatScreen(celebId);
+}
+
+function openCelebrityChatScreen(celebId = 'usr_celeb_1') {
+  const isPremium = currentUser?.isPremium || localStorage.getItem('fc_celeb_hub_premium') === 'true';
+  if (!isPremium) {
+    alert('⚠️ Celebrity Hub പ്രീമിയം യൂസേഴ്സിന് മാത്രമുള്ളതാണ്! Please unlock Celebrity Hub VIP Pass first.');
+    checkCelebrityHubAccess();
+    return;
+  }
+  document.getElementById('celeb-hub-main-view')?.classList.add('hidden');
+  document.getElementById('normal-celeb-chat-view')?.classList.remove('hidden');
+  renderCelebrityChatScreen(celebId);
+}
+
+function closeCelebrityChatScreen() {
+  document.getElementById('normal-celeb-chat-view')?.classList.add('hidden');
+  document.getElementById('celeb-hub-main-view')?.classList.remove('hidden');
+}
+
+function handleCelebrityCallClick(celebId = 'usr_celeb_1', callType = 'CELEBRITY_VIDEO') {
+  if (!hasCelebrityFanPass(celebId)) {
+    alert('⚠️ ദുൽക്കർ സിത്താരയുമായി നേരിട്ട് സംസാരിക്കാൻ "Dulquer Sithara VIP Fan Pass" സബ്‌സ്‌ക്രൈബ് ചെയ്യുക!\nPlease subscribe to Dulquer Sithara VIP Fan Pass (₹499 / Month) to unlock VIP Calling & Chat.');
+    document.getElementById('celeb-chat-controls')?.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  startNormalToCelebCall(celebId, callType);
+}
+
+function renderCelebrityChatScreen(celebId = 'usr_celeb_1') {
+  const isSubscribed = hasCelebrityFanPass(celebId);
+  const badgeEl = document.getElementById('celeb-pass-status-badge');
+  const controlsEl = document.getElementById('celeb-chat-controls');
+
+  if (badgeEl) {
+    if (isSubscribed) {
+      badgeEl.className = 'px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5';
+      badgeEl.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i><span>Dulquer Sithara VIP Pass Active</span>';
+    } else {
+      badgeEl.className = 'px-3 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5';
+      badgeEl.innerHTML = '<i class="fa-solid fa-lock text-amber-400"></i><span>Specific Fan Pass Required</span>';
+    }
+  }
+
+  // 1. Controls (Input box vs Paywall)
+  if (!isSubscribed) {
+    controlsEl.innerHTML = `
+      <div class="p-4 rounded-xl bg-white/[0.03] border border-white/20 text-center">
+        <div class="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs mb-1">
           <i class="fa-solid fa-lock"></i>
-          <span>VIP Calling Locked (പ്രീമിയം ലോക്ക്ഡ്)</span>
+          <span>Dulquer Sithara VIP Fan Pass Required</span>
+        </div>
+        <p class="text-xs text-slate-300 mb-3 max-w-md mx-auto leading-relaxed">
+          ദുൽക്കർ സിത്താരയുമായി നേരിട്ട് 1-on-1 ചാറ്റ് ചെയ്യാനും VIP ഓഡിയോ/വീഡിയോ കോളുകൾ ചെയ്യാനും ഈ സെലിബ്രിറ്റിയുടെ പ്രത്യേക VIP ഫാൻ പാസ്സ് സബ്‌സ്‌ക്രൈബ് ചെയ്യുക.
         </p>
-        <p class="text-[11px] text-slate-300 leading-snug mb-3">
-          സെലിബ്രിറ്റികളെ നേരിട്ട് ഓഡിയോ/വീഡിയോ കോളിൽ വിളിക്കാൻ പ്രീമിയം സബ്‌സ്‌ക്രിപ്ഷൻ ആവശ്യമാണ്.
-        </p>
-        <button onclick="unlockPremiumSubscription()" class="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition">
-          Unlock VIP Calls (₹199 / Month)
+        <button onclick="subscribeCelebrityFanPass('${celebId}')" class="fc-chrome-btn px-6 py-2.5 rounded-full font-bold text-xs uppercase tracking-wider text-black shadow-xl">
+          <i class="fa-solid fa-crown text-amber-500 mr-1.5"></i>
+          <span>Subscribe Dulquer Sithara Fan Pass (₹499 / Month)</span>
         </button>
       </div>
     `;
   } else {
-    container.innerHTML = `
-      <div class="bg-blue-950/30 border border-blue-500/30 rounded-xl p-3 text-left mb-2">
-        <p class="text-xs font-bold text-blue-400 flex items-center gap-1">
-          <i class="fa-solid fa-crown"></i>
-          <span>VIP Direct Access Unlocked!</span>
-        </p>
-        <p class="text-[10px] text-slate-300">You have full access to connect with Dulquer Sithara.</p>
-      </div>
-      <div class="flex gap-2">
-        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_AUDIO')" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
-          <i class="fa-solid fa-phone"></i>
-          <span>VIP Audio</span>
-        </button>
-        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_VIDEO')" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
-          <i class="fa-solid fa-video text-blue-400"></i>
-          <span>VIP Video</span>
+    controlsEl.innerHTML = `
+      <div class="flex items-center gap-2">
+        <input id="celeb-chat-input" type="text" placeholder="Type a message to Dulquer Sithara..." 
+          onkeydown="if(event.key==='Enter') sendCelebChatMessage('${celebId}')"
+          class="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-white/20 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-white transition" />
+        <button onclick="sendCelebChatMessage('${celebId}')" class="fc-chrome-btn px-5 py-2.5 rounded-xl font-bold text-xs text-black shadow flex items-center gap-1.5">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Send</span>
         </button>
       </div>
     `;
   }
+
+  // 2. Chat history
+  renderCelebChatHistory(celebId);
+}
+
+function renderCelebChatHistory(celebId = 'usr_celeb_1') {
+  const messagesEl = document.getElementById('celeb-chat-messages');
+  if (!messagesEl) return;
+
+  const storageKey = 'fc_celeb_chat_' + celebId;
+  let chatData = [];
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) chatData = JSON.parse(saved);
+  } catch {}
+
+  if (!chatData || chatData.length === 0) {
+    chatData = [
+      {
+        id: 'msg_init',
+        sender: 'CELEBRITY',
+        name: 'Dulquer Sithara',
+        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+        text: 'ഹലോ! ഫ്രണ്ട്സ് കണക്റ്റിലെ എന്റെ ഒഫീഷ്യൽ VIP റൂമിലേക്ക് സ്വാഗതം! ❤️ എന്തൊക്കെയുണ്ട് വിശേഷങ്ങൾ?',
+        time: 'Today • 10:00 AM'
+      }
+    ];
+    try { localStorage.setItem(storageKey, JSON.stringify(chatData)); } catch {}
+  }
+
+  messagesEl.innerHTML = chatData.map(msg => {
+    const isMe = msg.sender === 'FAN';
+    if (isMe) {
+      return `
+        <div class="flex justify-end gap-2 items-end">
+          <div class="max-w-xs sm:max-w-md bg-gradient-to-r from-blue-600 to-sky-600 text-white p-3 rounded-2xl rounded-br-sm shadow border border-blue-400/30">
+            <p class="text-xs leading-relaxed">${msg.text}</p>
+            <span class="text-[9px] text-blue-200 block text-right mt-1 font-mono">${msg.time}</span>
+          </div>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="flex justify-start gap-2.5 items-end">
+          <img src="${msg.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-8 h-8 rounded-full object-cover border border-white/30 shadow mb-1">
+          <div class="max-w-xs sm:max-w-md bg-white/10 backdrop-blur-md text-slate-100 p-3 rounded-2xl rounded-bl-sm shadow border border-white/20">
+            <span class="text-[10px] text-sky-400 font-bold block mb-0.5">${msg.name}</span>
+            <p class="text-xs leading-relaxed">${msg.text}</p>
+            <span class="text-[9px] text-slate-400 block text-right mt-1 font-mono">${msg.time}</span>
+          </div>
+        </div>
+      `;
+    }
+  }).join('');
+
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function sendCelebChatMessage(celebId = 'usr_celeb_1') {
+  if (!hasCelebrityFanPass(celebId)) {
+    alert('⚠️ ഈ സെലിബ്രിറ്റിയുമായി ചാറ്റ് ചെയ്യാൻ "Dulquer Sithara VIP Fan Pass" സബ്‌സ്‌ക്രൈബ് ചെയ്യുക!');
+    return;
+  }
+  const input = document.getElementById('celeb-chat-input');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  const storageKey = 'fc_celeb_chat_' + celebId;
+  let chatData = [];
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved) chatData = JSON.parse(saved);
+  } catch {}
+
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+  chatData.push({
+    id: 'msg_' + Date.now(),
+    sender: 'FAN',
+    name: currentUser?.fullName || 'Arjun Nair',
+    text,
+    time: timeStr
+  });
+
+  try { localStorage.setItem(storageKey, JSON.stringify(chatData)); } catch {}
+  renderCelebChatHistory(celebId);
+
+  // Realistic Celebrity VIP automated response after 1.4 seconds!
+  setTimeout(() => {
+    const replies = [
+      'താങ്ക് യു സോ മച്ച് ഫോർ ദി മെസ്സേജ്! ❤️ നിങ്ങളുടെ സ്നേഹവും സപ്പോർട്ടും എനിക്ക് ഒരുപാട് വിലപ്പെട്ടതാണ്!',
+      'സുഖമായിരിക്കുന്നു! നിങ്ങളുടെ ഈ പിന്തുണയാണ് എന്റെ ഏറ്റവും വലിയ പ്രചോദനം. അടുത്ത ഷോയിൽ നമുക്ക് നേരിട്ട് കാണാം! 🎶',
+      'താങ്ക്സ് എ ലോട്ട്! 🥰 ഫ്രണ്ട്സ് കണക്റ്റിലൂടെ നിങ്ങളോട് സംസാരിക്കാൻ സാധിച്ചതിൽ വലിയ സന്തോഷം! ലവ് യു ഓൾ ❤️',
+      'ഹായ്! മെസ്സേജിന് വളരെ നന്ദി! പ്രീമിയം ഫാൻ മെമ്പർഷിപ്പിലൂടെ കണക്റ്റ് ചെയ്തതിൽ ഒരുപാട് സന്തോഷം! Stay blessed! ✨'
+    ];
+    const replyText = replies[Math.floor(Math.random() * replies.length)];
+
+    let current = [];
+    try { current = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch {}
+    current.push({
+      id: 'msg_' + Date.now(),
+      sender: 'CELEBRITY',
+      name: 'Dulquer Sithara',
+      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      text: replyText,
+      time: timeStr
+    });
+    try { localStorage.setItem(storageKey, JSON.stringify(current)); } catch {}
+    renderCelebChatHistory(celebId);
+    playGateBeep(true);
+  }, 1400);
 }
 
 async function startNormalToCelebCall(celebId, callType) {
   const isAvailable = localStorage.getItem('fc_celeb_available') !== 'false';
   if (!isAvailable) {
     alert('⚠️ Dulquer Sithara is currently Offline (Call receiving turned OFF). Please try again when the celebrity is Online!');
+    return;
+  }
+  if (!hasCelebrityFanPass(celebId)) {
+    alert('⚠️ ദുൽക്കർ സിത്താരയുമായി സംസാരിക്കാൻ "Dulquer Sithara VIP Fan Pass" സബ്‌സ്‌ക്രൈബ് ചെയ്യുക!\nPlease subscribe to Dulquer Sithara VIP Fan Pass to unlock VIP Calling.');
+    openCelebrityChatScreen(celebId);
     return;
   }
   isCelebActiveCall = true;
@@ -2305,29 +2502,40 @@ async function loadCelebrityHub() {
           : `<img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">`;
 
         return `
-          <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
-            <div class="p-4 flex items-center gap-3">
-              <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-10 h-10 rounded-full object-cover border border-blue-500 shadow">
-              <div>
-                <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>${post.celebrityName}</span>
-                  ${isVideo ? '<span class="px-1.5 py-0.5 rounded text-[9px] bg-pink-950/40 text-pink-300 border border-pink-500/30 font-bold">Video</span>' : ''}
-                </h4>
-                <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
+          <div class="fc-glass-card rounded-2xl overflow-hidden shadow-xl border border-white/20">
+            <div class="p-4 flex items-center justify-between border-b border-white/10">
+              <div onclick="openCelebrityChatScreen('${post.celebrityId || 'usr_celeb_1'}')" class="flex items-center gap-3 cursor-pointer group">
+                <div class="relative">
+                  <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-11 h-11 rounded-full object-cover border-2 border-white/30 group-hover:border-white shadow transition">
+                  <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border border-black"></span>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-white flex items-center gap-1.5 group-hover:text-blue-300 transition">
+                    <span>${post.celebrityName}</span>
+                    <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
+                    ${isVideo ? '<span class="px-1.5 py-0.5 rounded text-[9px] bg-pink-950/40 text-pink-300 border border-pink-500/30 font-bold">Video</span>' : ''}
+                  </h4>
+                  <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()} • Verified VIP Artist</span>
+                </div>
               </div>
+
+              <button onclick="openCelebrityChatScreen('${post.celebrityId || 'usr_celeb_1'}')" class="px-3.5 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition shadow">
+                <i class="fa-solid fa-comments text-sky-400"></i>
+                <span>1-on-1 Chat</span>
+              </button>
             </div>
             ${mediaHtml}
             <div class="p-4">
-              <p class="text-xs text-slate-300 mb-3">${post.caption}</p>
-              <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-                <button onclick="likeCelebrityPost('${post.id}')" class="px-3 py-1.5 rounded-lg bg-pink-950/40 border border-pink-500/30 text-rose-400 hover:bg-pink-900/40 text-xs font-bold flex items-center gap-1.5 transition">
-                  <i class="fa-solid fa-heart"></i>
+              <p class="text-xs text-slate-200 mb-3 leading-relaxed">${post.caption}</p>
+              <div class="flex items-center justify-between pt-2 border-t border-white/10">
+                <button onclick="likeCelebrityPost('${post.id}')" class="px-3.5 py-1.5 rounded-xl bg-pink-950/40 border border-pink-500/30 text-rose-300 hover:bg-pink-900/40 text-xs font-bold flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-heart text-rose-500"></i>
                   <span id="like-count-${post.id}">${post.likesCount} Likes</span>
                 </button>
-                <span class="text-[10px] text-blue-400/80 font-medium flex items-center gap-1">
-                  <i class="fa-solid fa-circle-check text-blue-400"></i>
-                  <span>Verified Celebrity Post</span>
-                </span>
+                <button onclick="openCelebrityChatScreen('${post.celebrityId || 'usr_celeb_1'}')" class="text-xs text-sky-400 font-bold hover:underline flex items-center gap-1">
+                  <i class="fa-solid fa-paper-plane text-[10px]"></i>
+                  <span>Message Artist & Calls</span>
+                </button>
               </div>
             </div>
           </div>
