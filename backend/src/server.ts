@@ -139,6 +139,12 @@ export class FrndServer {
       return this.jsonResponse({ success: true, user });
     }
 
+    if (path === '/api/auth/upgrade-premium' && method === 'POST') {
+      const user = await this.authenticate(req);
+      const updated = this.authService.updateProfile(user.id, { isPremium: true });
+      return this.jsonResponse({ success: true, user: updated, message: 'Premium Pass activated successfully!' });
+    }
+
     if (path === '/api/auth/profile' && method === 'PUT') {
       const user = await this.authenticate(req);
       const updates = await req.json();

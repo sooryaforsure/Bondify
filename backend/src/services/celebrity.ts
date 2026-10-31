@@ -13,11 +13,11 @@ export class CelebrityService {
     const post1: CelebrityPost = {
       id: 'post_celeb_1',
       celebrityId: 'usr_celeb_1',
-      celebrityName: 'Ananya Joy',
+      celebrityName: 'Dulquer Sithara',
       celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
       mediaType: 'IMAGE',
       mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800',
-      caption: 'Backstage vibes right before tonight’s live acoustic performance in Kochi! 🎤✨ Let’s connect on VIP call later tonight!',
+      caption: 'Backstage vibes right before tonight’s live acoustic performance in Kochi! 🎤✨ Fans can connect with me on VIP video call!',
       likesCount: 1420,
       createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
     };
@@ -25,7 +25,7 @@ export class CelebrityService {
     const post2: CelebrityPost = {
       id: 'post_celeb_2',
       celebrityId: 'usr_celeb_1',
-      celebrityName: 'Ananya Joy',
+      celebrityName: 'Dulquer Sithara',
       celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
       mediaType: 'VIDEO',
       mediaUrl: 'https://assets.mixkit.co/videos/preview/mixkit-singer-singing-on-stage-with-microphone-41221-large.mp4',
@@ -116,11 +116,11 @@ export class CelebrityService {
       ? Math.round(celebDetails.callRatePerMinute * 1.5) // 50% extra for video call
       : celebDetails.callRatePerMinute;
 
-    // Check premium subscription or sufficient wallet coins
-    if (!caller.isPremium && caller.walletBalance < rate) {
+    // Normal users MUST have an active Premium Subscription to call celebrities
+    if (!caller.isPremium) {
       return {
         authorized: false,
-        reason: `Celebrity calling is a Premium feature. You need an active Premium Pass or at least ${rate} coins in your wallet. Current balance: ${caller.walletBalance} coins.`,
+        reason: 'സെലിബ്രിറ്റികളെ വിളിക്കാൻ പ്രീമിയം സബ്‌സ്‌ക്രിപ്ഷൻ (Premium Pass) ആവശ്യമാണ്! പ്രീമിയം പാസ്സ് സബ്‌സ്‌ക്രൈബ് ചെയ്ത് VIP കോളുകൾ അൺലോക്ക് ചെയ്യുക.',
         ratePerMinute: rate,
         celebrity
       };

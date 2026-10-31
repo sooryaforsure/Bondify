@@ -1,9 +1,9 @@
-// FRND Web Application State & Client Logic
+// Friends Connect (FC) Client Logic
 let currentUser = null;
 let currentToken = null;
 let allUsers = [];
 let socket = null;
-let currentTab = 'matchmaking';
+let activeNormalTab = 'connect';
 
 // Call & WebRTC State
 let matchingMode = 'AUDIO'; // 'AUDIO' or 'VIDEO'
@@ -17,7 +17,6 @@ let currentCallHasVideo = false;
 let selectedEventForBooking = null;
 let selectedTicketTier = null;
 let bookingQty = 1;
-let selectedCelebrityForCall = null;
 let activeDistanceFilter = 50;
 
 // Initialize on page load
@@ -25,118 +24,50 @@ window.addEventListener('DOMContentLoaded', async () => {
   await fetchAllUsers();
 
   // Check saved session in localStorage
-  const savedSession = localStorage.getItem('frnd_session');
+  const savedSession = localStorage.getItem('fc_session');
   if (savedSession) {
     try {
       const parsed = JSON.parse(savedSession);
       currentUser = parsed.user;
       currentToken = parsed.token;
       showDashboard();
+      return;
     } catch {
-      showAuthScreen();
+      localStorage.removeItem('fc_session');
     }
-  } else {
-    // Show login screen by default
-    showAuthScreen();
   }
+
+  // Show login screen by default
+  showAuthScreen();
 });
 
-// ----------------- AUTHENTICATION & LOGIN WORKFLOW -----------------
+// ----------------- SIMPLE LOGIN & DROPDOWN WORKFLOW -----------------
 
-function showAuthScreen() {
-  document.getElementById('auth-view').classList.remove('hidden');
-  document.getElementById('dashboard-view').classList.add('hidden');
+function onAccountDropdownChange() {
+  const select = document.getElementById('select-account-role');
+  const userId = select.value;
+
+  const phoneMap = {
+    'usr_normal_1': '+919876543210',
+    'usr_celeb_1': '+919876543212',
+    'usr_org_1': '+919876543211',
+    'usr_support_1': '+919876543213',
+    'usr_admin_1': '+919876543214'
+  };
+
+  document.getElementById('input-phone').value = phoneMap[userId] || '+919876543210';
+  document.getElementById('input-otp').value = '123456';
 }
 
-function showDashboard() {
-  document.getElementById('auth-view').classList.add('hidden');
-  document.getElementById('dashboard-view').classList.remove('hidden');
-
-  updateUserUI();
-  updateRoleSpecificUI();
-  initWebSocket();
-
-  // Load appropriate default tab
-  if (currentUser.role === 'SUPER_ADMIN') {
-    switchTab('admin');
-  } else if (currentUser.role === 'SUPPORT') {
-    switchTab('support');
-  } else if (currentUser.role === 'ORGANIZATION') {
-    switchTab('events');
-  } else if (currentUser.role === 'CELEBRITY') {
-    switchTab('celebrity');
-  } else {
-    switchTab('matchmaking');
-  }
-
-  loadNearbyEvents();
-  loadCelebrityHub();
-  loadSupportTickets();
-}
-
-function switchAuthTab(tab) {
-  const tabOtp = document.getElementById('auth-tab-otp');
-  const tabAdmin = document.getElementById('auth-tab-admin');
-  const tabDemo = document.getElementById('auth-tab-demo');
-
-  const formOtp = document.getElementById('auth-form-otp');
-  const formAdmin = document.getElementById('auth-form-admin');
-  const formDemo = document.getElementById('auth-form-demo');
-
-  // Reset tabs
-  [tabOtp, tabAdmin, tabDemo].forEach(el => {
-    el.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white';
-  });
-  [formOtp, formAdmin, formDemo].forEach(el => el.classList.add('hidden'));
-
-  if (tab === 'otp') {
-    tabOtp.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow';
-    formOtp.classList.remove('hidden');
-  } else if (tab === 'admin') {
-    tabAdmin.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-purple-600 text-white shadow';
-    formAdmin.classList.remove('hidden');
-  } else if (tab === 'demo') {
-    tabDemo.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-amber-500 text-slate-950 shadow';
-    formDemo.classList.remove('hidden');
-  }
-}
-
-async function requestOtp() {
-  const phone = document.getElementById('input-phone').value.trim();
-  if (!phone) {
-    alert('Please enter your mobile number.');
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/auth/send-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phoneNumber: phone })
-    });
-    const data = await res.json();
-    if (data.success) {
-      const hint = document.getElementById('otp-hint-message');
-      hint.classList.remove('hidden');
-      document.getElementById('input-otp').value = data.debugOtp || '123456';
-    } else {
-      alert(data.error || 'Failed to send OTP');
-    }
-  } catch (err) {
-    console.error('OTP request error:', err);
-  }
-}
-
-async function handleOtpLogin() {
+async function handleSimpleLogin() {
+  const select = document.getElementById('select-account-role');
+  const userId = select.value;
   const phone = document.getElementById('input-phone').value.trim();
   const otp = document.getElementById('input-otp').value.trim();
-  const role = document.querySelector('input[name="auth-role"]:checked')?.value || 'NORMAL';
-  const fullName = document.getElementById('input-fullname').value.trim();
 
-  if (!phone || !otp) {
-    alert('Please enter your mobile number and OTP.');
-    return;
-  }
+  const user = allUsers.find(u => u.id === userId);
+  const role = user ? user.role : 'NORMAL';
+  const fullName = user ? user.fullName : 'User';
 
   try {
     const res = await fetch('/api/auth/verify-otp', {
@@ -154,72 +85,20 @@ async function handleOtpLogin() {
     if (data.success) {
       currentUser = data.session.user;
       currentToken = data.session.token;
-      localStorage.setItem('frnd_session', JSON.stringify({ user: currentUser, token: currentToken }));
+      localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
       showDashboard();
     } else {
       alert(data.error || 'Invalid OTP. Please enter 123456.');
     }
   } catch (err) {
     console.error('Login error:', err);
-    alert('Login error. Please check your network.');
-  }
-}
-
-async function handleAdminLogin() {
-  const identifier = document.getElementById('admin-input-id').value.trim();
-  const password = document.getElementById('admin-input-password').value.trim();
-
-  if (!identifier || !password) {
-    alert('Please enter your admin email and password.');
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/auth/admin-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password })
-    });
-
-    const data = await res.json();
-    if (data.success) {
-      currentUser = data.session.user;
-      currentToken = data.session.token;
-      localStorage.setItem('frnd_session', JSON.stringify({ user: currentUser, token: currentToken }));
-      showDashboard();
-    } else {
-      alert(data.error || 'Invalid admin credentials.');
-    }
-  } catch (err) {
-    console.error('Admin login error:', err);
-    alert('Login error. Check credentials.');
-  }
-}
-
-async function quickDemoLogin(userId) {
-  const target = allUsers.find(u => u.id === userId);
-  if (!target) return;
-
-  if (target.role === 'SUPER_ADMIN') {
-    document.getElementById('admin-input-id').value = 'admin@frnd.app';
-    document.getElementById('admin-input-password').value = 'admin123';
-    await handleAdminLogin();
-  } else if (target.role === 'SUPPORT') {
-    document.getElementById('admin-input-id').value = 'support@frnd.app';
-    document.getElementById('admin-input-password').value = 'support123';
-    await handleAdminLogin();
-  } else {
-    document.getElementById('input-phone').value = target.phoneNumber;
-    document.getElementById('input-otp').value = '123456';
-    const radio = document.querySelector(`input[name="auth-role"][value="${target.role}"]`);
-    if (radio) radio.checked = true;
-    await handleOtpLogin();
+    alert('Login error. Please check server.');
   }
 }
 
 function handleLogout() {
   if (confirm('Are you sure you want to log out?')) {
-    localStorage.removeItem('frnd_session');
+    localStorage.removeItem('fc_session');
     currentUser = null;
     currentToken = null;
     if (socket) {
@@ -232,183 +111,266 @@ function handleLogout() {
   }
 }
 
-async function fetchAllUsers() {
-  try {
-    const res = await fetch('/api/users');
-    const data = await res.json();
-    if (data.success) {
-      allUsers = data.users;
-    }
-  } catch (err) {
-    console.error('Error fetching users:', err);
-  }
+function showAuthScreen() {
+  document.getElementById('auth-view').classList.remove('hidden');
+  document.getElementById('dashboard-view').classList.add('hidden');
+  onAccountDropdownChange();
 }
 
-function updateUserUI() {
+// ----------------- STRICT ROLE-SEGREGATED DASHBOARD -----------------
+
+function showDashboard() {
   if (!currentUser) return;
 
+  document.getElementById('auth-view').classList.add('hidden');
+  document.getElementById('dashboard-view').classList.remove('hidden');
+
+  // Update Top Bar Profile Info
   document.getElementById('user-display-name').textContent = currentUser.fullName;
   document.getElementById('user-role-badge').textContent = currentUser.role;
-  document.getElementById('header-user-role-label').textContent = currentUser.fullName + ` (${currentUser.role})`;
-  document.getElementById('user-wallet-coins').textContent = currentUser.walletBalance;
   document.getElementById('user-avatar').src = currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
+  document.getElementById('header-role-title').textContent = `${currentUser.fullName} (${currentUser.role})`;
 
-  const walletContainer = document.getElementById('header-wallet-container');
-  if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SUPPORT') {
-    walletContainer.classList.add('hidden');
-  } else {
-    walletContainer.classList.remove('hidden');
-  }
-}
-
-function updateRoleSpecificUI() {
-  if (!currentUser) return;
-
-  const adminTab = document.getElementById('tab-admin');
-  const postEventBtn = document.getElementById('btn-post-event');
-  const postMediaBtn = document.getElementById('btn-post-media');
-
-  // Super Admin Tab
-  if (currentUser.role === 'SUPER_ADMIN') {
-    adminTab.classList.remove('hidden');
-    loadAdminMetrics();
-  } else {
-    adminTab.classList.add('hidden');
-  }
-
-  // Organization Post Event Button
-  if (currentUser.role === 'ORGANIZATION' || currentUser.role === 'SUPER_ADMIN') {
-    postEventBtn.classList.remove('hidden');
-  } else {
-    postEventBtn.classList.add('hidden');
-  }
-
-  // Celebrity Post Media Button
-  if (currentUser.role === 'CELEBRITY' || currentUser.role === 'SUPER_ADMIN') {
-    postMediaBtn.classList.remove('hidden');
-  } else {
-    postMediaBtn.classList.add('hidden');
-  }
-}
-
-function addDemoCoins() {
-  if (!currentUser) return;
-  currentUser.walletBalance += 100;
-  document.getElementById('user-wallet-coins').textContent = currentUser.walletBalance;
-  alert('Added 100 Demo Coins! Current balance: ' + currentUser.walletBalance + ' coins');
-}
-
-// ----------------- TAB NAVIGATION -----------------
-
-function switchTab(tabId) {
-  currentTab = tabId;
-
-  // Update tabs UI
-  document.querySelectorAll('.tab-item').forEach(el => {
-    el.classList.remove('active-tab');
-    el.classList.add('text-slate-400');
+  // Hide all role dashboards first
+  ['normal', 'celebrity', 'organization', 'support', 'admin'].forEach(r => {
+    document.getElementById(`dashboard-${r}`).classList.add('hidden');
   });
-  document.getElementById(`tab-${tabId}`)?.classList.add('active-tab');
-  document.getElementById(`tab-${tabId}`)?.classList.remove('text-slate-400');
 
-  // Show selected content
-  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-  document.getElementById(`view-${tabId}`)?.classList.remove('hidden');
+  // Role-specific Header area elements
+  const normalPremiumArea = document.getElementById('normal-user-premium-area');
+  const celebEarningsArea = document.getElementById('celebrity-earnings-area');
+  normalPremiumArea.classList.add('hidden');
+  celebEarningsArea.classList.add('hidden');
+
+  const navContainer = document.getElementById('authorized-nav-tabs');
+  navContainer.innerHTML = '';
+
+  initWebSocket();
+
+  // 1. NORMAL USER
+  if (currentUser.role === 'NORMAL') {
+    document.getElementById('dashboard-normal').classList.remove('hidden');
+    normalPremiumArea.classList.remove('hidden');
+    updateNormalPremiumUI();
+
+    // Normal Tabs
+    navContainer.innerHTML = `
+      <button onclick="switchNormalTab('connect')" id="norm-tab-connect" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white flex items-center gap-1.5">
+        <i class="fa-solid fa-shuffle"></i><span>Random Audio/Video</span>
+      </button>
+      <button onclick="switchNormalTab('events')" id="norm-tab-events" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5">
+        <i class="fa-solid fa-calendar-days text-amber-400"></i><span>Nearby Events</span>
+      </button>
+      <button onclick="switchNormalTab('celebrity')" id="norm-tab-celebrity" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5">
+        <i class="fa-solid fa-star text-pink-400"></i><span>Celebrity Hub</span>
+      </button>
+      <button onclick="switchNormalTab('support')" id="norm-tab-support" class="norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5">
+        <i class="fa-solid fa-comments text-emerald-400"></i><span>Customer Care</span>
+      </button>
+    `;
+
+    loadNearbyEvents();
+    loadCelebrityHub();
+    loadSupportTickets();
+    switchNormalTab('connect');
+  }
+
+  // 2. CELEBRITY
+  else if (currentUser.role === 'CELEBRITY') {
+    document.getElementById('dashboard-celebrity').classList.remove('hidden');
+    celebEarningsArea.classList.remove('hidden');
+
+    navContainer.innerHTML = `
+      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-pink-400 bg-pink-950/40 border border-pink-500/30 flex items-center gap-1.5">
+        <i class="fa-solid fa-crown"></i><span>Celebrity Console</span>
+      </span>
+      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
+        <i class="fa-solid fa-info-circle text-blue-400"></i>
+        <span>Incoming fan call reception & media updates only (No matchmaking or coin buying needed)</span>
+      </span>
+    `;
+
+    loadCelebrityOwnFeed();
+  }
+
+  // 3. ORGANIZATION
+  else if (currentUser.role === 'ORGANIZATION') {
+    document.getElementById('dashboard-organization').classList.remove('hidden');
+
+    navContainer.innerHTML = `
+      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-amber-400 bg-amber-950/40 border border-amber-500/30 flex items-center gap-1.5">
+        <i class="fa-solid fa-building"></i><span>Event Organizer Console</span>
+      </span>
+      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
+        <i class="fa-solid fa-ticket text-amber-400"></i>
+        <span>Publish events & scan gate QR codes</span>
+      </span>
+    `;
+
+    loadOrganizationEvents();
+  }
+
+  // 4. SUPPORT EXECUTIVE
+  else if (currentUser.role === 'SUPPORT') {
+    document.getElementById('dashboard-support').classList.remove('hidden');
+
+    navContainer.innerHTML = `
+      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 flex items-center gap-1.5">
+        <i class="fa-solid fa-headset"></i><span>Helpdesk Executive</span>
+      </span>
+      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
+        <span>Active Live Queries Stream</span>
+      </span>
+    `;
+
+    loadSupportExecutiveDesk();
+  }
+
+  // 5. SUPER ADMIN
+  else if (currentUser.role === 'SUPER_ADMIN') {
+    document.getElementById('dashboard-admin').classList.remove('hidden');
+
+    navContainer.innerHTML = `
+      <span class="px-3 py-1.5 rounded-lg text-xs font-bold text-purple-400 bg-purple-950/40 border border-purple-500/30 flex items-center gap-1.5">
+        <i class="fa-solid fa-shield-halved"></i><span>Platform Control</span>
+      </span>
+      <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
+        <span>Root System Moderation & Analytics</span>
+      </span>
+    `;
+
+    loadAdminMetrics();
+  }
+}
+
+// ----------------- NORMAL USER LOGIC -----------------
+
+function switchNormalTab(tabId) {
+  activeNormalTab = tabId;
+
+  document.querySelectorAll('.norm-tab').forEach(btn => {
+    btn.className = 'norm-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5';
+  });
+  document.getElementById(`norm-tab-${tabId}`)?.classList.remove('text-slate-400');
+  document.getElementById(`norm-tab-${tabId}`)?.classList.add('bg-blue-600', 'text-white');
+
+  document.querySelectorAll('.normal-section').forEach(sec => sec.classList.add('hidden'));
+  document.getElementById(`normal-tab-${tabId}`)?.classList.remove('hidden');
 
   if (tabId === 'events') loadNearbyEvents();
-  if (tabId === 'celebrity') loadCelebrityHub();
-  if (tabId === 'support') loadSupportTickets();
-  if (tabId === 'admin') loadAdminMetrics();
+  if (tabId === 'celebrity') renderCelebrityCallControls();
 }
 
-// ----------------- WEBSOCKET & REALTIME SIGNALING -----------------
+function updateNormalPremiumUI() {
+  const btnUpgrade = document.getElementById('btn-upgrade-premium');
+  const badgeActive = document.getElementById('badge-premium-active');
 
-function initWebSocket() {
-  if (!currentUser) return;
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}/ws?userId=${currentUser.id}`;
+  if (currentUser.isPremium) {
+    btnUpgrade.classList.add('hidden');
+    badgeActive.classList.remove('hidden');
+  } else {
+    btnUpgrade.classList.remove('hidden');
+    badgeActive.classList.add('hidden');
+  }
 
-  socket = new WebSocket(wsUrl);
+  renderCelebrityCallControls();
+}
 
-  socket.onopen = () => {
-    console.log('[WebSocket] Connected to FRND signaling server');
-  };
-
-  socket.onmessage = (event) => {
-    try {
-      const payload = JSON.parse(event.data);
-      handleSignalingMessage(payload);
-    } catch (err) {
-      console.error('[WebSocket] Error parsing message:', err);
+async function unlockPremiumSubscription() {
+  try {
+    const res = await fetch('/api/auth/upgrade-premium', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${currentToken}` }
+    });
+    const data = await res.json();
+    if (data.success) {
+      currentUser.isPremium = true;
+      localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
+      updateNormalPremiumUI();
+      alert('🎉 Congratulations! Premium VIP Subscription activated! You can now call Dulquer Sithara directly on VIP Audio & Video call.');
     }
-  };
-
-  socket.onclose = () => {
-    console.log('[WebSocket] Connection closed');
-  };
-}
-
-function handleSignalingMessage(payload) {
-  console.log('[Signaling Received]:', payload.type, payload);
-
-  switch (payload.type) {
-    case 'MATCH_FOUND':
-      onMatchFound(payload);
-      break;
-
-    case 'PEER_DISCONNECTED':
-      alert('Your call partner skipped to the next person.');
-      setCallState('searching');
-      break;
-
-    case 'END_CALL':
-      alert('Call ended.');
-      setCallState('idle');
-      break;
-
-    case 'CALL_OFFER':
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'CALL_ANSWER',
-          sdp: { type: 'answer', sdp: 'v=0...' }
-        }));
-      }
-      break;
-
-    default:
-      break;
+  } catch (err) {
+    console.error('Upgrade error:', err);
   }
 }
 
-// ----------------- RANDOM AUDIO & VIDEO MATCHMAKING -----------------
+function renderCelebrityCallControls() {
+  const container = document.getElementById('normal-celeb-call-controls');
+  if (!container) return;
+
+  if (!currentUser.isPremium) {
+    container.innerHTML = `
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-left">
+        <p class="text-xs font-bold text-amber-400 mb-1 flex items-center gap-1">
+          <i class="fa-solid fa-lock"></i>
+          <span>VIP Calling Locked (പ്രീമിയം ലോക്ക്ഡ്)</span>
+        </p>
+        <p class="text-[11px] text-slate-300 leading-snug mb-3">
+          സെലിബ്രിറ്റികളെ നേരിട്ട് ഓഡിയോ/വീഡിയോ കോളിൽ വിളിക്കാൻ പ്രീമിയം സബ്‌സ്‌ക്രിപ്ഷൻ ആവശ്യമാണ്.
+        </p>
+        <button onclick="unlockPremiumSubscription()" class="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition">
+          Unlock VIP Calls (₹199 / Month)
+        </button>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-left mb-2">
+        <p class="text-xs font-bold text-emerald-400 flex items-center gap-1">
+          <i class="fa-solid fa-crown"></i>
+          <span>VIP Direct Access Unlocked!</span>
+        </p>
+        <p class="text-[10px] text-slate-300">You have full access to connect with Dulquer Sithara.</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_AUDIO')" class="flex-1 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
+          <i class="fa-solid fa-phone"></i>
+          <span>VIP Audio</span>
+        </button>
+        <button onclick="startNormalToCelebCall('usr_celeb_1', 'CELEBRITY_VIDEO')" class="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
+          <i class="fa-solid fa-video"></i>
+          <span>VIP Video</span>
+        </button>
+      </div>
+    `;
+  }
+}
+
+function startNormalToCelebCall(celebId, callType) {
+  const hasVideo = callType === 'CELEBRITY_VIDEO';
+  switchNormalTab('connect');
+
+  document.getElementById('peer-name').textContent = 'Dulquer Sithara (VIP Artist)';
+  document.getElementById('peer-avatar').src = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
+  document.getElementById('remote-peer-video-name').textContent = 'Dulquer Sithara (VIP)';
+  document.getElementById('remote-peer-video-avatar').src = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
+
+  setCallState('connected', hasVideo);
+  alert(`Connecting 1-on-1 VIP WebRTC ${hasVideo ? 'Video' : 'Audio'} Call with Dulquer Sithara!`);
+}
+
+// ----------------- RANDOM MATCHMAKING LOGIC -----------------
 
 function setMatchingMode(mode) {
   matchingMode = mode;
-
   const btnAudio = document.getElementById('mode-btn-audio');
   const btnVideo = document.getElementById('mode-btn-video');
   const mainIcon = document.getElementById('idle-main-icon');
   const idleTitle = document.getElementById('idle-title');
-  const idleDesc = document.getElementById('idle-desc');
   const btnText = document.getElementById('connect-btn-text');
-  const btnIcon = document.getElementById('connect-btn-icon');
 
   if (mode === 'VIDEO') {
-    btnVideo.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-sm';
-    btnAudio.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 text-slate-400 hover:text-white';
+    btnVideo.className = 'px-5 py-2 rounded-full text-xs font-bold bg-pink-600 text-white shadow';
+    btnAudio.className = 'px-5 py-2 rounded-full text-xs font-bold text-slate-400 hover:text-white';
     mainIcon.className = 'fa-solid fa-video text-pink-400';
     idleTitle.textContent = 'Live Random Video Chat';
-    idleDesc.textContent = 'Connect 1-on-1 on live WebRTC video with online friends worldwide.';
     btnText.textContent = 'Connect Random Video Friend';
-    btnIcon.className = 'fa-solid fa-video';
   } else {
-    btnAudio.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm';
-    btnVideo.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 text-slate-400 hover:text-white';
-    mainIcon.className = 'fa-solid fa-microphone text-indigo-400';
+    btnAudio.className = 'px-5 py-2 rounded-full text-xs font-bold bg-blue-600 text-white shadow';
+    btnVideo.className = 'px-5 py-2 rounded-full text-xs font-bold text-slate-400 hover:text-white';
+    mainIcon.className = 'fa-solid fa-microphone text-blue-400';
     idleTitle.textContent = 'Find Someone New';
-    idleDesc.textContent = 'Safe, instant anonymous audio matching with verified community members.';
     btnText.textContent = 'Connect Random Friend';
-    btnIcon.className = 'fa-solid fa-phone-volume';
   }
 }
 
@@ -431,7 +393,6 @@ function setCallState(state, hasVideo = false) {
     stopCallTimer();
   } else if (state === 'connected') {
     document.getElementById('call-state-connected').classList.remove('hidden');
-    
     if (hasVideo) {
       videoViewport.classList.remove('hidden');
       audioViewport.classList.add('hidden');
@@ -450,17 +411,12 @@ function setCallState(state, hasVideo = false) {
 async function startLocalCamera() {
   try {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      localMediaStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
-      });
+      localMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       const localVideo = document.getElementById('local-video');
-      if (localVideo) {
-        localVideo.srcObject = localMediaStream;
-      }
+      if (localVideo) localVideo.srcObject = localMediaStream;
     }
   } catch (err) {
-    console.log('[Camera] Using simulated camera stream or preview:', err.message);
+    console.log('[Camera] Using mock camera preview:', err.message);
   }
 }
 
@@ -477,40 +433,28 @@ function toggleCamera() {
   const btn = document.getElementById('btn-camera');
 
   if (localMediaStream) {
-    localMediaStream.getVideoTracks().forEach(track => {
-      track.enabled = !isCameraOff;
-    });
+    localMediaStream.getVideoTracks().forEach(track => { track.enabled = !isCameraOff; });
   }
 
   if (isCameraOff) {
     overlay.classList.remove('hidden');
     btn.innerHTML = '<i class="fa-solid fa-video-slash text-rose-500"></i>';
-    btn.classList.add('bg-rose-950/40', 'border-rose-500/50');
   } else {
     overlay.classList.add('hidden');
     btn.innerHTML = '<i class="fa-solid fa-video"></i>';
-    btn.classList.remove('bg-rose-950/40', 'border-rose-500/50');
   }
 }
 
 function startRandomMatching() {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    initWebSocket();
-  }
-
+  if (!socket || socket.readyState !== WebSocket.OPEN) initWebSocket();
   setCallState('searching');
 
-  // Send JOIN_RANDOM_QUEUE signal with callType preference
   socket.send(JSON.stringify({
     type: 'JOIN_RANDOM_QUEUE',
     userId: currentUser.id,
-    metadata: {
-      callType: matchingMode,
-      audioOnly: matchingMode === 'AUDIO'
-    }
+    metadata: { callType: matchingMode, audioOnly: matchingMode === 'AUDIO' }
   }));
 
-  // Demo fallback
   setTimeout(() => {
     const searching = !document.getElementById('call-state-searching').classList.contains('hidden');
     if (searching) {
@@ -529,10 +473,7 @@ function startRandomMatching() {
 
 function cancelMatching() {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: 'LEAVE_RANDOM_QUEUE',
-      userId: currentUser.id
-    }));
+    socket.send(JSON.stringify({ type: 'LEAVE_RANDOM_QUEUE', userId: currentUser.id }));
   }
   setCallState('idle');
 }
@@ -540,13 +481,12 @@ function cancelMatching() {
 function onMatchFound(payload) {
   currentCallPartner = payload.targetUserId;
   const hasVideo = payload.metadata?.hasVideo === true || payload.metadata?.callType === 'RANDOM_VIDEO';
-  
-  const names = ['Kavya S.', 'Arjun Menon', 'Sneha V.', 'Fahad K.', 'Deepak Raj'];
+
+  const names = ['Kavya S.', 'Midhun K.', 'Gokul S.', 'Reshma P.'];
   const avatars = [
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400'
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400'
   ];
 
   const matchedName = names[Math.floor(Math.random() * names.length)];
@@ -569,11 +509,7 @@ function onMatchFound(payload) {
 
 function skipToNextPerson() {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: 'NEXT_PERSON',
-      userId: currentUser.id,
-      metadata: { callType: matchingMode }
-    }));
+    socket.send(JSON.stringify({ type: 'NEXT_PERSON', userId: currentUser.id, metadata: { callType: matchingMode } }));
   }
   setCallState('searching');
 
@@ -595,10 +531,7 @@ function skipToNextPerson() {
 
 function endCurrentCall() {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: 'END_CALL',
-      userId: currentUser.id
-    }));
+    socket.send(JSON.stringify({ type: 'END_CALL', userId: currentUser.id }));
   }
   setCallState('idle');
 }
@@ -606,19 +539,13 @@ function endCurrentCall() {
 function toggleMute() {
   isMuted = !isMuted;
   const btn = document.getElementById('btn-mute');
-
   if (localMediaStream) {
-    localMediaStream.getAudioTracks().forEach(track => {
-      track.enabled = !isMuted;
-    });
+    localMediaStream.getAudioTracks().forEach(track => { track.enabled = !isMuted; });
   }
-
   if (isMuted) {
     btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
-    btn.classList.add('bg-rose-950/40', 'border-rose-500/50');
   } else {
     btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-    btn.classList.remove('bg-rose-950/40', 'border-rose-500/50');
   }
 }
 
@@ -630,453 +557,184 @@ function startCallTimer() {
     const mins = String(Math.floor(callDuration / 60)).padStart(2, '0');
     const secs = String(callDuration % 60).padStart(2, '0');
     document.getElementById('call-timer').textContent = `${mins}:${secs}`;
-    const videoTimer = document.getElementById('video-call-timer');
-    if (videoTimer) videoTimer.textContent = `${mins}:${secs}`;
   }, 1000);
 }
 
 function stopCallTimer() {
   clearInterval(callTimerInterval);
   document.getElementById('call-timer').textContent = '00:00';
-  const videoTimer = document.getElementById('video-call-timer');
-  if (videoTimer) videoTimer.textContent = '00:00';
 }
 
-// ----------------- NEARBY EVENTS & TICKETING -----------------
+// ----------------- CELEBRITY CONSOLE LOGIC -----------------
 
-async function loadNearbyEvents() {
-  try {
-    const userLat = currentUser?.latitude || 9.9312;
-    const userLon = currentUser?.longitude || 76.2673;
-    const url = `/api/events?lat=${userLat}&lon=${userLon}${activeDistanceFilter ? `&radius=${activeDistanceFilter}` : ''}`;
-    
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.success) {
-      renderEvents(data.events);
-    }
-  } catch (err) {
-    console.error('Error loading events:', err);
+let celebAvailable = true;
+
+function toggleCelebrityAvailability() {
+  celebAvailable = !celebAvailable;
+  const btn = document.getElementById('celeb-status-btn');
+  const label = document.getElementById('celeb-status-label');
+
+  if (celebAvailable) {
+    btn.className = 'px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5';
+    label.textContent = 'Online (Accepting Calls)';
+  } else {
+    btn.className = 'px-4 py-2 rounded-full bg-slate-700 text-slate-300 font-bold text-xs shadow flex items-center gap-1.5';
+    label.textContent = 'Offline (Busy)';
   }
 }
 
-function filterEventsDistance(radiusKm) {
-  activeDistanceFilter = radiusKm;
-  document.getElementById('dist-10').className = radiusKm === 10 ? 'px-2.5 py-1 rounded-md bg-indigo-600 text-white font-medium' : 'px-2.5 py-1 rounded-md text-slate-400 hover:text-white';
-  document.getElementById('dist-50').className = radiusKm === 50 ? 'px-2.5 py-1 rounded-md bg-indigo-600 text-white font-medium' : 'px-2.5 py-1 rounded-md text-slate-400 hover:text-white';
-  document.getElementById('dist-all').className = radiusKm === 0 ? 'px-2.5 py-1 rounded-md bg-indigo-600 text-white font-medium' : 'px-2.5 py-1 rounded-md text-slate-400 hover:text-white';
-  loadNearbyEvents();
+function acceptIncomingFanCall() {
+  document.getElementById('incoming-fan-call-box').classList.add('hidden');
+  document.getElementById('celeb-active-call-box').classList.remove('hidden');
+  alert('Connecting 1-on-1 VIP Video Call with fan Arjun Nair!');
 }
 
-function renderEvents(events) {
-  const container = document.getElementById('events-grid');
-  if (!events || events.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full py-12 text-center text-slate-400">
-        <i class="fa-regular fa-calendar-xmark text-4xl mb-3 text-slate-500"></i>
-        <p class="text-sm">No events found within ${activeDistanceFilter}km of your location.</p>
-      </div>
-    `;
+function declineIncomingFanCall() {
+  document.getElementById('incoming-fan-call-box').classList.add('hidden');
+  alert('Fan call declined.');
+  setTimeout(() => {
+    document.getElementById('incoming-fan-call-box').classList.remove('hidden');
+  }, 5000);
+}
+
+function endCelebrityCall() {
+  document.getElementById('celeb-active-call-box').classList.add('hidden');
+  document.getElementById('incoming-fan-call-box').classList.remove('hidden');
+  alert('Call completed.');
+}
+
+async function loadCelebrityOwnFeed() {
+  try {
+    const res = await fetch('/api/celebrities/feed');
+    const data = await res.json();
+    if (data.success) {
+      const container = document.getElementById('celeb-own-feed');
+      container.innerHTML = data.feed.map(post => `
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
+          <div class="p-4 flex items-center justify-between">
+            <span class="text-xs font-bold text-white">${post.celebrityName}</span>
+            <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
+          </div>
+          <img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">
+          <div class="p-4">
+            <p class="text-xs text-slate-300 mb-2">${post.caption}</p>
+            <div class="text-xs text-pink-400 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-heart"></i>
+              <span>${post.likesCount} Fan Likes</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Error loading celeb feed:', err);
+  }
+}
+
+// ----------------- ORGANIZATION CONSOLE LOGIC -----------------
+
+async function loadOrganizationEvents() {
+  try {
+    const res = await fetch('/api/events');
+    const data = await res.json();
+    if (data.success) {
+      const container = document.getElementById('org-events-list');
+      container.innerHTML = data.events.map(evt => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h4 class="text-xs font-bold text-white">${evt.title}</h4>
+            <p class="text-[11px] text-slate-400">${evt.venueName}, ${evt.city}</p>
+            <p class="text-[10px] text-amber-400 mt-1 font-semibold">General Pass: ₹${evt.ticketTiers[0]?.price} • ${evt.ticketTiers[0]?.soldQuantity} Sold</p>
+          </div>
+          <span class="text-xs px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-400 font-bold">Approved</span>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Error loading org events:', err);
+  }
+}
+
+async function handleScanTicket() {
+  const hash = document.getElementById('input-scan-qr').value.trim();
+  if (!hash) {
+    alert('Please enter or scan a ticket QR code hash.');
     return;
   }
 
-  container.innerHTML = events.map(evt => `
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition flex flex-col shadow-lg">
-      <div class="relative h-44 overflow-hidden">
-        <img src="${evt.bannerUrl}" class="w-full h-full object-cover">
-        <div class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold text-amber-300 border border-amber-500/30 flex items-center gap-1">
-          <i class="fa-solid fa-location-dot"></i>
-          <span>${evt.distanceKm !== undefined ? `${evt.distanceKm} km away` : evt.city}</span>
-        </div>
-        <div class="absolute top-3 right-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-semibold text-indigo-300 border border-indigo-500/30">
-          ${evt.category}
-        </div>
-      </div>
-
-      <div class="p-5 flex-1 flex flex-col justify-between">
-        <div>
-          <h3 class="text-base font-bold text-white mb-1.5 leading-snug">${evt.title}</h3>
-          <p class="text-xs text-slate-400 mb-3 line-clamp-2">${evt.description}</p>
-          
-          <div class="space-y-1.5 text-xs text-slate-300 mb-4">
-            <div class="flex items-center gap-2">
-              <i class="fa-regular fa-clock text-indigo-400 w-4"></i>
-              <span>${new Date(evt.startTime).toLocaleDateString()} at ${new Date(evt.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <i class="fa-solid fa-building text-slate-400 w-4"></i>
-              <span class="truncate">${evt.venueName}, ${evt.city}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between">
-          <div>
-            <span class="text-[10px] text-slate-500 uppercase font-semibold">Starting from</span>
-            <p class="text-base font-extrabold text-amber-400">₹${evt.ticketTiers[0]?.price || 0}</p>
-          </div>
-          <button onclick="openBookingModal('${evt.id}')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:opacity-90 text-slate-950 font-bold text-xs shadow-md transition flex items-center gap-1.5">
-            <i class="fa-solid fa-ticket"></i>
-            <span>Book Ticket</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function openBookingModal(eventId) {
-  fetch(`/api/events`)
-    .then(r => r.json())
-    .then(data => {
-      const event = data.events.find(e => e.id === eventId);
-      if (!event) return;
-
-      selectedEventForBooking = event;
-      selectedTicketTier = event.ticketTiers[0];
-      bookingQty = 1;
-
-      document.getElementById('booking-event-title').textContent = event.title;
-      document.getElementById('booking-event-venue').textContent = `${event.venueName}, ${event.city}`;
-      document.getElementById('booking-qty').textContent = bookingQty;
-
-      renderTiersList();
-      updateBookingTotal();
-
-      document.getElementById('ticket-booking-form').classList.remove('hidden');
-      document.getElementById('ticket-qr-result').classList.add('hidden');
-      document.getElementById('modal-ticket').classList.remove('hidden');
-    });
-}
-
-function renderTiersList() {
-  const container = document.getElementById('booking-tiers-list');
-  container.innerHTML = selectedEventForBooking.ticketTiers.map(tier => `
-    <div onclick="selectTier('${tier.id}')" class="p-3 rounded-xl border cursor-pointer transition flex items-center justify-between ${selectedTicketTier.id === tier.id ? 'border-amber-500 bg-amber-500/10' : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'}">
-      <div>
-        <p class="text-xs font-bold text-slate-200">${tier.name}</p>
-        <p class="text-[10px] text-slate-400">${tier.totalQuantity - tier.soldQuantity} seats remaining</p>
-      </div>
-      <span class="text-xs font-bold text-amber-400">₹${tier.price}</span>
-    </div>
-  `).join('');
-}
-
-function selectTier(tierId) {
-  selectedTicketTier = selectedEventForBooking.ticketTiers.find(t => t.id === tierId);
-  renderTiersList();
-  updateBookingTotal();
-}
-
-function adjustTicketQty(delta) {
-  bookingQty = Math.max(1, Math.min(10, bookingQty + delta));
-  document.getElementById('booking-qty').textContent = bookingQty;
-  updateBookingTotal();
-}
-
-function updateBookingTotal() {
-  if (!selectedTicketTier) return;
-  const total = selectedTicketTier.price * bookingQty;
-  document.getElementById('booking-total-price').textContent = `₹${total}`;
-}
-
-async function confirmTicketBooking() {
   try {
-    const res = await fetch('/api/events/book', {
+    const res = await fetch('/api/events/verify-ticket', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentToken}`
-      },
-      body: JSON.stringify({
-        eventId: selectedEventForBooking.id,
-        tierId: selectedTicketTier.id,
-        quantity: bookingQty
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ qrCodeHash: hash })
     });
-
     const data = await res.json();
-    if (data.success) {
-      const booking = data.booking;
-      document.getElementById('ticket-booking-form').classList.add('hidden');
-      document.getElementById('ticket-qr-result').classList.remove('hidden');
+    const box = document.getElementById('scan-result-box');
+    box.classList.remove('hidden');
 
-      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(booking.qrCodeHash)}`;
-      document.getElementById('qr-image').src = qrApiUrl;
-      document.getElementById('qr-hash-display').textContent = booking.qrCodeHash;
+    if (data.success) {
+      box.className = 'mt-4 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300 text-xs';
+      box.innerHTML = `<strong>VALID ENTRY:</strong> ${data.message} <br>Attendee: <strong>${data.booking?.userName}</strong> (${data.booking?.quantity} Tickets)`;
     } else {
-      alert(data.error || 'Failed to book ticket');
+      box.className = 'mt-4 p-3 rounded-xl border border-rose-500/50 bg-rose-950/30 text-rose-300 text-xs';
+      box.innerHTML = `<strong>INVALID / DUPLICATE:</strong> ${data.message}`;
     }
   } catch (err) {
-    console.error('Booking failed:', err);
+    console.error('Ticket verification error:', err);
   }
 }
 
-// ----------------- CELEBRITY HUB & VIP CALLING -----------------
+// ----------------- SUPPORT EXECUTIVE LOGIC -----------------
 
-async function loadCelebrityHub() {
-  try {
-    const celebsRes = await fetch('/api/celebrities/list');
-    const celebsData = await celebsRes.json();
-    if (celebsData.success) {
-      renderCelebritiesList(celebsData.celebrities);
-    }
-
-    const feedRes = await fetch('/api/celebrities/feed');
-    const feedData = await feedRes.json();
-    if (feedData.success) {
-      renderCelebrityFeed(feedData.feed);
-    }
-  } catch (err) {
-    console.error('Error loading celebrity hub:', err);
-  }
-}
-
-function renderCelebritiesList(celebrities) {
-  const container = document.getElementById('celebrities-list');
-  container.innerHTML = celebrities.map(celeb => `
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="relative">
-          <img src="${celeb.avatarUrl}" class="w-12 h-12 rounded-full object-cover border border-pink-500/50">
-          <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border border-slate-900 rounded-full"></span>
-        </div>
-        <div>
-          <h4 class="text-xs font-bold text-white flex items-center gap-1">
-            ${celeb.fullName}
-            <i class="fa-solid fa-circle-check text-sky-400 text-[10px]"></i>
-          </h4>
-          <p class="text-[10px] text-slate-400">${celeb.celebrityDetails?.category || 'Artist'}</p>
-          <span class="text-[10px] font-semibold text-amber-400">
-            <i class="fa-solid fa-coins mr-0.5"></i>${celeb.celebrityDetails?.callRatePerMinute || 50} / min
-          </span>
-        </div>
-      </div>
-
-      <div class="flex items-center gap-1.5">
-        <button onclick="promptVipCall('${celeb.id}', 'CELEBRITY_AUDIO')" class="w-8 h-8 rounded-lg bg-pink-600/20 text-pink-400 hover:bg-pink-600 hover:text-white flex items-center justify-center text-xs transition" title="VIP Audio Call">
-          <i class="fa-solid fa-phone"></i>
-        </button>
-        <button onclick="promptVipCall('${celeb.id}', 'CELEBRITY_VIDEO')" class="w-8 h-8 rounded-lg bg-purple-600/20 text-purple-400 hover:bg-purple-600 hover:text-white flex items-center justify-center text-xs transition" title="VIP Video Call">
-          <i class="fa-solid fa-video"></i>
-        </button>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderCelebrityFeed(posts) {
-  const container = document.getElementById('celebrity-feed');
-  container.innerHTML = posts.map(post => `
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-      <div class="p-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-10 h-10 rounded-full object-cover border border-pink-500/50">
-          <div>
-            <h4 class="text-xs font-bold text-white flex items-center gap-1">
-              ${post.celebrityName}
-              <i class="fa-solid fa-circle-check text-sky-400 text-[10px]"></i>
-            </h4>
-            <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
-          </div>
-        </div>
-        <button onclick="promptVipCall('${post.celebrityId}', 'CELEBRITY_AUDIO')" class="px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 hover:bg-pink-500 hover:text-white text-xs font-semibold transition flex items-center gap-1">
-          <i class="fa-solid fa-phone text-[10px]"></i>
-          <span>VIP Call</span>
-        </button>
-      </div>
-
-      ${post.mediaType === 'VIDEO' ? `
-        <div class="bg-black relative max-h-[420px] flex items-center justify-center">
-          <video src="${post.mediaUrl}" controls class="w-full max-h-[420px] object-contain"></video>
-        </div>
-      ` : `
-        <img src="${post.mediaUrl}" class="w-full max-h-[420px] object-cover">
-      `}
-
-      <div class="p-4">
-        <p class="text-xs text-slate-300 mb-3">${post.caption}</p>
-        <div class="flex items-center gap-4 text-xs text-slate-400">
-          <button onclick="likePost('${post.id}')" class="flex items-center gap-1.5 text-rose-400 hover:scale-110 transition">
-            <i class="fa-solid fa-heart"></i>
-            <span id="likes-${post.id}">${post.likesCount}</span>
-          </button>
-          <span class="flex items-center gap-1">
-            <i class="fa-regular fa-comment"></i>
-            <span>Comments</span>
-          </span>
-          <span class="flex items-center gap-1">
-            <i class="fa-solid fa-share-nodes"></i>
-            <span>Share</span>
-          </span>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-async function likePost(postId) {
-  try {
-    const res = await fetch(`/api/celebrities/like/${postId}`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      document.getElementById(`likes-${postId}`).textContent = data.likes;
-    }
-  } catch (err) {
-    console.error('Error liking post:', err);
-  }
-}
-
-async function promptVipCall(celebId, callType) {
-  try {
-    const res = await fetch('/api/celebrities/authorize-call', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentToken}`
-      },
-      body: JSON.stringify({ celebrityId: celebId, callType })
-    });
-
-    const data = await res.json();
-    if (!data.authorized) {
-      alert(data.reason || 'Not eligible for VIP call');
-      return;
-    }
-
-    selectedCelebrityForCall = { celebId, callType, rate: data.ratePerMinute, celeb: data.celebrity };
-    document.getElementById('vip-celeb-name').textContent = data.celebrity.fullName;
-    document.getElementById('vip-celeb-avatar').src = data.celebrity.avatarUrl;
-    document.getElementById('vip-celeb-rate').textContent = `${data.ratePerMinute} coins / min`;
-    document.getElementById('vip-call-type-badge').textContent = callType === 'CELEBRITY_VIDEO' ? 'VIP Video Call' : 'VIP Audio Call';
-    document.getElementById('vip-user-coins').textContent = `${currentUser.walletBalance} coins`;
-
-    document.getElementById('modal-vip-call').classList.remove('hidden');
-  } catch (err) {
-    console.error('VIP Call Auth error:', err);
-  }
-}
-
-function startVipCallSession() {
-  closeModal('modal-vip-call');
-  switchTab('matchmaking');
-  
-  const hasVideo = selectedCelebrityForCall.callType === 'CELEBRITY_VIDEO';
-
-  const celebName = selectedCelebrityForCall.celeb.fullName + ' (VIP)';
-  const celebAvatar = selectedCelebrityForCall.celeb.avatarUrl;
-
-  document.getElementById('peer-name').textContent = celebName;
-  document.getElementById('peer-avatar').src = celebAvatar;
-  document.getElementById('remote-peer-video-name').textContent = celebName;
-  document.getElementById('remote-peer-video-avatar').src = celebAvatar;
-
-  setCallState('connected', hasVideo);
-  alert(`Connecting 1-on-1 VIP WebRTC ${hasVideo ? 'Video' : 'Audio'} Call with ${selectedCelebrityForCall.celeb.fullName}!`);
-}
-
-// ----------------- CUSTOMER CARE SUPPORT DESK -----------------
-
-let activeSupportTicket = null;
-
-async function loadSupportTickets() {
-  if (!currentToken) return;
+async function loadSupportExecutiveDesk() {
   try {
     const res = await fetch('/api/support/tickets', {
       headers: { 'Authorization': `Bearer ${currentToken}` }
     });
     const data = await res.json();
-    if (data.success && data.tickets.length > 0) {
-      activeSupportTicket = data.tickets[0];
-      renderSupportMessages(activeSupportTicket.messages);
-      document.getElementById('support-ticket-status').textContent = `TICKET: ${activeSupportTicket.status}`;
+    if (data.success) {
+      const container = document.getElementById('support-desk-messages');
+      const allMsgs = data.tickets.flatMap(t => t.messages);
+      container.innerHTML = allMsgs.map(msg => `
+        <div class="p-3 rounded-xl border border-slate-800 ${msg.senderRole === 'SUPPORT' ? 'bg-slate-900 border-l-4 border-l-emerald-500' : 'bg-slate-950 border-l-4 border-l-blue-500'}">
+          <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+            <span class="font-bold ${msg.senderRole === 'SUPPORT' ? 'text-emerald-400' : 'text-blue-400'}">${msg.senderRole} (${msg.senderId})</span>
+            <span>${new Date(msg.timestamp).toLocaleTimeString()}</span>
+          </div>
+          <p class="text-xs text-white">${msg.content}</p>
+        </div>
+      `).join('');
     }
   } catch (err) {
-    console.error('Error loading support tickets:', err);
+    console.error('Support desk error:', err);
   }
 }
 
-function renderSupportMessages(messages) {
-  const container = document.getElementById('support-messages-container');
-  if (!messages || messages.length === 0) {
-    container.innerHTML = `
-      <div class="text-center text-slate-500 py-12 text-xs">
-        No previous messages. Type below to chat with a support executive.
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = messages.map(msg => {
-    const isMe = msg.senderId === currentUser.id;
-    return `
-      <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
-        <div class="max-w-md rounded-2xl px-4 py-2.5 text-xs shadow-md ${isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 rounded-bl-none border border-slate-700/60'}">
-          <p class="font-semibold text-[10px] mb-0.5 ${isMe ? 'text-indigo-200' : 'text-emerald-400'}">
-            ${isMe ? 'You' : `Support Executive (${msg.senderRole})`}
-          </p>
-          <p>${msg.content}</p>
-        </div>
-        <span class="text-[9px] text-slate-500 mt-1 px-1">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-    `;
-  }).join('');
-
-  container.scrollTop = container.scrollHeight;
-}
-
-async function sendSupportMessage() {
-  const input = document.getElementById('support-message-input');
+async function sendSupportExecutiveReply() {
+  const input = document.getElementById('support-desk-reply');
   const text = input.value.trim();
-  if (!text || !activeSupportTicket) return;
+  if (!text) return;
 
   try {
-    const res = await fetch('/api/support/messages', {
+    await fetch('/api/support/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentToken}`
       },
       body: JSON.stringify({
-        ticketId: activeSupportTicket.id,
+        ticketId: 'ticket_sample_101',
         content: text
       })
     });
-
-    const data = await res.json();
-    if (data.success) {
-      input.value = '';
-      activeSupportTicket.messages.push(data.message);
-      renderSupportMessages(activeSupportTicket.messages);
-
-      if (currentUser.role !== 'SUPPORT') {
-        setTimeout(async () => {
-          activeSupportTicket.messages.push({
-            id: 'auto_reply_' + Date.now(),
-            ticketId: activeSupportTicket.id,
-            senderId: 'usr_support_1',
-            senderRole: 'SUPPORT',
-            content: `Thank you for reaching out to FRND Helpdesk! We have received your query regarding "${text.slice(0, 30)}..." and an executive will assist you.`,
-            timestamp: new Date().toISOString()
-          });
-          renderSupportMessages(activeSupportTicket.messages);
-        }, 1500);
-      }
-    }
+    input.value = '';
+    loadSupportExecutiveDesk();
   } catch (err) {
-    console.error('Error sending support message:', err);
+    console.error('Reply error:', err);
   }
 }
 
-function startSupportVoipCall() {
-  switchTab('matchmaking');
-  document.getElementById('peer-name').textContent = 'FRND Customer Care (VoIP)';
-  document.getElementById('peer-avatar').src = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150';
-  setCallState('connected', false);
-  alert('Connected to FRND Helpdesk via in-app VoIP Audio Call!');
-}
-
-// ----------------- SUPER ADMIN OPERATIONS -----------------
+// ----------------- SUPER ADMIN LOGIC -----------------
 
 async function loadAdminMetrics() {
   if (!currentToken || currentUser?.role !== 'SUPER_ADMIN') return;
@@ -1086,73 +744,45 @@ async function loadAdminMetrics() {
     });
     const data = await res.json();
     if (data.success) {
-      renderAdminMetrics(data.metrics);
-      renderAdminUsersTable();
+      const m = data.metrics;
+      document.getElementById('admin-metrics-grid').innerHTML = `
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold">Total Users</span>
+          <p class="text-xl font-bold text-white mt-1">${m.totalUsers}</p>
+        </div>
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold">Live Events</span>
+          <p class="text-xl font-bold text-amber-400 mt-1">${m.totalEvents}</p>
+        </div>
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold">Celebrities</span>
+          <p class="text-xl font-bold text-pink-400 mt-1">${m.totalCelebrities}</p>
+        </div>
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl p-4">
+          <span class="text-[10px] text-slate-400 uppercase font-semibold">Platform Revenue</span>
+          <p class="text-xl font-bold text-emerald-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
+        </div>
+      `;
+
+      document.getElementById('admin-users-table').innerHTML = allUsers.map(u => `
+        <tr class="hover:bg-slate-800/40">
+          <td class="px-4 py-3 font-bold text-white text-xs">${u.fullName}</td>
+          <td class="px-4 py-3 font-mono text-[11px] text-slate-400">${u.phoneNumber}</td>
+          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-200">${u.role}</span></td>
+          <td class="px-4 py-3">${u.isBanned ? '<span class="text-rose-400 font-bold">Banned</span>' : '<span class="text-emerald-400 font-bold">Active</span>'}</td>
+          <td class="px-4 py-3 text-right">
+            ${u.role !== 'SUPER_ADMIN' ? `
+              <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-2.5 py-1 rounded text-[10px] font-bold border ${u.isBanned ? 'border-emerald-500 text-emerald-300' : 'border-rose-500 text-rose-300'}">
+                ${u.isBanned ? 'Unban' : 'Ban'}
+              </button>
+            ` : '<span class="text-slate-500 text-[10px]">Root</span>'}
+          </td>
+        </tr>
+      `).join('');
     }
   } catch (err) {
     console.error('Admin metrics error:', err);
   }
-}
-
-function renderAdminMetrics(m) {
-  const container = document.getElementById('admin-metrics-grid');
-  container.innerHTML = `
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-      <span class="text-[11px] text-slate-400 uppercase font-semibold">Total Users</span>
-      <p class="text-2xl font-bold text-white mt-1">${m.totalUsers}</p>
-      <span class="text-[10px] text-indigo-400 font-medium">Community Members</span>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-      <span class="text-[11px] text-slate-400 uppercase font-semibold">Live Events</span>
-      <p class="text-2xl font-bold text-amber-400 mt-1">${m.totalEvents}</p>
-      <span class="text-[10px] text-slate-400">${m.totalBookings} tickets sold</span>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-      <span class="text-[11px] text-slate-400 uppercase font-semibold">Celebrities</span>
-      <p class="text-2xl font-bold text-pink-400 mt-1">${m.totalCelebrities}</p>
-      <span class="text-[10px] text-slate-400">Verified Artists</span>
-    </div>
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-      <span class="text-[11px] text-slate-400 uppercase font-semibold">Gross Revenue</span>
-      <p class="text-2xl font-bold text-emerald-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
-      <span class="text-[10px] text-slate-400">Tickets & VIP Calls</span>
-    </div>
-  `;
-}
-
-function renderAdminUsersTable() {
-  const container = document.getElementById('admin-users-table');
-  container.innerHTML = allUsers.map(u => `
-    <tr class="hover:bg-slate-800/40 transition">
-      <td class="px-4 py-3 flex items-center gap-2.5">
-        <img src="${u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}" class="w-7 h-7 rounded-full object-cover">
-        <div>
-          <p class="font-bold text-white text-xs">${u.fullName}</p>
-          <span class="text-[10px] text-slate-400 font-mono">${u.id}</span>
-        </div>
-      </td>
-      <td class="px-4 py-3 font-mono text-[11px]">${u.phoneNumber}</td>
-      <td class="px-4 py-3">
-        <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
-          u.role === 'SUPER_ADMIN' ? 'bg-purple-500/20 text-purple-300' :
-          u.role === 'CELEBRITY' ? 'bg-pink-500/20 text-pink-300' :
-          u.role === 'ORGANIZATION' ? 'bg-amber-500/20 text-amber-300' :
-          u.role === 'SUPPORT' ? 'bg-emerald-500/20 text-emerald-300' :
-          'bg-indigo-500/20 text-indigo-300'
-        }">${u.role}</span>
-      </td>
-      <td class="px-4 py-3">
-        ${u.isBanned ? '<span class="text-rose-400 font-bold text-[11px]"><i class="fa-solid fa-ban mr-1"></i>Banned</span>' : '<span class="text-emerald-400 font-bold text-[11px]"><i class="fa-solid fa-check mr-1"></i>Active</span>'}
-      </td>
-      <td class="px-4 py-3 text-right">
-        ${u.role !== 'SUPER_ADMIN' ? `
-          <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-2.5 py-1 rounded text-[11px] font-semibold border ${u.isBanned ? 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300' : 'border-rose-500/40 bg-rose-950/40 text-rose-300'} hover:opacity-80 transition">
-            ${u.isBanned ? 'Unban' : 'Ban'}
-          </button>
-        ` : '<span class="text-slate-500 text-[10px]">Root</span>'}
-      </td>
-    </tr>
-  `).join('');
 }
 
 async function toggleBanUser(targetUserId, ban) {
@@ -1168,77 +798,245 @@ async function toggleBanUser(targetUserId, ban) {
     const data = await res.json();
     if (data.success) {
       await fetchAllUsers();
-      renderAdminUsersTable();
-      alert(`User status updated to: ${ban ? 'BANNED' : 'ACTIVE'}`);
+      loadAdminMetrics();
     }
   } catch (err) {
     console.error('Ban error:', err);
   }
 }
 
-// ----------------- MODAL HELPERS -----------------
+// ----------------- COMMON / SHARED HELPERS -----------------
 
-function closeModal(modalId) {
-  document.getElementById(modalId)?.classList.add('hidden');
+async function fetchAllUsers() {
+  try {
+    const res = await fetch('/api/users');
+    const data = await res.json();
+    if (data.success) allUsers = data.users;
+  } catch (err) {
+    console.error('Users fetch error:', err);
+  }
+}
+
+function initWebSocket() {
+  if (!currentUser) return;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws?userId=${currentUser.id}`;
+  socket = new WebSocket(wsUrl);
+
+  socket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'MATCH_FOUND') onMatchFound(payload);
+      else if (payload.type === 'PEER_DISCONNECTED') { alert('Partner skipped to next.'); setCallState('searching'); }
+      else if (payload.type === 'END_CALL') { alert('Call ended.'); setCallState('idle'); }
+    } catch (err) {
+      console.error('WS Error:', err);
+    }
+  };
+}
+
+// Nearby Events & Feed Loader for Normal User
+async function loadNearbyEvents() {
+  try {
+    const res = await fetch(`/api/events?lat=9.9312&lon=76.2673&radius=${activeDistanceFilter}`);
+    const data = await res.json();
+    if (data.success) {
+      const container = document.getElementById('events-grid');
+      container.innerHTML = data.events.map(evt => `
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow flex flex-col justify-between">
+          <img src="${evt.bannerUrl}" class="w-full h-36 object-cover">
+          <div class="p-4 flex-1 flex flex-col justify-between">
+            <div>
+              <h4 class="text-xs font-bold text-white mb-1">${evt.title}</h4>
+              <p class="text-[11px] text-slate-400 mb-2">${evt.venueName}, ${evt.city}</p>
+            </div>
+            <div class="pt-3 border-t border-slate-800 flex justify-between items-center">
+              <span class="text-xs font-bold text-amber-400">₹${evt.ticketTiers[0]?.price}</span>
+              <button onclick="openBookingModal('${evt.id}')" class="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs shadow">Book</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Events error:', err);
+  }
+}
+
+function filterEventsDistance(r) {
+  activeDistanceFilter = r;
+  document.getElementById('dist-10').className = r === 10 ? 'px-2.5 py-1 rounded-md bg-blue-600 text-white font-medium' : 'px-2.5 py-1 rounded-md text-slate-400';
+  document.getElementById('dist-50').className = r === 50 ? 'px-2.5 py-1 rounded-md bg-blue-600 text-white font-medium' : 'px-2.5 py-1 rounded-md text-slate-400';
+  document.getElementById('dist-all').className = r === 0 ? 'px-2.5 py-1 rounded-md bg-blue-600 text-white font-medium' : 'px-2.5 py-1 rounded-md text-slate-400';
+  loadNearbyEvents();
+}
+
+async function loadCelebrityHub() {
+  try {
+    const res = await fetch('/api/celebrities/feed');
+    const data = await res.json();
+    if (data.success) {
+      const container = document.getElementById('celebrity-feed');
+      container.innerHTML = data.feed.map(post => `
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
+          <div class="p-4 flex items-center gap-3">
+            <img src="${post.celebrityAvatar}" class="w-10 h-10 rounded-full object-cover border border-pink-500">
+            <div>
+              <h4 class="text-xs font-bold text-white">${post.celebrityName}</h4>
+              <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+          <img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">
+          <div class="p-4">
+            <p class="text-xs text-slate-300 mb-2">${post.caption}</p>
+            <span class="text-xs text-rose-400 font-bold"><i class="fa-solid fa-heart mr-1"></i>${post.likesCount}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Feed error:', err);
+  }
+}
+
+async function loadSupportTickets() {
+  if (!currentToken) return;
+  try {
+    const res = await fetch('/api/support/tickets', { headers: { 'Authorization': `Bearer ${currentToken}` } });
+    const data = await res.json();
+    if (data.success && data.tickets.length > 0) {
+      const container = document.getElementById('support-messages-container');
+      container.innerHTML = data.tickets[0].messages.map(msg => `
+        <div class="p-2.5 rounded-xl text-xs ${msg.senderId === currentUser.id ? 'bg-blue-600 ml-auto max-w-xs text-white' : 'bg-slate-800 mr-auto max-w-xs text-slate-200'}">
+          ${msg.content}
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Support tickets error:', err);
+  }
+}
+
+async function sendSupportMessage() {
+  const input = document.getElementById('support-message-input');
+  const text = input.value.trim();
+  if (!text) return;
+  try {
+    await fetch('/api/support/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+      body: JSON.stringify({ ticketId: 'ticket_sample_101', content: text })
+    });
+    input.value = '';
+    loadSupportTickets();
+  } catch (err) {
+    console.error('Support send error:', err);
+  }
+}
+
+function startSupportVoipCall() {
+  switchNormalTab('connect');
+  document.getElementById('peer-name').textContent = 'FRND Helpdesk (VoIP)';
+  document.getElementById('peer-avatar').src = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150';
+  setCallState('connected', false);
+  alert('Connected to Helpdesk VoIP Audio Call!');
+}
+
+function openBookingModal(eventId) {
+  fetch('/api/events')
+    .then(r => r.json())
+    .then(data => {
+      const event = data.events.find(e => e.id === eventId);
+      if (!event) return;
+      selectedEventForBooking = event;
+      selectedTicketTier = event.ticketTiers[0];
+      bookingQty = 1;
+      document.getElementById('booking-event-title').textContent = event.title;
+      document.getElementById('booking-event-venue').textContent = `${event.venueName}, ${event.city}`;
+      document.getElementById('booking-qty').textContent = '1';
+      document.getElementById('booking-tiers-list').innerHTML = event.ticketTiers.map(t => `
+        <div onclick="selectedTicketTier=selectedEventForBooking.ticketTiers.find(x=>x.id==='${t.id}'); document.getElementById('booking-total-price').textContent='₹'+(${t.price}*bookingQty);" class="p-2.5 rounded-xl border border-slate-700 bg-slate-900 flex justify-between cursor-pointer">
+          <span class="text-xs font-bold text-white">${t.name}</span>
+          <span class="text-xs font-bold text-amber-400">₹${t.price}</span>
+        </div>
+      `).join('');
+      document.getElementById('booking-total-price').textContent = `₹${event.ticketTiers[0].price}`;
+      document.getElementById('ticket-booking-form').classList.remove('hidden');
+      document.getElementById('ticket-qr-result').classList.add('hidden');
+      document.getElementById('modal-ticket').classList.remove('hidden');
+    });
+}
+
+function adjustTicketQty(delta) {
+  bookingQty = Math.max(1, Math.min(10, bookingQty + delta));
+  document.getElementById('booking-qty').textContent = bookingQty;
+  if (selectedTicketTier) {
+    document.getElementById('booking-total-price').textContent = `₹${selectedTicketTier.price * bookingQty}`;
+  }
+}
+
+async function confirmTicketBooking() {
+  try {
+    const res = await fetch('/api/events/book', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+      body: JSON.stringify({ eventId: selectedEventForBooking.id, tierId: selectedTicketTier.id, quantity: bookingQty })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('ticket-booking-form').classList.add('hidden');
+      document.getElementById('ticket-qr-result').classList.remove('hidden');
+      document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.booking.qrCodeHash)}`;
+      document.getElementById('qr-hash-display').textContent = data.booking.qrCodeHash;
+    }
+  } catch (err) {
+    console.error('Booking error:', err);
+  }
 }
 
 function openCreateEventModal() {
   const title = prompt('Enter Event Title:');
   if (!title) return;
-  const venue = prompt('Enter Venue Name & City:');
-  const price = parseInt(prompt('Enter General Ticket Price (₹):') || '499', 10);
+  const venue = prompt('Enter Venue Name & City:') || 'Marine Drive Grounds, Kochi';
+  const price = parseInt(prompt('General Ticket Price (₹):') || '499', 10);
 
   fetch('/api/events', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${currentToken}`
-    },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
     body: JSON.stringify({
       title,
-      description: 'Exciting live event organized by ' + currentUser.fullName,
-      category: 'Live Concert',
-      venueName: venue || 'Marine Drive Grounds',
+      description: 'Grand Live Event organized by Kochi Live Arena Events',
+      category: 'Music Festival',
+      venueName: venue,
       address: 'Kochi, Kerala',
       city: 'Kochi',
       latitude: 9.9723,
       longitude: 76.2783,
       startTime: new Date(Date.now() + 86400000 * 7).toISOString(),
       endTime: new Date(Date.now() + 86400000 * 7 + 18000000).toISOString(),
-      ticketTiers: [{ name: 'Standard Pass', price, totalQuantity: 500 }]
+      ticketTiers: [{ name: 'General Pass', price, totalQuantity: 500 }]
     })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      alert('Event published successfully!');
-      loadNearbyEvents();
-    }
+  }).then(() => {
+    alert('Event Published Successfully!');
+    loadOrganizationEvents();
   });
 }
 
 function openCreatePostModal() {
-  const caption = prompt('Enter Caption for your new post:');
+  const caption = prompt('Enter Post Caption:');
   if (!caption) return;
   const mediaUrl = prompt('Enter Image URL (or press Enter for default):') || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800';
 
   fetch('/api/celebrities/posts', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${currentToken}`
-    },
-    body: JSON.stringify({
-      mediaType: 'IMAGE',
-      mediaUrl,
-      caption
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      alert('Post shared with followers!');
-      loadCelebrityHub();
-    }
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+    body: JSON.stringify({ mediaType: 'IMAGE', mediaUrl, caption })
+  }).then(() => {
+    alert('Post shared with your fans!');
+    loadCelebrityOwnFeed();
   });
+}
+
+function closeModal(id) {
+  document.getElementById(id)?.classList.add('hidden');
 }

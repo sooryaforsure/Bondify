@@ -12,32 +12,32 @@ export class AuthService {
   }
 
   private seedDefaultUsers() {
-    // 1. Normal User (Rahul)
+    // 1. Normal User (Arjun Nair)
     const normalUser: User = {
       id: 'usr_normal_1',
       phoneNumber: '+919876543210',
       role: 'NORMAL',
-      fullName: 'Rahul Nair',
+      fullName: 'Arjun Nair',
       avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-      bio: 'Music lover & tech enthusiast from Kochi',
+      bio: 'Music enthusiast & tech fan from Kochi',
       city: 'Kochi',
       latitude: 9.9312,
       longitude: 76.2673,
       isVerified: true,
       isBanned: false,
-      walletBalance: 250, // 250 coins
-      isPremium: true,
+      walletBalance: 50,
+      isPremium: false, // Starts non-premium so user can test subscription upgrade!
       createdAt: new Date().toISOString(),
     };
 
-    // 2. Organization User (Grand Arena Events)
+    // 2. Organization User (Kochi Live Arena Events)
     const orgUser: User = {
       id: 'usr_org_1',
       phoneNumber: '+919876543211',
       role: 'ORGANIZATION',
-      fullName: 'Grand Arena Entertainment',
+      fullName: 'Kochi Live Arena Events',
       avatarUrl: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=150',
-      bio: 'Leading concert & live event organizers in Kerala',
+      bio: 'Leading concert & live mega event organizers in Kerala',
       city: 'Kochi',
       latitude: 9.9674,
       longitude: 76.2991,
@@ -46,45 +46,45 @@ export class AuthService {
       walletBalance: 0,
       isPremium: false,
       organizationDetails: {
-        companyName: 'Grand Arena Pvt Ltd',
+        companyName: 'Kochi Live Arena Events Pvt Ltd',
         registrationNumber: 'KL-ERN-2024-9988',
         isApproved: true,
       },
       createdAt: new Date().toISOString(),
     };
 
-    // 3. Celebrity User (Ananya Joy)
+    // 3. Celebrity User (Dulquer Sithara)
     const celebUser: User = {
       id: 'usr_celeb_1',
       phoneNumber: '+919876543212',
       role: 'CELEBRITY',
-      fullName: 'Ananya Joy',
+      fullName: 'Dulquer Sithara',
       avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      bio: 'Playback singer & live performer 🎤✨',
+      bio: 'Playback Singer & Celebrity Artist 🎤✨',
       city: 'Kochi',
       latitude: 9.9816,
       longitude: 76.2798,
       isVerified: true,
       isBanned: false,
-      walletBalance: 1200,
+      walletBalance: 0,
       isPremium: true,
       celebrityDetails: {
-        category: 'Playback Singer & Artist',
-        callRatePerMinute: 50, // 50 coins/min
+        category: 'Playback Singer & Celebrity Artist',
+        callRatePerMinute: 50,
         isAvailableForCalls: true,
-        followersCount: 125000,
+        followersCount: 350000,
       },
       createdAt: new Date().toISOString(),
     };
 
-    // 4. Customer Support User
+    // 4. Customer Support User (Rahul)
     const supportUser: User = {
       id: 'usr_support_1',
       phoneNumber: '+919876543213',
       role: 'SUPPORT',
-      fullName: 'FRND Helpdesk Executive (Support #1)',
+      fullName: 'Rahul (Customer Care Support)',
       avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150',
-      bio: 'Customer Success Officer',
+      bio: 'Customer Care Executive',
       city: 'Kochi',
       isVerified: true,
       isBanned: false,
@@ -98,7 +98,7 @@ export class AuthService {
       id: 'usr_admin_1',
       phoneNumber: '+919876543214',
       role: 'SUPER_ADMIN',
-      fullName: 'Super Administrator',
+      fullName: 'Super Admin (Platform Control)',
       avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
       bio: 'Platform Root Admin',
       city: 'Global',

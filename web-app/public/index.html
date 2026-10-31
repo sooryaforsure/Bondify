@@ -3,227 +3,79 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FRND - Social Discovery, Events & Celebrity Platform</title>
+  <title>Friends Connect (FC) - Social Discovery, Events & Celebrity Platform</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="/style.css">
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+<body class="bg-[#0b1120] text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white">
 
   <!-- ============================================================== -->
-  <!-- 1. AUTHENTICATION / LOGIN SCREEN (Displayed when logged out)    -->
+  <!-- 1. CLEAN & SIMPLE LOGIN SCREEN (Exact user-requested layout)    -->
   <!-- ============================================================== -->
-  <div id="auth-view" class="flex-1 flex flex-col items-center justify-center p-4 py-8 relative overflow-hidden">
+  <div id="auth-view" class="flex-1 flex flex-col items-center justify-center p-4 py-12 relative overflow-hidden">
     
-    <!-- Background Ambient Glows -->
-    <div class="absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-pink-600/15 rounded-full blur-3xl pointer-events-none"></div>
-
-    <div class="max-w-xl w-full mx-auto relative z-10">
+    <div class="max-w-md w-full mx-auto relative z-10">
       
-      <!-- Brand Logo & Header -->
-      <div class="text-center mb-6">
-        <div class="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 items-center justify-center text-white shadow-xl shadow-indigo-500/25 mb-3">
-          <i class="fa-solid fa-headset text-2xl"></i>
-        </div>
-        <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
-          FRND
-        </h1>
-        <p class="text-xs text-slate-400 mt-1">Random Audio/Video • Events & Ticketing • Celebrity Hub</p>
-      </div>
-
-      <!-- Auth Main Card -->
-      <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+      <!-- Main Card -->
+      <div class="bg-[#111928] border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-2xl">
         
-        <!-- Login Portal Switcher Tabs -->
-        <div class="flex rounded-2xl bg-slate-950/80 p-1 mb-6 border border-slate-800/80">
-          <button onclick="switchAuthTab('otp')" id="auth-tab-otp" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow">
-            <i class="fa-solid fa-mobile-screen"></i>
-            <span>Mobile OTP Login</span>
-          </button>
-          <button onclick="switchAuthTab('admin')" id="auth-tab-admin" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white">
-            <i class="fa-solid fa-shield-halved"></i>
-            <span>Admin / Staff Portal</span>
-          </button>
-          <button onclick="switchAuthTab('demo')" id="auth-tab-demo" class="flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white">
-            <i class="fa-solid fa-bolt text-amber-400"></i>
-            <span>Demo Accounts</span>
-          </button>
+        <!-- Brand Header (FC Icon + Title + Subtitle) -->
+        <div class="flex items-center gap-3.5 mb-5">
+          <div class="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-blue-600/30">
+            FC
+          </div>
+          <div>
+            <h1 class="text-xl font-bold tracking-tight text-white leading-tight">
+              Friends Connect
+            </h1>
+            <p class="text-xs text-slate-400">Mobile Number + OTP Login</p>
+          </div>
         </div>
 
-        <!-- PORTAL 1: MOBILE NUMBER + OTP LOGIN & REGISTRATION -->
-        <div id="auth-form-otp" class="space-y-4">
-          <div>
-            <h2 class="text-lg font-bold text-white mb-0.5">Welcome to FRND</h2>
-            <p class="text-xs text-slate-400">നിങ്ങളുടെ മൊബൈൽ നമ്പറും ഒടിപിയും നൽകി പ്രവേശിക്കുക.</p>
-          </div>
+        <!-- Green Alert Banner -->
+        <div class="bg-[#064e3b]/30 border border-[#059669]/40 rounded-xl p-3 mb-5 text-left">
+          <p class="text-xs text-[#34d399] leading-relaxed font-medium">
+            <span class="font-bold text-white">Dummy OTP Ready:</span> മൊബൈൽ നമ്പറും ഡമ്മി OTP 123456 ഉം താഴെ ഓട്ടോമാറ്റിക്കായി പൂരിപ്പിച്ചിട്ടുണ്ട്. നേരിട്ട് <span class="font-bold text-white">"Verify OTP & Enter Website"</span> ക്ലിക്ക് ചെയ്യുക!
+          </p>
+        </div>
 
-          <!-- Phone Number Input -->
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">Mobile Number</label>
-            <div class="flex gap-2">
-              <span class="inline-flex items-center px-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs font-mono">
-                +91 (IN)
-              </span>
-              <input type="tel" id="input-phone" value="+919876543210" placeholder="9876543210" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono">
-              <button onclick="requestOtp()" id="btn-send-otp" class="px-3.5 py-2.5 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition">
-                Send OTP
-              </button>
-            </div>
-            <p id="otp-hint-message" class="text-[11px] text-emerald-400 mt-1.5 hidden flex items-center gap-1">
-              <i class="fa-solid fa-circle-check"></i> Demo OTP sent: <span class="font-bold font-mono">123456</span>
-            </p>
-          </div>
-
-          <!-- OTP Input -->
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">6-Digit Verification Code (OTP)</label>
-            <input type="text" id="input-otp" value="123456" maxlength="6" placeholder="123456" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-center text-slate-100 placeholder-slate-600 tracking-widest font-mono font-bold focus:outline-none focus:border-indigo-500">
-            <span class="text-[10px] text-slate-500 mt-1 block">Test dummy OTP is <span class="text-slate-300 font-mono">123456</span></span>
-          </div>
-
-          <!-- Role Selection (For registration / login category) -->
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">Select Account Role (റോൾ തിരഞ്ഞെടുക്കുക)</label>
-            <div class="grid grid-cols-3 gap-2">
-              <label class="cursor-pointer">
-                <input type="radio" name="auth-role" value="NORMAL" checked class="peer sr-only">
-                <div class="p-2.5 rounded-xl border border-slate-800 bg-slate-950 text-center peer-checked:border-indigo-500 peer-checked:bg-indigo-600/15 peer-checked:text-indigo-300 transition">
-                  <i class="fa-solid fa-user text-base mb-1 block"></i>
-                  <span class="text-[11px] font-bold block">Normal User</span>
-                  <span class="text-[9px] text-slate-400 block">Friends & Events</span>
-                </div>
-              </label>
-
-              <label class="cursor-pointer">
-                <input type="radio" name="auth-role" value="CELEBRITY" class="peer sr-only">
-                <div class="p-2.5 rounded-xl border border-slate-800 bg-slate-950 text-center peer-checked:border-pink-500 peer-checked:bg-pink-600/15 peer-checked:text-pink-300 transition">
-                  <i class="fa-solid fa-star text-base mb-1 block"></i>
-                  <span class="text-[11px] font-bold block">Celebrity</span>
-                  <span class="text-[9px] text-slate-400 block">VIP Calling & Feed</span>
-                </div>
-              </label>
-
-              <label class="cursor-pointer">
-                <input type="radio" name="auth-role" value="ORGANIZATION" class="peer sr-only">
-                <div class="p-2.5 rounded-xl border border-slate-800 bg-slate-950 text-center peer-checked:border-amber-500 peer-checked:bg-amber-600/15 peer-checked:text-amber-300 transition">
-                  <i class="fa-solid fa-building text-base mb-1 block"></i>
-                  <span class="text-[11px] font-bold block">Organization</span>
-                  <span class="text-[9px] text-slate-400 block">Host Events</span>
-                </div>
-              </label>
+        <!-- Role / Account Selector Dropdown -->
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Select Account to Login (അക്കൗണ്ട് തിരഞ്ഞെടുക്കുക)</label>
+          <div class="relative">
+            <select id="select-account-role" onchange="onAccountDropdownChange()" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-3 text-sm text-slate-100 font-medium appearance-none focus:outline-none focus:border-blue-500 cursor-pointer">
+              <option value="usr_normal_1">1. Normal User (Arjun Nair)</option>
+              <option value="usr_celeb_1">2. Celebrity Account (Dulquer Sithara)</option>
+              <option value="usr_org_1">3. Organization (Kochi Live Arena Events)</option>
+              <option value="usr_support_1">4. Customer Care Support (Rahul)</option>
+              <option value="usr_admin_1">5. Super Admin (Platform Control)</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
+              <i class="fa-solid fa-chevron-down text-xs"></i>
             </div>
           </div>
-
-          <!-- Full Name (Optional for existing users, used for new) -->
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">Your Full Name (പുതിയ അക്കൗണ്ടുകൾക്ക്)</label>
-            <input type="text" id="input-fullname" placeholder="e.g. Rahul Nair" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-          </div>
-
-          <!-- Submit Button -->
-          <button onclick="handleOtpLogin()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 hover:opacity-95 transition flex items-center justify-center gap-2 mt-2">
-            <i class="fa-solid fa-arrow-right-to-bracket"></i>
-            <span>Verify OTP & Sign In (ലോഗിൻ ചെയ്യുക)</span>
-          </button>
         </div>
 
-        <!-- PORTAL 2: SUPER ADMIN & SUPPORT STAFF SEPARATE LOGIN -->
-        <div id="auth-form-admin" class="space-y-4 hidden">
-          <div>
-            <h2 class="text-lg font-bold text-white mb-0.5">Admin & Staff Portal</h2>
-            <p class="text-xs text-slate-400">സൂപ്പർ അഡ്മിൻമാർക്കും കസ്റ്റമർ കെയർ ജീവനക്കാർക്കുമുള്ള പ്രത്യേക ലോഗിൻ.</p>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">Email / Staff Username</label>
-            <input type="text" id="admin-input-id" value="admin@frnd.app" placeholder="admin@frnd.app" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono">
-            <span class="text-[10px] text-slate-500 mt-1 block">Super Admin: <span class="text-slate-300 font-mono">admin@frnd.app</span> | Support: <span class="text-slate-300 font-mono">support@frnd.app</span></span>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
-            <input type="password" id="admin-input-password" value="admin123" placeholder="••••••••" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono">
-            <span class="text-[10px] text-slate-500 mt-1 block">Admin pass: <span class="text-slate-300 font-mono">admin123</span> | Support pass: <span class="text-slate-300 font-mono">support123</span></span>
-          </div>
-
-          <button onclick="handleAdminLogin()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs sm:text-sm shadow-lg shadow-purple-600/25 hover:opacity-95 transition flex items-center justify-center gap-2 mt-2">
-            <i class="fa-solid fa-lock"></i>
-            <span>Sign In to Admin Console</span>
-          </button>
+        <!-- Mobile Number / Identifier Input -->
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">Mobile Number / Identifier</label>
+          <input type="text" id="input-phone" value="+919876543210" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 font-mono tracking-wide focus:outline-none focus:border-blue-500">
         </div>
 
-        <!-- PORTAL 3: ONE-CLICK DEMO ACCOUNTS -->
-        <div id="auth-form-demo" class="space-y-3 hidden">
-          <div>
-            <h2 class="text-lg font-bold text-white mb-0.5">Quick Demo Accounts</h2>
-            <p class="text-xs text-slate-400">താഴെ നൽകിയിട്ടുള്ള ഏതെങ്കിലും അക്കൗണ്ട് തെരഞ്ഞെടുത്ത് ഒറ്റ ക്ലിക്കിൽ ലോഗിൻ ചെയ്യാം:</p>
-          </div>
-
-          <div class="space-y-2 pt-1">
-            <!-- 1. Normal User -->
-            <button onclick="quickDemoLogin('usr_normal_1')" class="w-full p-3 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 hover:bg-indigo-950/50 flex items-center justify-between text-left transition">
-              <div class="flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" class="w-10 h-10 rounded-full object-cover border border-indigo-400">
-                <div>
-                  <h4 class="text-xs font-bold text-white">Rahul Nair (Normal User)</h4>
-                  <p class="text-[10px] text-slate-400">+91 9876543210 • 250 Coins • Kochi</p>
-                </div>
-              </div>
-              <span class="text-xs font-semibold px-2 py-1 rounded bg-indigo-500/20 text-indigo-300">Enter</span>
-            </button>
-
-            <!-- 2. Celebrity User -->
-            <button onclick="quickDemoLogin('usr_celeb_1')" class="w-full p-3 rounded-2xl border border-pink-500/30 bg-pink-950/20 hover:bg-pink-950/50 flex items-center justify-between text-left transition">
-              <div class="flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-10 h-10 rounded-full object-cover border border-pink-400">
-                <div>
-                  <h4 class="text-xs font-bold text-white">Ananya Joy (Celebrity)</h4>
-                  <p class="text-[10px] text-slate-400">+91 9876543212 • Playback Singer</p>
-                </div>
-              </div>
-              <span class="text-xs font-semibold px-2 py-1 rounded bg-pink-500/20 text-pink-300">Enter</span>
-            </button>
-
-            <!-- 3. Organization User -->
-            <button onclick="quickDemoLogin('usr_org_1')" class="w-full p-3 rounded-2xl border border-amber-500/30 bg-amber-950/20 hover:bg-amber-950/50 flex items-center justify-between text-left transition">
-              <div class="flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1511578314322-379afb476865?w=150" class="w-10 h-10 rounded-full object-cover border border-amber-400">
-                <div>
-                  <h4 class="text-xs font-bold text-white">Grand Arena Entertainment (Organization)</h4>
-                  <p class="text-[10px] text-slate-400">+91 9876543211 • Event Organizer</p>
-                </div>
-              </div>
-              <span class="text-xs font-semibold px-2 py-1 rounded bg-amber-500/20 text-amber-300">Enter</span>
-            </button>
-
-            <!-- 4. Super Admin -->
-            <button onclick="quickDemoLogin('usr_admin_1')" class="w-full p-3 rounded-2xl border border-purple-500/30 bg-purple-950/20 hover:bg-purple-950/50 flex items-center justify-between text-left transition">
-              <div class="flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150" class="w-10 h-10 rounded-full object-cover border border-purple-400">
-                <div>
-                  <h4 class="text-xs font-bold text-white">Super Administrator (Root Admin)</h4>
-                  <p class="text-[10px] text-slate-400">Full Access • User Moderation & Revenue</p>
-                </div>
-              </div>
-              <span class="text-xs font-semibold px-2 py-1 rounded bg-purple-500/20 text-purple-300">Enter</span>
-            </button>
-
-            <!-- 5. Support Desk -->
-            <button onclick="quickDemoLogin('usr_support_1')" class="w-full p-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 hover:bg-emerald-950/50 flex items-center justify-between text-left transition">
-              <div class="flex items-center gap-3">
-                <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150" class="w-10 h-10 rounded-full object-cover border border-emerald-400">
-                <div>
-                  <h4 class="text-xs font-bold text-white">FRND Support Executive (Helpdesk)</h4>
-                  <p class="text-[10px] text-slate-400">24/7 Live VoIP & Chat Resolution</p>
-                </div>
-              </div>
-              <span class="text-xs font-semibold px-2 py-1 rounded bg-emerald-500/20 text-emerald-300">Enter</span>
-            </button>
-          </div>
+        <!-- 6-Digit Dummy OTP / Password Input -->
+        <div class="mb-6">
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">6-Digit Dummy OTP / Password</label>
+          <input type="text" id="input-otp" value="123456" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-center font-mono font-bold tracking-[0.3em] text-emerald-400 focus:outline-none focus:border-blue-500">
         </div>
+
+        <!-- Submit Button -->
+        <button onclick="handleSimpleLogin()" class="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-lock text-xs"></i>
+          <span>Verify OTP (123456) & Enter Website</span>
+        </button>
 
       </div>
 
@@ -232,45 +84,57 @@
 
 
   <!-- ============================================================== -->
-  <!-- 2. DASHBOARD VIEW (Displayed once user is logged in)            -->
+  <!-- 2. AUTHORIZED DASHBOARD VIEW (Strictly role-segregated)         -->
   <!-- ============================================================== -->
   <div id="dashboard-view" class="hidden flex-1 flex flex-col">
     
     <!-- TOP HEADER -->
-    <header class="bg-slate-900/90 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+    <header class="bg-[#111928] border-b border-slate-800 sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         
-        <!-- Logo & Tagline -->
+        <!-- Brand Logo -->
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
-            <i class="fa-solid fa-headset text-xl"></i>
+          <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow">
+            FC
           </div>
           <div>
-            <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-indigo-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">FRND</h1>
-            <p class="text-[11px] text-slate-400">Connected as <span id="header-user-role-label" class="text-indigo-300 font-semibold">User</span></p>
+            <h1 class="text-base font-bold text-white leading-tight">Friends Connect</h1>
+            <p id="header-role-title" class="text-[11px] text-blue-400 font-semibold"></p>
           </div>
         </div>
 
-        <!-- Active User Profile, Coins Wallet & Logout Button -->
+        <!-- User Specific Info & Logout -->
         <div class="flex items-center gap-3">
-          <!-- Wallet Coins (for normal / celebrity) -->
-          <div id="header-wallet-container" class="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-full px-3 py-1">
-            <span class="text-amber-400 text-xs sm:text-sm font-semibold flex items-center gap-1">
-              <i class="fa-solid fa-coins"></i> <span id="user-wallet-coins">250</span>
-            </span>
-            <button onclick="addDemoCoins()" class="text-[10px] bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-900 px-1.5 py-0.5 rounded-full font-bold transition" title="Add 100 Demo Coins">+</button>
-          </div>
           
-          <div class="flex items-center gap-2.5 pl-2 border-l border-slate-800">
-            <img id="user-avatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-indigo-500/50">
-            <div class="text-left">
-              <p id="user-display-name" class="text-xs font-semibold text-slate-200">Rahul Nair</p>
-              <span id="user-role-badge" class="inline-block text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-medium">NORMAL</span>
+          <!-- Normal User Premium Button / Status -->
+          <div id="normal-user-premium-area" class="hidden">
+            <button onclick="unlockPremiumSubscription()" id="btn-upgrade-premium" class="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs shadow hover:scale-105 transition flex items-center gap-1.5">
+              <i class="fa-solid fa-crown text-xs"></i>
+              <span>Upgrade to Premium (₹199)</span>
+            </button>
+            <div id="badge-premium-active" class="hidden px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-check text-xs"></i>
+              <span>VIP Premium Active</span>
             </div>
           </div>
 
-          <!-- LOGOUT BUTTON -->
-          <button onclick="handleLogout()" class="ml-2 px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 hover:bg-rose-600 hover:text-white text-xs font-semibold transition flex items-center gap-1.5" title="Sign out of account">
+          <!-- Celebrity Total Earnings (No points/coins needed for celeb) -->
+          <div id="celebrity-earnings-area" class="hidden px-3 py-1 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-300 text-xs font-bold flex items-center gap-1.5">
+            <i class="fa-solid fa-coins text-amber-400"></i>
+            <span>Fan Earnings: ₹18,450</span>
+          </div>
+
+          <!-- User Avatar & Name -->
+          <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
+            <img id="user-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-blue-500">
+            <div class="hidden sm:block text-left">
+              <p id="user-display-name" class="text-xs font-bold text-white"></p>
+              <span id="user-role-badge" class="text-[10px] text-slate-400"></span>
+            </div>
+          </div>
+
+          <!-- Logout Button -->
+          <button onclick="handleLogout()" class="px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-950/20 text-rose-300 hover:bg-rose-600 hover:text-white text-xs font-semibold transition flex items-center gap-1.5">
             <i class="fa-solid fa-right-from-bracket"></i>
             <span class="hidden sm:inline">Logout</span>
           </button>
@@ -278,379 +142,430 @@
 
       </div>
 
-      <!-- MAIN NAVIGATION TABS (Role Adaptive) -->
-      <div class="border-t border-slate-800/80 bg-slate-900/50">
+      <!-- Navigation Tabs (Only shows tabs authorized for this user role) -->
+      <div class="border-t border-slate-800 bg-[#0e1626]">
         <div class="max-w-7xl mx-auto px-4 flex items-center justify-between overflow-x-auto">
-          <nav class="flex space-x-1 sm:space-x-4 py-2" id="nav-tabs">
-            <button onclick="switchTab('matchmaking')" id="tab-matchmaking" class="tab-item active-tab flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-              <i class="fa-solid fa-shuffle text-indigo-400"></i>
-              <span>Random Audio/Video</span>
-            </button>
-            <button onclick="switchTab('events')" id="tab-events" class="tab-item text-slate-400 hover:text-slate-200 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-              <i class="fa-solid fa-calendar-days text-amber-400"></i>
-              <span>Nearby Events</span>
-            </button>
-            <button onclick="switchTab('celebrity')" id="tab-celebrity" class="tab-item text-slate-400 hover:text-slate-200 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-              <i class="fa-solid fa-star text-pink-400"></i>
-              <span>Celebrity Hub</span>
-            </button>
-            <button onclick="switchTab('support')" id="tab-support" class="tab-item text-slate-400 hover:text-slate-200 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-              <i class="fa-solid fa-comments text-emerald-400"></i>
-              <span>Customer Care</span>
-            </button>
-            <button onclick="switchTab('admin')" id="tab-admin" class="tab-item text-slate-400 hover:text-slate-200 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition hidden">
-              <i class="fa-solid fa-gauge text-purple-400"></i>
-              <span>Super Admin</span>
-            </button>
+          <nav class="flex space-x-2 py-2" id="authorized-nav-tabs">
+            <!-- Rendered dynamically strictly per role -->
           </nav>
-
-          <!-- Live Server Status Indicator -->
-          <div class="flex items-center gap-2 text-xs text-slate-400">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span class="hidden sm:inline">Online</span>
-          </div>
         </div>
       </div>
     </header>
 
-    <!-- MAIN APP CONTENT CONTAINER -->
+    <!-- MAIN ROLE-BASED DASHBOARD CONTENT -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
+      
+      <!-- ============================================== -->
+      <!-- A. NORMAL USER AUTHORIZED CONTENT              -->
+      <!-- ============================================== -->
+      <div id="dashboard-normal" class="hidden space-y-6">
+        
+        <!-- Tab: Random Connect (Audio & Video) -->
+        <div id="normal-tab-connect" class="normal-section">
+          <div class="max-w-2xl mx-auto text-center py-4">
+            <h2 class="text-2xl font-extrabold text-white mb-1">Random Friends Matchmaking</h2>
+            <p class="text-slate-400 text-xs mb-5">ഓൺലൈനിലുള്ള മറ്റ് സുഹൃത്തുക്കളുമായി ഓഡിയോ അല്ലെങ്കിൽ വീഡിയോ കോളിൽ സംസാരിക്കുക</p>
 
-      <!-- ==================== TAB 1: RANDOM AUDIO & VIDEO MATCHMAKING ==================== -->
-      <section id="view-matchmaking" class="tab-content block">
-        <div class="max-w-3xl mx-auto text-center py-4">
-          
-          <h2 class="text-3xl font-extrabold text-white mb-2">Connect to Random Friends</h2>
-          <p class="text-slate-400 text-xs sm:text-sm mb-5">
-            ഓൺലൈനിലുള്ള പുതിയ സുഹൃത്തുക്കളുമായി തത്സമയം ഓഡിയോ അല്ലെങ്കിൽ വീഡിയോ കോളിൽ സംസാരിക്കാം!
-          </p>
+            <!-- Mode Selector -->
+            <div class="inline-flex rounded-full bg-slate-900 border border-slate-800 p-1 mb-6">
+              <button onclick="setMatchingMode('AUDIO')" id="mode-btn-audio" class="px-5 py-2 rounded-full text-xs font-bold bg-blue-600 text-white">
+                <i class="fa-solid fa-headset mr-1"></i>Audio Call
+              </button>
+              <button onclick="setMatchingMode('VIDEO')" id="mode-btn-video" class="px-5 py-2 rounded-full text-xs font-bold text-slate-400 hover:text-white">
+                <i class="fa-solid fa-video mr-1"></i>Video Call
+              </button>
+            </div>
 
-          <!-- Mode Selector (Audio vs Video) -->
-          <div class="inline-flex rounded-full bg-slate-900 border border-slate-800 p-1 mb-6 shadow-md">
-            <button onclick="setMatchingMode('AUDIO')" id="mode-btn-audio" class="px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm">
-              <i class="fa-solid fa-headset"></i>
-              <span>Audio Call</span>
-            </button>
-            <button onclick="setMatchingMode('VIDEO')" id="mode-btn-video" class="px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 text-slate-400 hover:text-white">
-              <i class="fa-solid fa-video"></i>
-              <span>Video Call</span>
-            </button>
-          </div>
-
-          <!-- Call Status Container -->
-          <div class="bg-gradient-to-b from-slate-900 to-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden mb-6">
-            
-            <div class="absolute -top-24 -left-24 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-            <!-- STATE 1: IDLE / READY -->
-            <div id="call-state-idle" class="flex flex-col items-center">
-              <div class="relative mb-6">
-                <div id="idle-icon-container" class="w-28 h-28 rounded-full bg-indigo-900/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-400 text-4xl shadow-inner">
+            <!-- Call Container -->
+            <div class="bg-[#111928] border border-slate-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden mb-6">
+              
+              <!-- Idle State -->
+              <div id="call-state-idle" class="flex flex-col items-center">
+                <div class="w-24 h-24 rounded-full bg-blue-900/30 border-2 border-blue-500/40 flex items-center justify-center text-blue-400 text-3xl mb-4">
                   <i class="fa-solid fa-microphone" id="idle-main-icon"></i>
                 </div>
+                <h3 class="text-lg font-bold text-white mb-1" id="idle-title">Find Someone New</h3>
+                <p class="text-xs text-slate-400 mb-5">Click below to get paired with an online friend.</p>
+                <button onclick="startRandomMatching()" class="px-7 py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg transition flex items-center gap-2">
+                  <i class="fa-solid fa-phone-volume"></i>
+                  <span id="connect-btn-text">Connect Random Friend</span>
+                </button>
               </div>
-              <h3 class="text-xl font-bold text-slate-200 mb-1" id="idle-title">Find Someone New</h3>
-              <p class="text-xs text-slate-400 mb-6 max-w-sm" id="idle-desc">Safe, instant anonymous audio matching with verified community members.</p>
-              <button onclick="startRandomMatching()" class="px-8 py-3.5 rounded-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-semibold shadow-lg shadow-indigo-600/30 hover:scale-105 active:scale-95 transition flex items-center gap-3">
-                <i class="fa-solid fa-phone-volume" id="connect-btn-icon"></i>
-                <span id="connect-btn-text">Connect Random Friend</span>
-              </button>
-            </div>
 
-            <!-- STATE 2: SEARCHING / IN QUEUE -->
-            <div id="call-state-searching" class="hidden flex flex-col items-center py-4">
-              <div class="relative w-32 h-32 mb-6 flex items-center justify-center">
-                <div class="absolute inset-0 rounded-full border-2 border-indigo-500/20 animate-ping"></div>
-                <div class="absolute inset-2 rounded-full border-2 border-purple-500/40 animate-pulse"></div>
-                <div class="w-20 h-20 rounded-full bg-indigo-600/20 border border-indigo-500 flex items-center justify-center text-indigo-400 text-2xl">
-                  <i class="fa-solid fa-magnifying-glass animate-spin" style="animation-duration: 3s;"></i>
-                </div>
+              <!-- Searching State -->
+              <div id="call-state-searching" class="hidden flex flex-col items-center py-4">
+                <div class="w-16 h-16 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-4"></div>
+                <h3 class="text-base font-bold text-white mb-1">Finding an Online Friend...</h3>
+                <p class="text-xs text-slate-400 mb-4">Matching with an active user in the queue.</p>
+                <button onclick="cancelMatching()" class="px-5 py-1.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300 text-xs">
+                  Cancel
+                </button>
               </div>
-              <h3 class="text-lg font-bold text-slate-200 mb-1">Finding an Online Friend...</h3>
-              <p class="text-xs text-slate-400 mb-6">Connecting you with someone available in the queue.</p>
-              <button onclick="cancelMatching()" class="px-6 py-2 rounded-full border border-slate-700 bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition">
-                <i class="fa-solid fa-xmark mr-1.5"></i>Cancel
-              </button>
-            </div>
 
-            <!-- STATE 3: CALL CONNECTED! -->
-            <div id="call-state-connected" class="hidden flex flex-col items-center py-2">
-              
-              <!-- VIDEO CALL VIEWPORT -->
-              <div id="video-call-viewport" class="hidden w-full max-w-lg mb-4 relative rounded-2xl overflow-hidden bg-black border border-slate-800 aspect-video shadow-2xl">
-                <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
-                <div id="remote-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950">
-                  <img id="remote-peer-video-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" class="w-20 h-20 rounded-full object-cover border-2 border-purple-500 mb-2">
-                  <p id="remote-peer-video-name" class="text-xs font-bold text-slate-200">Online Friend</p>
-                  <span class="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>Live Video Feed
-                  </span>
-                </div>
-
-                <!-- Picture-in-Picture Local Camera -->
-                <div class="absolute bottom-3 right-3 w-28 h-36 rounded-xl overflow-hidden border-2 border-slate-700 bg-slate-900 shadow-lg z-10">
-                  <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                  <div id="local-camera-off-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 text-xs">
-                    <i class="fa-solid fa-video-slash text-base mb-1 text-rose-400"></i>
-                    <span class="text-[9px]">Camera Off</span>
+              <!-- Connected State -->
+              <div id="call-state-connected" class="hidden flex flex-col items-center py-2">
+                <!-- Video Viewport -->
+                <div id="video-call-viewport" class="hidden w-full max-w-md mb-4 relative rounded-2xl overflow-hidden bg-black aspect-video shadow-xl">
+                  <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
+                  <div id="remote-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950">
+                    <img id="remote-peer-video-avatar" src="" class="w-16 h-16 rounded-full object-cover border-2 border-purple-500 mb-2">
+                    <p id="remote-peer-video-name" class="text-xs font-bold text-slate-200">Online Friend</p>
+                    <span class="text-[10px] text-emerald-400 mt-1">Live Video Feed</span>
                   </div>
-                  <span class="absolute top-1 left-1.5 text-[8px] bg-slate-950/70 text-slate-300 px-1 py-0.2 rounded font-mono">You</span>
+                  <!-- Local PiP -->
+                  <div class="absolute bottom-2 right-2 w-24 h-32 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-md">
+                    <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                    <div id="local-camera-off-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 text-xs">
+                      <span class="text-[9px]">Camera Off</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="absolute top-3 left-3 bg-slate-950/70 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-mono text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span id="video-call-timer">00:00</span>
-                </div>
-              </div>
-
-              <!-- AUDIO CALL VIEWPORT -->
-              <div id="audio-call-viewport" class="flex flex-col items-center">
-                <div class="relative mb-4">
-                  <img id="peer-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" class="w-20 h-20 rounded-full object-cover border-2 border-emerald-500 shadow-md shadow-emerald-500/20">
-                  <span class="absolute bottom-0 right-0 w-4 h-4 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+                <!-- Audio Viewport -->
+                <div id="audio-call-viewport" class="flex flex-col items-center">
+                  <img id="peer-avatar" src="" class="w-16 h-16 rounded-full object-cover border-2 border-emerald-500 mb-2">
+                  <h3 id="peer-name" class="text-base font-bold text-white mb-0.5">Online Friend</h3>
+                  <p class="text-[11px] text-emerald-400 mb-2">WebRTC Audio Call Active</p>
+                  <div class="text-xl font-mono font-bold text-slate-200 mb-3" id="call-timer">00:00</div>
                 </div>
 
-                <h3 id="peer-name" class="text-xl font-bold text-slate-100 mb-0.5">Online Friend</h3>
-                <p class="text-xs text-emerald-400 font-medium mb-3 flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  WebRTC Audio Call Active
-                </p>
-
-                <div class="text-2xl font-mono font-bold text-slate-200 mb-5 bg-slate-950/60 px-4 py-1 rounded-xl border border-slate-800" id="call-timer">
-                  00:00
+                <!-- Action Toolbar -->
+                <div class="flex items-center gap-3 mt-2">
+                  <button onclick="toggleMute()" id="btn-mute" class="w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center text-sm shadow">
+                    <i class="fa-solid fa-microphone"></i>
+                  </button>
+                  <button onclick="toggleCamera()" id="btn-camera" class="w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center text-sm shadow hidden">
+                    <i class="fa-solid fa-video"></i>
+                  </button>
+                  <button onclick="skipToNextPerson()" class="px-5 py-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow flex items-center gap-1.5">
+                    <i class="fa-solid fa-forward-step"></i>
+                    <span>Next Friend</span>
+                  </button>
+                  <button onclick="endCurrentCall()" class="w-11 h-11 rounded-full bg-rose-600 text-white flex items-center justify-center text-sm shadow">
+                    <i class="fa-solid fa-phone-slash"></i>
+                  </button>
                 </div>
-
-                <div class="w-full max-w-xs h-12 flex items-center justify-center gap-1.5 mb-6 px-4" id="audio-wave">
-                  <span class="w-1.5 bg-indigo-500 rounded-full animate-wave h-4"></span>
-                  <span class="w-1.5 bg-indigo-400 rounded-full animate-wave h-8" style="animation-delay: 0.1s;"></span>
-                  <span class="w-1.5 bg-purple-500 rounded-full animate-wave h-10" style="animation-delay: 0.2s;"></span>
-                  <span class="w-1.5 bg-pink-500 rounded-full animate-wave h-6" style="animation-delay: 0.3s;"></span>
-                  <span class="w-1.5 bg-indigo-500 rounded-full animate-wave h-9" style="animation-delay: 0.4s;"></span>
-                  <span class="w-1.5 bg-purple-400 rounded-full animate-wave h-5" style="animation-delay: 0.5s;"></span>
-                  <span class="w-1.5 bg-pink-400 rounded-full animate-wave h-7" style="animation-delay: 0.2s;"></span>
-                </div>
-              </div>
-
-              <!-- In-Call Actions -->
-              <div class="flex items-center gap-3 sm:gap-4 mt-2">
-                <button onclick="toggleMute()" id="btn-mute" class="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-lg transition shadow-md" title="Mute/Unmute Mic">
-                  <i class="fa-solid fa-microphone"></i>
-                </button>
-
-                <button onclick="toggleCamera()" id="btn-camera" class="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-lg transition shadow-md hidden" title="Toggle Camera On/Off">
-                  <i class="fa-solid fa-video"></i>
-                </button>
-
-                <button onclick="skipToNextPerson()" class="px-5 sm:px-6 py-3 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition hover:scale-105 active:scale-95" title="Skip to next friend">
-                  <i class="fa-solid fa-forward-step"></i>
-                  <span>Next Friend</span>
-                </button>
-
-                <button onclick="endCurrentCall()" class="w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-lg transition shadow-lg shadow-rose-600/30" title="End Call">
-                  <i class="fa-solid fa-phone-slash"></i>
-                </button>
               </div>
 
             </div>
-
           </div>
-
-          <div class="text-xs text-slate-500 flex items-center justify-center gap-4">
-            <span><i class="fa-solid fa-lock mr-1 text-slate-400"></i>End-to-End Encrypted WebRTC</span>
-            <span>•</span>
-            <span><i class="fa-solid fa-shield mr-1 text-slate-400"></i>Zero Number Sharing</span>
-          </div>
-
         </div>
-      </section>
 
-      <!-- ==================== TAB 2: NEARBY EVENTS & TICKETING ==================== -->
-      <section id="view-events" class="tab-content hidden">
-        <div class="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-              <i class="fa-solid fa-map-location-dot text-amber-400"></i>
-              Events Near You (ലൊക്കേഷൻ ഇവന്റുകൾ)
-            </h2>
-            <p class="text-xs text-slate-400">നിങ്ങളുടെ ജിപിഎസ് ലൊക്കേഷൻ അടിസ്ഥാനമാക്കി അടുത്തുള്ള സംഗീതപരിപാടികളും ഇവന്റുകളും ടിക്കറ്റുകളും</p>
+        <!-- Tab: Nearby Events -->
+        <div id="normal-tab-events" class="normal-section hidden">
+          <div class="mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-xl font-bold text-white">Events Near You</h2>
+              <p class="text-xs text-slate-400">നിങ്ങളുടെ ലൊക്കേഷനിലുള്ള സംഗീതപരിപാടികളും ഇവന്റുകളും ടിക്കറ്റുകളും</p>
+            </div>
+            <div class="flex rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-xs">
+              <button onclick="filterEventsDistance(10)" class="px-2.5 py-1 rounded-md text-slate-400" id="dist-10">10 km</button>
+              <button onclick="filterEventsDistance(50)" class="px-2.5 py-1 rounded-md bg-blue-600 text-white font-medium" id="dist-50">50 km</button>
+              <button onclick="filterEventsDistance(0)" class="px-2.5 py-1 rounded-md text-slate-400" id="dist-all">All</button>
+            </div>
+          </div>
+          <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </div>
+
+        <!-- Tab: Celebrity Hub -->
+        <div id="normal-tab-celebrity" class="normal-section hidden">
+          <div class="mb-5">
+            <h2 class="text-xl font-bold text-white">Celebrity Hub & Updates</h2>
+            <p class="text-xs text-slate-400">സെലിബ്രിറ്റികളുടെ പോസ്റ്റുകൾ കാണുക; പ്രീമിയം യൂസേഴ്സിന് നേരിട്ട് വിളിക്കാം!</p>
           </div>
 
-          <div class="flex items-center flex-wrap gap-2">
-            <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300">
-              <i class="fa-solid fa-location-crosshairs text-indigo-400 mr-2"></i>
-              <span id="current-city-label">Kochi, Kerala (9.93°N, 76.26°E)</span>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Featured Celebrity Card with Call action -->
+            <div class="lg:col-span-1 space-y-4">
+              <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5 text-center">
+                <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-20 h-20 rounded-full mx-auto object-cover border-2 border-pink-500 mb-3 shadow">
+                <h3 class="text-base font-bold text-white flex items-center justify-center gap-1">
+                  Dulquer Sithara
+                  <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
+                </h3>
+                <p class="text-xs text-slate-400 mb-4">Playback Singer & Celebrity Artist</p>
+
+                <!-- Premium Locked / Unlocked Call Controls -->
+                <div id="normal-celeb-call-controls" class="space-y-2">
+                  <!-- Rendered dynamically based on isPremium -->
+                </div>
+              </div>
             </div>
 
-            <div class="flex rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-xs">
-              <button onclick="filterEventsDistance(10)" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white" id="dist-10">10 km</button>
-              <button onclick="filterEventsDistance(50)" class="px-2.5 py-1 rounded-md bg-indigo-600 text-white font-medium" id="dist-50">50 km</button>
-              <button onclick="filterEventsDistance(0)" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white" id="dist-all">All</button>
-            </div>
+            <!-- Right: Celebrity Feed Posts -->
+            <div class="lg:col-span-2 space-y-5" id="celebrity-feed"></div>
+          </div>
+        </div>
 
-            <button onclick="openCreateEventModal()" id="btn-post-event" class="hidden px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition">
-              <i class="fa-solid fa-plus"></i>
-              <span>Post Event</span>
+        <!-- Tab: Customer Care -->
+        <div id="normal-tab-support" class="normal-section hidden">
+          <div class="max-w-3xl mx-auto bg-[#111928] border border-slate-800 rounded-2xl flex flex-col h-[480px] overflow-hidden shadow-2xl">
+            <div class="bg-slate-800/80 px-4 py-3 border-b border-slate-700/60 flex items-center justify-between">
+              <div>
+                <h4 class="text-sm font-semibold text-white">Customer Care Support</h4>
+                <p class="text-[11px] text-emerald-400">Live Executive Online</p>
+              </div>
+              <button onclick="startSupportVoipCall()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-phone"></i>
+                <span>VoIP Call</span>
+              </button>
+            </div>
+            <div id="support-messages-container" class="flex-1 p-4 overflow-y-auto space-y-3"></div>
+            <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2">
+              <input type="text" id="support-message-input" placeholder="Type support query..." class="flex-1 bg-[#1e293b] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500">
+              <button onclick="sendSupportMessage()" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-medium text-xs">Send</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+
+      <!-- ============================================== -->
+      <!-- B. CELEBRITY AUTHORIZED DASHBOARD              -->
+      <!-- ============================================== -->
+      <div id="dashboard-celebrity" class="hidden space-y-6">
+        
+        <!-- Celebrity Banner -->
+        <div class="bg-gradient-to-r from-pink-950/40 via-purple-950/30 to-[#111928] border border-pink-500/30 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-16 h-16 rounded-full object-cover border-2 border-pink-500 shadow-lg">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <h2 class="text-xl font-bold text-white">Dulquer Sithara</h2>
+                <i class="fa-solid fa-circle-check text-sky-400 text-sm"></i>
+              </div>
+              <p class="text-xs text-slate-300">Verified Celebrity Artist Console • 350K Followers</p>
+              <p class="text-[11px] text-pink-400 mt-1 font-semibold">സെലിബ്രിറ്റി അക്കൗണ്ട്: ആരാധകരുടെ ഇൻകമിംഗ് കോളുകൾ സ്വീകരിക്കാം</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400">Call Receiving Status:</span>
+            <button onclick="toggleCelebrityAvailability()" id="celeb-status-btn" class="px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5">
+              <i class="fa-solid fa-circle text-[8px] animate-pulse"></i>
+              <span id="celeb-status-label">Online (Accepting Calls)</span>
             </button>
           </div>
         </div>
 
-        <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <!-- Loaded dynamically -->
-        </div>
-      </section>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Column 1: Live Incoming Fan Calls Receiver Console -->
+          <div class="lg:col-span-1 space-y-4">
+            <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5">
+              <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                <i class="fa-solid fa-phone-volume text-emerald-400"></i>
+                Incoming Fan Calls Desk
+              </h3>
+              <p class="text-[11px] text-slate-400 mb-4">പ്രീമിയം ആരാധകരിൽ നിന്നുള്ള ഇൻകമിംഗ് കോളുകൾ ഇവിടെ സ്വീകരിക്കാം</p>
 
-      <!-- ==================== TAB 3: CELEBRITY HUB & VIP CALLING ==================== -->
-      <section id="view-celebrity" class="tab-content hidden">
-        <div class="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-              <i class="fa-solid fa-crown text-pink-400"></i>
-              Celebrity Hub & VIP Calls
-            </h2>
-            <p class="text-xs text-slate-400">സെലിബ്രിറ്റികളുടെ ഫോട്ടോകളും വീഡിയോകളും കാണുക, പ്രീമിയം ഓഡിയോ/വീഡിയോ കോളുകൾ ചെയ്യുക</p>
+              <!-- Incoming Call Notification Box -->
+              <div id="incoming-fan-call-box" class="bg-gradient-to-b from-purple-950/40 to-slate-900 border border-purple-500/40 rounded-2xl p-4 text-center">
+                <div class="w-12 h-12 rounded-full bg-purple-600/30 text-purple-300 flex items-center justify-center mx-auto mb-2 text-xl animate-pulse">
+                  <i class="fa-solid fa-video"></i>
+                </div>
+                <h4 class="text-xs font-bold text-white">Arjun Nair (VIP Fan)</h4>
+                <p class="text-[10px] text-purple-300 mb-3">Incoming VIP Video Call...</p>
+                <div class="flex gap-2">
+                  <button onclick="acceptIncomingFanCall()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow transition">
+                    <i class="fa-solid fa-phone mr-1"></i>Accept
+                  </button>
+                  <button onclick="declineIncomingFanCall()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white text-xs">
+                    Decline
+                  </button>
+                </div>
+              </div>
+
+              <!-- Active Call Session (When Accepted) -->
+              <div id="celeb-active-call-box" class="hidden bg-black rounded-2xl p-4 text-center border border-emerald-500/50 mt-3">
+                <p class="text-[11px] text-emerald-400 font-bold mb-2 flex items-center justify-center gap-1">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  Fan Video Call in Progress
+                </p>
+                <div class="w-full h-32 rounded-xl bg-slate-900 overflow-hidden mb-3 relative flex items-center justify-center">
+                  <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" class="w-16 h-16 rounded-full object-cover border border-purple-400">
+                  <span class="absolute bottom-1 right-2 text-[9px] bg-black/70 text-slate-300 px-1 rounded">Arjun Nair</span>
+                </div>
+                <button onclick="endCelebrityCall()" class="w-full py-2 rounded-xl bg-rose-600 text-white text-xs font-bold">
+                  End Call
+                </button>
+              </div>
+
+            </div>
           </div>
 
-          <button onclick="openCreatePostModal()" id="btn-post-media" class="hidden px-3.5 py-1.5 rounded-lg bg-pink-500 hover:bg-pink-400 text-white font-semibold text-xs flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-cloud-arrow-up"></i>
-            <span>Post Photo/Video</span>
+          <!-- Column 2 & 3: Celebrity Posts & Media Publisher -->
+          <div class="lg:col-span-2 space-y-4">
+            <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-bold text-white">My Media Posts & Feed Updates</h3>
+                <p class="text-[11px] text-slate-400">നിങ്ങളുടെ ആരാധകർക്കായി പുതിയ ചിത്രങ്ങളും വീഡിയോകളും പോസ്റ്റ് ചെയ്യുക</p>
+              </div>
+              <button onclick="openCreatePostModal()" class="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-plus"></i>
+                <span>Post Photo/Video</span>
+              </button>
+            </div>
+
+            <!-- Celebrity's own feed list -->
+            <div id="celeb-own-feed" class="space-y-4"></div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ============================================== -->
+      <!-- C. ORGANIZATION AUTHORIZED DASHBOARD           -->
+      <!-- ============================================== -->
+      <div id="dashboard-organization" class="hidden space-y-6">
+        
+        <div class="bg-[#111928] border border-amber-500/30 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl border border-amber-500/40">
+              <i class="fa-solid fa-building"></i>
+            </div>
+            <div>
+              <h2 class="text-xl font-bold text-white">Kochi Live Arena Events</h2>
+              <p class="text-xs text-slate-300">Verified Event Organizer & Production Console</p>
+              <p class="text-[11px] text-amber-400 mt-0.5">ഇവന്റുകൾ പോസ്റ്റ് ചെയ്യാനും ടിക്കറ്റുകൾ വാലിഡേറ്റ് ചെയ്യാനുമുള്ള പോർട്ടൽ</p>
+            </div>
+          </div>
+
+          <button onclick="openCreateEventModal()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-2 transition">
+            <i class="fa-solid fa-plus"></i>
+            <span>Publish New Event</span>
           </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div class="lg:col-span-1 space-y-4">
-            <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <i class="fa-solid fa-star text-amber-400"></i>
-              Featured Artists
-            </h3>
-            <div id="celebrities-list" class="space-y-3">
-              <!-- Loaded dynamically -->
-            </div>
-          </div>
-
-          <div class="lg:col-span-2 space-y-6">
-            <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-              <i class="fa-solid fa-fire text-rose-400"></i>
-              Latest Updates & Media Feed
-            </h3>
-            <div id="celebrity-feed" class="space-y-6">
-              <!-- Loaded dynamically -->
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ==================== TAB 4: CUSTOMER CARE SUPPORT DESK ==================== -->
-      <section id="view-support" class="tab-content hidden">
-        <div class="max-w-4xl mx-auto">
           
-          <div class="mb-4 flex items-center justify-between">
-            <div>
-              <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-                <i class="fa-solid fa-headset text-emerald-400"></i>
-                Customer Care & Helpdesk
-              </h2>
-              <p class="text-xs text-slate-400">തത്സമയ ടെക്സ്റ്റ് ചാറ്റും വോയ്‌സ് കോളും (Live Text Chat & VoIP Call)</p>
-            </div>
+          <!-- QR Scanner / Ticket Validator Console -->
+          <div class="lg:col-span-1 space-y-4">
+            <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5">
+              <h3 class="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                <i class="fa-solid fa-qrcode text-amber-400"></i>
+                Gate QR Ticket Scanner
+              </h3>
+              <p class="text-[11px] text-slate-400 mb-4">ഇവന്റ് ഗേറ്റിൽ വെച്ച് ടിക്കറ്റ് QR കോഡ് സ്കാൻ ചെയ്ത് എൻട്രി നൽകുക</p>
 
-            <button onclick="startSupportVoipCall()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition">
-              <i class="fa-solid fa-phone"></i>
-              <span>Call Support Now (VoIP)</span>
-            </button>
-          </div>
-
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl flex flex-col h-[520px] overflow-hidden shadow-2xl">
-            <div class="bg-slate-800/80 px-5 py-3 border-b border-slate-700/60 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                  <i class="fa-solid fa-user-shield"></i>
-                </div>
-                <div>
-                  <h4 class="text-sm font-semibold text-slate-100">FRND Support Executive</h4>
-                  <p class="text-[11px] text-emerald-400 flex items-center gap-1">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Available 24/7 for Users, Orgs & Celebrities
-                  </p>
-                </div>
+              <div class="space-y-3">
+                <input type="text" id="input-scan-qr" placeholder="Enter or paste ticket QR Hash..." class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+                <button onclick="handleScanTicket()" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition">
+                  Validate & Check-in Ticket
+                </button>
               </div>
-              <span class="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-mono" id="support-ticket-status">TICKET: ACTIVE</span>
-            </div>
 
-            <div id="support-messages-container" class="flex-1 p-5 overflow-y-auto space-y-4">
-              <!-- Loaded dynamically -->
+              <!-- Scanner result feedback -->
+              <div id="scan-result-box" class="hidden mt-4 p-3 rounded-xl border text-xs"></div>
             </div>
+          </div>
 
-            <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2">
-              <input type="text" id="support-message-input" placeholder="Type your message or issue..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-              <button onclick="sendSupportMessage()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition flex items-center gap-1.5">
-                <span>Send</span>
-                <i class="fa-solid fa-paper-plane text-xs"></i>
-              </button>
+          <!-- Published Events Management -->
+          <div class="lg:col-span-2 space-y-4">
+            <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5">
+              <h3 class="text-sm font-bold text-white mb-1">My Active Events & Ticket Sales</h3>
+              <p class="text-[11px] text-slate-400 mb-4">Live sales tracking and bookings</p>
+              <div id="org-events-list" class="space-y-3"></div>
             </div>
           </div>
 
         </div>
-      </section>
 
-      <!-- ==================== TAB 5: SUPER ADMIN CONTROL PANEL ==================== -->
-      <section id="view-admin" class="tab-content hidden">
-        <div class="space-y-6">
-          <div>
-            <h2 class="text-2xl font-bold text-white flex items-center gap-2">
-              <i class="fa-solid fa-shield-halved text-purple-400"></i>
-              Super Admin Control Center
-            </h2>
-            <p class="text-xs text-slate-400">മുഴുവൻ സിസ്റ്റം നിയന്ത്രണവും യൂസർ മോഡറേഷനും അനലിറ്റിക്സും</p>
-          </div>
+      </div>
 
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="admin-metrics-grid">
-            <!-- Loaded dynamically -->
-          </div>
 
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-            <div class="px-5 py-3 bg-slate-800/60 border-b border-slate-800 font-semibold text-sm text-slate-200">
-              Platform Users & Roles Moderation
+      <!-- ============================================== -->
+      <!-- D. CUSTOMER CARE SUPPORT AUTHORIZED DASHBOARD   -->
+      <!-- ============================================== -->
+      <div id="dashboard-support" class="hidden space-y-6">
+        
+        <div class="bg-[#111928] border border-emerald-500/30 rounded-2xl p-5 flex items-center justify-between">
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl border border-emerald-500/40">
+              <i class="fa-solid fa-headset"></i>
             </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider border-b border-slate-800">
-                  <tr>
-                    <th class="px-4 py-3">User</th>
-                    <th class="px-4 py-3">Phone</th>
-                    <th class="px-4 py-3">Role</th>
-                    <th class="px-4 py-3">Status</th>
-                    <th class="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="admin-users-table" class="divide-y divide-slate-800/60 text-slate-300">
-                  <!-- Loaded dynamically -->
-                </tbody>
-              </table>
+            <div>
+              <h2 class="text-lg font-bold text-white">FRND Support Executive Console</h2>
+              <p class="text-xs text-slate-400">All Users, Celebrities & Organizations Helpdesk Desk</p>
             </div>
+          </div>
+          <span class="text-xs px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">Online & Active</span>
+        </div>
+
+        <!-- Support Ticket Stream -->
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[520px]">
+          <div class="p-4 bg-slate-800/60 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300">
+            <span>Incoming Support Inquiries</span>
+            <span class="text-emerald-400 font-bold">Priority: Celebrity &gt; Org &gt; Normal</span>
+          </div>
+          <div id="support-desk-messages" class="flex-1 p-5 overflow-y-auto space-y-3"></div>
+          <div class="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2">
+            <input type="text" id="support-desk-reply" placeholder="Reply to user query..." class="flex-1 bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+            <button onclick="sendSupportExecutiveReply()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow">Reply</button>
           </div>
         </div>
-      </section>
+
+      </div>
+
+
+      <!-- ============================================== -->
+      <!-- E. SUPER ADMIN AUTHORIZED DASHBOARD            -->
+      <!-- ============================================== -->
+      <div id="dashboard-admin" class="hidden space-y-6">
+        
+        <div>
+          <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved text-purple-400"></i>
+            Super Admin Control Center
+          </h2>
+          <p class="text-xs text-slate-400">മുഴുവൻ സിസ്റ്റം നിയന്ത്രണവും യൂസർ മോഡറേഷനും വരുമാന സ്ഥിതിവിവരക്കണക്കുകളും</p>
+        </div>
+
+        <!-- Metrics Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="admin-metrics-grid"></div>
+
+        <!-- User Management Table -->
+        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden">
+          <div class="px-5 py-3.5 bg-slate-800/60 border-b border-slate-800 font-bold text-xs text-slate-200">
+            Platform Users & Roles Moderation (Ban/Unban Control)
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950/60 text-slate-400 uppercase tracking-wider border-b border-slate-800">
+                <tr>
+                  <th class="px-4 py-3">User</th>
+                  <th class="px-4 py-3">Phone</th>
+                  <th class="px-4 py-3">Role</th>
+                  <th class="px-4 py-3">Status</th>
+                  <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-table" class="divide-y divide-slate-800/60 text-slate-300"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
 
     </main>
 
   </div>
 
-  <!-- ==================== MODALS ==================== -->
-
-  <!-- TICKET BOOKING & QR MODAL -->
+  <!-- MODALS (Ticket Booking & VIP Call) -->
   <div id="modal-ticket" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+    <div class="bg-[#111928] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
       <button onclick="closeModal('modal-ticket')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
         <i class="fa-solid fa-xmark"></i>
       </button>
-
       <div id="ticket-booking-form">
-        <h3 class="text-lg font-bold text-white mb-1" id="booking-event-title">Book Event Ticket</h3>
-        <p class="text-xs text-slate-400 mb-4" id="booking-event-venue">Venue Name</p>
-
+        <h3 class="text-base font-bold text-white mb-1" id="booking-event-title">Book Event Ticket</h3>
+        <p class="text-xs text-slate-400 mb-4" id="booking-event-venue"></p>
         <div class="space-y-3 mb-5">
-          <label class="block text-xs font-medium text-slate-300">Select Ticket Tier</label>
+          <label class="block text-xs font-medium text-slate-300">Ticket Tier</label>
           <div id="booking-tiers-list" class="space-y-2"></div>
-
           <div class="flex items-center justify-between pt-2">
             <span class="text-xs text-slate-300">Quantity</span>
             <div class="flex items-center gap-3 bg-slate-800 rounded-lg px-2 py-1">
@@ -659,67 +574,26 @@
               <button onclick="adjustTicketQty(1)" class="text-slate-400 hover:text-white text-xs px-1">+</button>
             </div>
           </div>
-
           <div class="flex items-center justify-between pt-3 border-t border-slate-800">
             <span class="text-sm font-semibold text-slate-200">Total Price</span>
             <span id="booking-total-price" class="text-base font-bold text-amber-400">₹499</span>
           </div>
         </div>
-
-        <button onclick="confirmTicketBooking()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 hover:opacity-95 transition">
+        <button onclick="confirmTicketBooking()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow transition">
           Confirm & Pay (Generate Ticket)
         </button>
       </div>
-
       <div id="ticket-qr-result" class="hidden text-center">
         <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-3 text-xl">
           <i class="fa-solid fa-check"></i>
         </div>
         <h3 class="text-base font-bold text-white mb-1">Ticket Confirmed!</h3>
         <p class="text-xs text-slate-400 mb-4">Show this QR code at the event gate entrance for entry.</p>
-
         <div class="bg-white p-4 rounded-2xl w-48 h-48 mx-auto mb-3 shadow-lg flex items-center justify-center">
           <img id="qr-image" src="" alt="Ticket QR Code" class="w-full h-full object-contain">
         </div>
-
         <p id="qr-hash-display" class="font-mono text-[10px] text-slate-400 bg-slate-950 py-1.5 px-3 rounded-lg border border-slate-800 break-all mb-4"></p>
-
-        <button onclick="closeModal('modal-ticket')" class="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold">
-          Done
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- VIP CALL CELEBRITY MODAL -->
-  <div id="modal-vip-call" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-center">
-      <button onclick="closeModal('modal-vip-call')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-
-      <img id="vip-celeb-avatar" src="" class="w-20 h-20 rounded-full mx-auto object-cover border-2 border-pink-500 mb-3 shadow-lg shadow-pink-500/20">
-      <h3 id="vip-celeb-name" class="text-lg font-bold text-white mb-0.5">Celebrity Name</h3>
-      <p id="vip-celeb-rate" class="text-xs text-amber-400 font-semibold mb-4">50 coins / minute</p>
-
-      <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 mb-5 text-left text-xs space-y-1.5">
-        <div class="flex justify-between text-slate-400">
-          <span>Call Type:</span>
-          <span id="vip-call-type-badge" class="font-semibold text-slate-200">VIP Audio Call</span>
-        </div>
-        <div class="flex justify-between text-slate-400">
-          <span>Your Balance:</span>
-          <span class="font-semibold text-amber-400" id="vip-user-coins">250 coins</span>
-        </div>
-      </div>
-
-      <div class="flex gap-2">
-        <button onclick="startVipCallSession()" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold text-xs shadow-lg shadow-pink-600/30 hover:scale-105 active:scale-95 transition">
-          <i class="fa-solid fa-phone mr-1.5"></i>Start Call
-        </button>
-        <button onclick="closeModal('modal-vip-call')" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition">
-          Cancel
-        </button>
+        <button onclick="closeModal('modal-ticket')" class="px-6 py-2 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold">Done</button>
       </div>
     </div>
   </div>
