@@ -19,6 +19,11 @@ let selectedTicketTier = null;
 let bookingQty = 1;
 let activeDistanceFilter = 50;
 
+// Customer Care Dedicated VoIP State
+let supportCallInterval = null;
+let supportCallDuration = 0;
+let isSupportCallMuted = false;
+
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', async () => {
   await fetchAllUsers();
@@ -107,6 +112,9 @@ function handleLogout() {
     }
     stopCallTimer();
     stopLocalCamera();
+    clearInterval(supportCallInterval);
+    document.getElementById('support-voip-call-card')?.classList.add('hidden');
+    document.getElementById('btn-start-support-voip')?.classList.remove('opacity-50', 'pointer-events-none');
     showAuthScreen();
   }
 }
@@ -934,12 +942,73 @@ async function sendSupportMessage() {
   }
 }
 
+// ----------------- DEDICATED IN-PLACE CUSTOMER CARE VOIP CALL -----------------
+
 function startSupportVoipCall() {
-  switchNormalTab('connect');
-  document.getElementById('peer-name').textContent = 'FRND Helpdesk (VoIP)';
-  document.getElementById('peer-avatar').src = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150';
-  setCallState('connected', false);
-  alert('Connected to Helpdesk VoIP Audio Call!');
+  // Reveal the VoIP calling card right inside the Customer Care section
+  const callCard = document.getElementById('support-voip-call-card');
+  const btnStart = document.getElementById('btn-start-support-voip');
+  const statusText = document.getElementById('support-call-status-text');
+  const timerEl = document.getElementById('support-call-timer');
+  const wavesEl = document.getElementById('support-voice-waves');
+
+  callCard.classList.remove('hidden');
+  btnStart.classList.add('opacity-50', 'pointer-events-none');
+
+  statusText.innerHTML = '<i class="fa-solid fa-phone-volume animate-pulse text-amber-400"></i><span>Calling Helpdesk Desk... (Ringing)</span>';
+  wavesEl.classList.add('opacity-40');
+  timerEl.textContent = '00:00';
+  supportCallDuration = 0;
+
+  // Simulate prompt connection to Support Officer (Rahul) after 1.5 seconds
+  setTimeout(() => {
+    statusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping mr-1"></span><span>Connected • HD Voice Audio</span>';
+    wavesEl.classList.remove('opacity-40');
+
+    clearInterval(supportCallInterval);
+    supportCallInterval = setInterval(() => {
+      supportCallDuration++;
+      const mins = String(Math.floor(supportCallDuration / 60)).padStart(2, '0');
+      const secs = String(supportCallDuration % 60).padStart(2, '0');
+      timerEl.textContent = `${mins}:${secs}`;
+    }, 1000);
+  }, 1500);
+}
+
+function toggleSupportCallMute() {
+  isSupportCallMuted = !isSupportCallMuted;
+  const btn = document.getElementById('btn-support-call-mute');
+  if (isSupportCallMuted) {
+    btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
+    btn.classList.add('bg-rose-950/50', 'border-rose-500/50');
+  } else {
+    btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    btn.classList.remove('bg-rose-950/50', 'border-rose-500/50');
+  }
+}
+
+function endSupportVoipCall() {
+  clearInterval(supportCallInterval);
+  const durationSec = supportCallDuration;
+  supportCallDuration = 0;
+
+  const callCard = document.getElementById('support-voip-call-card');
+  const btnStart = document.getElementById('btn-start-support-voip');
+  callCard.classList.add('hidden');
+  btnStart.classList.remove('opacity-50', 'pointer-events-none');
+
+  const mins = String(Math.floor(durationSec / 60)).padStart(2, '0');
+  const secs = String(durationSec % 60).padStart(2, '0');
+
+  // Insert a notification bubble in the chat messages
+  const container = document.getElementById('support-messages-container');
+  if (container) {
+    const bubble = document.createElement('div');
+    bubble.className = 'p-2 rounded-xl text-center text-[11px] bg-slate-900 border border-slate-800 text-slate-300 my-2';
+    bubble.innerHTML = `<i class="fa-solid fa-phone text-emerald-400 mr-1.5"></i> Voice Support Call ended • Duration: <span class="font-mono font-bold text-emerald-400">${mins}:${secs}</span>`;
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+  }
 }
 
 function openBookingModal(eventId) {
