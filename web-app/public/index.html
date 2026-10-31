@@ -8,7 +8,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="/style.css?v=6">
+  <!-- QR Code Scanning Engine (Camera & File Decoding) -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white">
 
@@ -703,23 +706,125 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          <!-- QR Scanner / Ticket Validator Console -->
+          <!-- QR Scanner / Ticket Validator Console with Camera, File, Browser & Manual Modes -->
           <div class="lg:col-span-1 space-y-4">
             <div class="fc-glass-card p-5">
-              <h3 class="text-sm font-bold text-white mb-1 flex items-center gap-2">
-                <i class="fa-solid fa-qrcode text-blue-400"></i>
-                Gate QR Ticket Scanner
-              </h3>
-              <p class="text-[11px] text-slate-400 mb-4">ഇവന്റ് ഗേറ്റിൽ വെച്ച് ടിക്കറ്റ് QR കോഡ് സ്കാൻ ചെയ്ത് എൻട്രി നൽകുക</p>
+              <div class="flex items-center justify-between mb-1.5">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                  <i class="fa-solid fa-qrcode text-blue-400"></i>
+                  Gate QR Ticket Scanner
+                </h3>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-950/40 text-blue-300 border border-blue-500/30 font-medium">Gate Pass</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mb-4">ടിക്കറ്റ് QR കോഡ് ക്യാമറ വെച്ചോ, ഇമേജ് ഫയൽ വഴിയോ, ബ്രൗസറിൽ നിന്നോ സ്കാൻ ചെയ്യാം</p>
 
-              <div class="space-y-3">
-                <input type="text" id="input-scan-qr" placeholder="Enter or paste ticket QR Hash..." class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-blue-500">
-                <button onclick="handleScanTicket()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition">
-                  Validate & Check-in Ticket
+              <!-- 3 Main Scanning Modes Selector Tabs -->
+              <div class="grid grid-cols-3 gap-1 p-1 bg-slate-900/90 rounded-xl border border-slate-800 mb-4">
+                <button onclick="setGateScanMode('camera')" id="btn-scanmode-camera" class="py-1.5 rounded-lg text-[11px] font-semibold bg-blue-600 text-white flex items-center justify-center gap-1 transition">
+                  <i class="fa-solid fa-camera"></i>
+                  <span>Camera</span>
+                </button>
+                <button onclick="setGateScanMode('file')" id="btn-scanmode-file" class="py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1 transition">
+                  <i class="fa-solid fa-file-image"></i>
+                  <span>Upload</span>
+                </button>
+                <button onclick="setGateScanMode('browser')" id="btn-scanmode-browser" class="py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1 transition">
+                  <i class="fa-solid fa-globe"></i>
+                  <span>Browser</span>
                 </button>
               </div>
 
-              <div id="scan-result-box" class="hidden mt-4 p-3 rounded-xl border text-xs"></div>
+              <!-- Option 1: Live Camera Scanner -->
+              <div id="gate-scanview-camera" class="space-y-3">
+                <div class="relative rounded-2xl overflow-hidden bg-black/95 border border-slate-800 flex flex-col items-center justify-center min-h-[200px]">
+                  <!-- Camera Viewfinder element for html5-qrcode / video stream -->
+                  <div id="qr-camera-viewport" class="w-full h-full min-h-[200px] object-cover"></div>
+                  
+                  <!-- Placeholder before camera starts -->
+                  <div id="qr-camera-idle-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-950/90">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-xl border border-blue-500/30 mb-2">
+                      <i class="fa-solid fa-video"></i>
+                    </div>
+                    <p class="text-xs font-bold text-white mb-0.5">Live Device Camera</p>
+                    <p class="text-[10px] text-slate-400 max-w-[200px]">Point ticket QR code in front of camera to check in</p>
+                  </div>
+
+                  <!-- Scanner Laser Aiming Animation (when active) -->
+                  <div id="qr-laser-line" class="hidden absolute left-4 right-4 h-0.5 bg-blue-400 shadow-[0_0_8px_#3b82f6] animate-pulse pointer-events-none"></div>
+                </div>
+
+                <div class="flex gap-2">
+                  <button id="btn-start-camera-scan" onclick="startGateCameraScanner()" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
+                    <i class="fa-solid fa-camera"></i>
+                    <span>Start Camera Scan</span>
+                  </button>
+                  <button id="btn-stop-camera-scan" onclick="stopGateCameraScanner()" class="hidden px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-stop"></i>
+                    <span>Stop</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Option 2: Upload File / Screenshot -->
+              <div id="gate-scanview-file" class="hidden space-y-3">
+                <div id="qr-file-dropzone" onclick="document.getElementById('gate-qr-file-input').click()" class="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer transition bg-slate-900/40">
+                  <div class="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-xl border border-blue-500/30 mx-auto mb-2">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                  </div>
+                  <p class="text-xs font-bold text-white mb-0.5">Choose or Drop QR Image</p>
+                  <p class="text-[10px] text-slate-400">Click to upload QR code screenshot from device / gallery</p>
+                  <input type="file" id="gate-qr-file-input" accept="image/*" class="hidden" onchange="handleQrImageUpload(event)">
+                </div>
+                <div id="qr-file-preview-box" class="hidden flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <img id="qr-file-preview-img" src="" class="w-12 h-12 rounded-lg object-cover bg-white p-1">
+                  <div class="overflow-hidden flex-1">
+                    <p class="text-[11px] font-bold text-white truncate" id="qr-file-name">filename.png</p>
+                    <p class="text-[10px] text-blue-400 flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check"></i>
+                      <span>QR Code Decoded</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option 3: Take from Browser / Demo Passes -->
+              <div id="gate-scanview-browser" class="hidden space-y-3">
+                <div>
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-[11px] font-medium text-slate-300">Attendee Pass from Browser</label>
+                    <button onclick="loadBrowserBookedTickets()" class="text-[10px] text-blue-400 hover:underline flex items-center gap-1">
+                      <i class="fa-solid fa-arrows-rotate"></i> Refresh Passes
+                    </button>
+                  </div>
+                  <select id="select-browser-ticket" onchange="onBrowserTicketSelectChange()" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white cursor-pointer focus:outline-none focus:border-blue-500">
+                    <option value="">Loading passes from browser...</option>
+                  </select>
+                </div>
+                <button onclick="scanSelectedBrowserPass()" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow flex items-center justify-center gap-1.5 transition">
+                  <i class="fa-solid fa-bolt"></i>
+                  <span>Scan & Verify Selected Pass</span>
+                </button>
+              </div>
+
+              <!-- Manual QR Hash Entry / Auto-populated Display -->
+              <div class="pt-3 border-t border-slate-800">
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Ticket Pass Hash Code</label>
+                  <span id="scan-detected-badge" class="hidden text-[10px] text-blue-400 font-bold flex items-center gap-1">
+                    <i class="fa-solid fa-circle-check"></i> Code Captured
+                  </span>
+                </div>
+                <div class="flex gap-2">
+                  <input type="text" id="input-scan-qr" placeholder="Scan QR above or paste FRND_TKT_..." class="flex-1 bg-[#1e293b] border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-blue-500">
+                  <button onclick="handleScanTicket()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow transition shrink-0 flex items-center gap-1">
+                    <i class="fa-solid fa-ticket-simple"></i>
+                    <span>Verify</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Verification Result Box -->
+              <div id="scan-result-box" class="hidden mt-3 p-3.5 rounded-2xl border text-xs"></div>
             </div>
           </div>
 
@@ -1079,6 +1184,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

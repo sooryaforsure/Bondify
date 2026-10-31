@@ -196,6 +196,11 @@ export class FrndServer {
       return this.jsonResponse({ success: true, bookings });
     }
 
+    if (path === '/api/events/all-bookings' && method === 'GET') {
+      const bookings = this.eventService.getAllBookings();
+      return this.jsonResponse({ success: true, bookings });
+    }
+
     if (path === '/api/events/verify-ticket' && method === 'POST') {
       const body = await req.json();
       const result = this.eventService.verifyAndCheckInTicket(body.qrCodeHash);

@@ -80,6 +80,25 @@ export class EventService {
     this.events.set(kochiConcert.id, kochiConcert);
     this.events.set(techSummit.id, techSummit);
     this.events.set(tvmCarnival.id, tvmCarnival);
+
+    // Seed sample attendee ticket for Arjun Nair to enable instant gate testing
+    const sampleBookingId = 'book_sample_gate_1';
+    const sampleQrHash = `FRND_TKT_DEMO_ARJUN_KOCHI_2026`;
+    this.bookings.set(sampleBookingId, {
+      id: sampleBookingId,
+      eventId: techSummit.id,
+      eventTitle: techSummit.title,
+      userId: 'usr_normal_1',
+      userName: 'Arjun Nair',
+      userPhone: '+919876543210',
+      tierId: techSummit.ticketTiers[0].id,
+      tierName: techSummit.ticketTiers[0].name,
+      quantity: 2,
+      totalAmount: techSummit.ticketTiers[0].price * 2,
+      qrCodeHash: sampleQrHash,
+      isUsed: false,
+      bookedAt: new Date(Date.now() - 86400000).toISOString()
+    });
   }
 
   createEvent(
@@ -203,6 +222,12 @@ export class EventService {
 
   getUserBookings(userId: string): TicketBooking[] {
     return Array.from(this.bookings.values()).filter(b => b.userId === userId);
+  }
+
+  getAllBookings(): TicketBooking[] {
+    return Array.from(this.bookings.values()).sort(
+      (a, b) => new Date(b.bookedAt).getTime() - new Date(a.bookedAt).getTime()
+    );
   }
 
   verifyAndCheckInTicket(qrCodeHash: string): { success: boolean; booking?: TicketBooking; message: string } {

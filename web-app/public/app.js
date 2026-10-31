@@ -846,25 +846,320 @@ async function loadOrganizationEvents() {
     if (data.success) {
       const container = document.getElementById('org-events-list');
       container.innerHTML = data.events.map(evt => `
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div class="fc-glass-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-slate-800">
           <div>
             <h4 class="text-xs font-bold text-white">${evt.title}</h4>
             <p class="text-[11px] text-slate-400">${evt.venueName}, ${evt.city}</p>
-            <p class="text-[10px] text-amber-400 mt-1 font-semibold">General Pass: ₹${evt.ticketTiers[0]?.price} • ${evt.ticketTiers[0]?.soldQuantity} Sold</p>
+            <p class="text-[10px] text-blue-400 mt-1 font-semibold">General Pass: ₹${evt.ticketTiers[0]?.price} • ${evt.ticketTiers[0]?.soldQuantity} Sold</p>
           </div>
-          <span class="text-xs px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-400 font-bold">Approved</span>
+          <span class="text-xs px-2.5 py-1 rounded-md bg-blue-950/40 text-blue-300 border border-blue-500/30 font-bold">Approved</span>
         </div>
       `).join('');
     }
   } catch (err) {
     console.error('Error loading org events:', err);
   }
+
+  // Pre-load browser passes for 1-click Gate scanner testing
+  loadBrowserBookedTickets();
+}
+
+// ----------------- GATE QR CODE SCANNER (CAMERA, FILE & BROWSER) -----------------
+
+let currentGateScanMode = 'camera';
+let gateHtml5QrScanner = null;
+let gateCameraStream = null;
+let isGateCameraRunning = false;
+let browserBookedPasses = [];
+
+function playGateBeep(isSuccess = true) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = isSuccess ? 880 : 320;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (isSuccess ? 0.22 : 0.45));
+    osc.start();
+    osc.stop(ctx.currentTime + (isSuccess ? 0.22 : 0.45));
+  } catch { /* AudioContext muted / blocked */ }
+}
+
+function setGateScanMode(mode) {
+  currentGateScanMode = mode;
+  ['camera', 'file', 'browser'].forEach(m => {
+    const btn = document.getElementById(`btn-scanmode-${m}`);
+    const view = document.getElementById(`gate-scanview-${m}`);
+    if (m === mode) {
+      if (btn) btn.className = 'py-1.5 rounded-lg text-[11px] font-semibold bg-blue-600 text-white flex items-center justify-center gap-1 transition';
+      view?.classList.remove('hidden');
+    } else {
+      if (btn) btn.className = 'py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1 transition';
+      view?.classList.add('hidden');
+    }
+  });
+
+  if (mode !== 'camera' && isGateCameraRunning) {
+    stopGateCameraScanner();
+  }
+  if (mode === 'browser') {
+    loadBrowserBookedTickets();
+  }
+}
+
+async function startGateCameraScanner() {
+  const idlePlaceholder = document.getElementById('qr-camera-idle-placeholder');
+  const laserLine = document.getElementById('qr-laser-line');
+  const btnStart = document.getElementById('btn-start-camera-scan');
+  const btnStop = document.getElementById('btn-stop-camera-scan');
+
+  btnStart?.classList.add('hidden');
+  btnStop?.classList.remove('hidden');
+  idlePlaceholder?.classList.add('hidden');
+  laserLine?.classList.remove('hidden');
+
+  const viewport = document.getElementById('qr-camera-viewport');
+  if (!viewport) return;
+
+  // Method 1: Using Html5Qrcode if loaded from CDN
+  if (window.Html5Qrcode) {
+    try {
+      if (gateHtml5QrScanner) {
+        try { await gateHtml5QrScanner.stop(); } catch {}
+      }
+      gateHtml5QrScanner = new Html5Qrcode('qr-camera-viewport');
+      await gateHtml5QrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 15, qrbox: { width: 180, height: 180 } },
+        (decodedText) => {
+          onQrCodeDetected(decodedText, 'Camera Scanner');
+          stopGateCameraScanner();
+        },
+        () => { /* frame scanning */ }
+      );
+      isGateCameraRunning = true;
+      return;
+    } catch (err) {
+      console.warn('Html5Qrcode camera failed, falling back to Native MediaDevices:', err);
+    }
+  }
+
+  // Method 2: Native navigator.mediaDevices + BarcodeDetector / jsQR
+  try {
+    gateCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    viewport.innerHTML = '<video id="gate-native-video" autoplay playsinline muted class="w-full h-full object-cover"></video><canvas id="gate-qr-canvas" class="hidden"></canvas>';
+    const video = document.getElementById('gate-native-video');
+    video.srcObject = gateCameraStream;
+    await video.play();
+    isGateCameraRunning = true;
+
+    const barcodeDetector = ('BarcodeDetector' in window)
+      ? new BarcodeDetector({ formats: ['qr_code'] })
+      : null;
+
+    const scanFrame = async () => {
+      if (!isGateCameraRunning || !video) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        if (barcodeDetector) {
+          try {
+            const codes = await barcodeDetector.detect(video);
+            if (codes && codes.length > 0) {
+              onQrCodeDetected(codes[0].rawValue, 'Camera Scanner');
+              stopGateCameraScanner();
+              return;
+            }
+          } catch {}
+        } else if (window.jsQR) {
+          const canvas = document.getElementById('gate-qr-canvas');
+          if (canvas) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imgData.data, imgData.width, imgData.height);
+            if (code && code.data) {
+              onQrCodeDetected(code.data, 'Camera Scanner');
+              stopGateCameraScanner();
+              return;
+            }
+          }
+        }
+      }
+      if (isGateCameraRunning) {
+        requestAnimationFrame(scanFrame);
+      }
+    };
+    requestAnimationFrame(scanFrame);
+  } catch (camErr) {
+    console.error('Camera access error:', camErr);
+    alert('Unable to access device camera. Please check camera permissions, or use "Upload Image" / "Browser Pass" option instead.');
+    stopGateCameraScanner();
+  }
+}
+
+async function stopGateCameraScanner() {
+  isGateCameraRunning = false;
+
+  if (gateHtml5QrScanner) {
+    try {
+      await gateHtml5QrScanner.stop();
+      await gateHtml5QrScanner.clear();
+    } catch {}
+    gateHtml5QrScanner = null;
+  }
+
+  if (gateCameraStream) {
+    gateCameraStream.getTracks().forEach(t => t.stop());
+    gateCameraStream = null;
+  }
+
+  const viewport = document.getElementById('qr-camera-viewport');
+  if (viewport) viewport.innerHTML = '';
+
+  document.getElementById('qr-camera-idle-placeholder')?.classList.remove('hidden');
+  document.getElementById('qr-laser-line')?.classList.add('hidden');
+  document.getElementById('btn-start-camera-scan')?.classList.remove('hidden');
+  document.getElementById('btn-stop-camera-scan')?.classList.add('hidden');
+}
+
+function onQrCodeDetected(rawCode, source = 'Scanner') {
+  if (!rawCode) return;
+  const cleanCode = rawCode.trim();
+  const inputEl = document.getElementById('input-scan-qr');
+  if (inputEl) inputEl.value = cleanCode;
+
+  const badge = document.getElementById('scan-detected-badge');
+  if (badge) {
+    badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Captured from ${source}</span>`;
+    badge.classList.remove('hidden');
+  }
+
+  handleScanTicket();
+}
+
+async function handleQrImageUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const previewBox = document.getElementById('qr-file-preview-box');
+  const previewImg = document.getElementById('qr-file-preview-img');
+  const previewName = document.getElementById('qr-file-name');
+
+  if (previewName) previewName.textContent = file.name;
+  if (previewImg) previewImg.src = URL.createObjectURL(file);
+  previewBox?.classList.remove('hidden');
+
+  // Try Html5Qrcode file scan
+  if (window.Html5Qrcode) {
+    try {
+      const html5Qr = new Html5Qrcode('qr-camera-viewport');
+      const decodedResult = await html5Qr.scanFile(file, true);
+      await html5Qr.clear();
+      if (decodedResult) {
+        onQrCodeDetected(decodedResult, 'Image File');
+        return;
+      }
+    } catch (err) {
+      console.warn('Html5Qrcode file scan fallback to canvas:', err);
+    }
+  }
+
+  // Fallback using HTML Image + canvas + jsQR / BarcodeDetector
+  const img = new Image();
+  img.src = URL.createObjectURL(file);
+  img.onload = async () => {
+    try {
+      if ('BarcodeDetector' in window) {
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        const codes = await detector.detect(img);
+        if (codes && codes.length > 0) {
+          onQrCodeDetected(codes[0].rawValue, 'Image File');
+          return;
+        }
+      }
+
+      if (window.jsQR) {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imgData.data, imgData.width, imgData.height);
+        if (code && code.data) {
+          onQrCodeDetected(code.data, 'Image File');
+          return;
+        }
+      }
+
+      const box = document.getElementById('scan-result-box');
+      if (box) {
+        box.classList.remove('hidden');
+        box.className = 'mt-3 p-3.5 rounded-2xl border border-rose-500/40 bg-rose-950/30 text-rose-300 text-xs';
+        box.innerHTML = '<strong>Scan Error:</strong> Could not detect a valid QR code in this image. Please upload a clearer ticket screenshot.';
+      }
+    } catch (decodeErr) {
+      console.error('File decode error:', decodeErr);
+    }
+  };
+}
+
+async function loadBrowserBookedTickets() {
+  const select = document.getElementById('select-browser-ticket');
+  if (!select) return;
+  select.innerHTML = '<option value="">Loading passes from browser...</option>';
+
+  try {
+    const res = await fetch('/api/events/all-bookings');
+    const data = await res.json();
+    if (data.success && data.bookings && data.bookings.length > 0) {
+      browserBookedPasses = data.bookings;
+      select.innerHTML = `
+        <option value="">-- Choose Attendee Pass (${browserBookedPasses.length} Available) --</option>
+        ${browserBookedPasses.map((b, i) => `
+          <option value="${b.qrCodeHash}">
+            ${i + 1}. ${b.userName} • ${b.eventTitle} [${b.tierName || 'Entry'}] (${b.isUsed ? 'ALREADY USED' : 'ACTIVE PASS'})
+          </option>
+        `).join('')}
+      `;
+    } else {
+      select.innerHTML = '<option value="">No booked passes found in browser</option>';
+    }
+  } catch (err) {
+    console.error('Error loading browser tickets:', err);
+    select.innerHTML = '<option value="">Failed to load passes</option>';
+  }
+}
+
+function onBrowserTicketSelectChange() {
+  const select = document.getElementById('select-browser-ticket');
+  const hash = select?.value;
+  if (hash) {
+    const input = document.getElementById('input-scan-qr');
+    if (input) input.value = hash;
+  }
+}
+
+function scanSelectedBrowserPass() {
+  const select = document.getElementById('select-browser-ticket');
+  const hash = select?.value;
+  if (!hash) {
+    alert('Please select an attendee ticket pass from the dropdown first.');
+    return;
+  }
+  onQrCodeDetected(hash, 'Browser Attendee Pass');
 }
 
 async function handleScanTicket() {
   const hash = document.getElementById('input-scan-qr').value.trim();
   if (!hash) {
-    alert('Please enter or scan a ticket QR code hash.');
+    alert('Please enter, upload, or scan a ticket QR code.');
     return;
   }
 
@@ -878,15 +1173,60 @@ async function handleScanTicket() {
     const box = document.getElementById('scan-result-box');
     box.classList.remove('hidden');
 
+    playGateBeep(data.success);
+
     if (data.success) {
-      box.className = 'mt-4 p-3 rounded-xl border border-emerald-500/50 bg-emerald-950/30 text-emerald-300 text-xs';
-      box.innerHTML = `<strong>VALID ENTRY:</strong> ${data.message} <br>Attendee: <strong>${data.booking?.userName}</strong> (${data.booking?.quantity} Tickets)`;
+      const b = data.booking || {};
+      box.className = 'mt-3 p-3.5 rounded-2xl border border-blue-500/40 bg-blue-950/40 text-blue-200 text-xs space-y-1.5 shadow-lg';
+      box.innerHTML = `
+        <div class="flex items-center justify-between pb-1.5 border-b border-blue-500/30">
+          <span class="font-bold text-white flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-check text-blue-400 text-sm"></i>
+            <span>ENTRY GRANTED • VALID PASS</span>
+          </span>
+          <span class="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-bold text-[10px] border border-blue-500/40">Verified</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-[11px] pt-1">
+          <div>
+            <span class="text-slate-400 block text-[10px]">Attendee Name</span>
+            <span class="font-bold text-white">${b.userName || 'Ticket Holder'}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Tickets Admitted</span>
+            <span class="font-bold text-blue-300">${b.quantity || 1} Person(s)</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Event Title</span>
+            <span class="text-slate-200 truncate block">${b.eventTitle || 'Official Event'}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Tier Category</span>
+            <span class="text-slate-200">${b.tierName || 'General Access'}</span>
+          </div>
+        </div>
+        <p class="text-[10px] text-blue-300/80 pt-1 border-t border-blue-500/20 flex items-center gap-1">
+          <i class="fa-solid fa-clock text-[9px]"></i> Check-in time: ${new Date().toLocaleTimeString()}
+        </p>
+      `;
     } else {
-      box.className = 'mt-4 p-3 rounded-xl border border-rose-500/50 bg-rose-950/30 text-rose-300 text-xs';
-      box.innerHTML = `<strong>INVALID / DUPLICATE:</strong> ${data.message}`;
+      const isAlreadyUsed = data.message?.includes('ALREADY');
+      box.className = `mt-3 p-3.5 rounded-2xl border ${isAlreadyUsed ? 'border-amber-500/40 bg-amber-950/30 text-amber-200' : 'border-rose-500/40 bg-rose-950/30 text-rose-200'} text-xs space-y-1 shadow-lg`;
+      box.innerHTML = `
+        <div class="flex items-center gap-2 font-bold ${isAlreadyUsed ? 'text-amber-300' : 'text-rose-400'}">
+          <i class="fa-solid ${isAlreadyUsed ? 'fa-triangle-exclamation' : 'fa-circle-xmark'} text-sm"></i>
+          <span>${isAlreadyUsed ? 'DUPLICATE PASS ENTRY DENIED' : 'INVALID TICKET CODE'}</span>
+        </div>
+        <p class="text-[11px] text-slate-300 mt-1">${data.message}</p>
+        ${data.booking ? `<p class="text-[10px] text-slate-400 mt-0.5">Assigned to: <strong>${data.booking.userName}</strong> (${data.booking.eventTitle})</p>` : ''}
+      `;
+    }
+
+    if (currentGateScanMode === 'browser') {
+      loadBrowserBookedTickets();
     }
   } catch (err) {
     console.error('Ticket verification error:', err);
+    playGateBeep(false);
   }
 }
 

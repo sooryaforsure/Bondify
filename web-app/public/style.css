@@ -136,6 +136,31 @@ button.bg-emerald-600:hover {
   color: #60a5fa !important;
 }
 
+/* QR Camera Scanner Viewport & Video */
+#qr-camera-viewport video,
+#gate-native-video {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 200px !important;
+  object-fit: cover !important;
+  border-radius: 0.85rem !important;
+}
+
+#qr-laser-line {
+  top: 50%;
+  transform: translateY(-50%);
+  animation: laserSweep 2s ease-in-out infinite alternate;
+}
+
+@keyframes laserSweep {
+  0% {
+    top: 15%;
+  }
+  100% {
+    top: 85%;
+  }
+}
+
 /* Minimal Clean Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
