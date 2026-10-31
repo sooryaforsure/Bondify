@@ -378,8 +378,24 @@ function startNormalToCelebCall(celebId, callType) {
   document.getElementById('remote-peer-video-name').textContent = 'Dulquer Sithara (VIP)';
   document.getElementById('remote-peer-video-avatar').src = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
 
-  setCallState('connected', hasVideo);
-  alert(`Connecting 1-on-1 VIP WebRTC ${hasVideo ? 'Video' : 'Audio'} Call with Dulquer Sithara!`);
+  // Request call approval from celebrity via localStorage cross-tab signal
+  localStorage.setItem('fc_incoming_celeb_call', JSON.stringify({
+    caller: currentUser?.fullName || 'Arjun Nair',
+    callType,
+    time: Date.now()
+  }));
+
+  // Show ringing / waiting for approval state
+  document.getElementById('call-state-idle')?.classList.add('hidden');
+  document.getElementById('call-state-connected')?.classList.add('hidden');
+  const searchingState = document.getElementById('call-state-searching');
+  if (searchingState) {
+    searchingState.classList.remove('hidden');
+    const title = searchingState.querySelector('h3');
+    const desc = searchingState.querySelector('p');
+    if (title) title.textContent = 'Calling Dulquer Sithara (Ringing...)';
+    if (desc) desc.textContent = 'സെലിബ്രിറ്റി കോൾ അപ്രൂവ് ചെയ്യുന്നതിനായി കാത്തിരിക്കുന്നു (Waiting for Approval)...';
+  }
 }
 
 // ----------------- RANDOM MATCHMAKING LOGIC -----------------
@@ -742,6 +758,51 @@ async function endCelebTabVoipCall() {
   }
 }
 
+// Celebrity Call & Audio State
+let celebIncomingRingtoneTimer = null;
+let celebActiveCallTimer = null;
+let celebActiveCallSeconds = 0;
+let isCelebCallMuted = false;
+
+function playCelebRingChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.value = 523.25; // C5
+    osc2.type = 'sine';
+    osc2.frequency.value = 659.25; // E5
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+
+    osc1.start();
+    osc2.start();
+    osc1.stop(ctx.currentTime + 0.4);
+    osc2.stop(ctx.currentTime + 0.4);
+  } catch {}
+}
+
+function startCelebrityIncomingRingtone() {
+  stopCelebrityIncomingRingtone();
+  playCelebRingChime();
+  celebIncomingRingtoneTimer = setInterval(playCelebRingChime, 1500);
+}
+
+function stopCelebrityIncomingRingtone() {
+  if (celebIncomingRingtoneTimer) {
+    clearInterval(celebIncomingRingtoneTimer);
+    celebIncomingRingtoneTimer = null;
+  }
+}
+
 function updateCelebrityCallUI() {
   const btn = document.getElementById('celeb-status-btn');
   const label = document.getElementById('celeb-status-label');
@@ -762,6 +823,7 @@ function updateCelebrityCallUI() {
       if (waitingBox) waitingBox.classList.remove('hidden');
     }
   } else {
+    stopCelebrityIncomingRingtone();
     if (btn) btn.className = 'px-4 py-2 rounded-full bg-slate-700 text-slate-300 font-bold text-xs shadow flex items-center gap-1.5';
     if (label) label.textContent = 'Offline (Busy)';
     if (offlineBox) offlineBox.classList.remove('hidden');
@@ -778,43 +840,90 @@ function toggleCelebrityAvailability() {
   if (celebAvailable) {
     alert('🟢 Status: ONLINE! You are now accepting incoming calls from VIP fans.');
   } else {
+    stopCelebrityIncomingRingtone();
     alert('🔴 Status: OFFLINE! Incoming fan calls are now disabled.');
   }
 }
 
-function simulateIncomingFanCall() {
+function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)') {
   if (!celebAvailable) {
     alert('⚠️ Call Receiving is currently OFF. Turn Call Receiving ON to accept fan calls!');
     return;
   }
+  const callerEl = document.getElementById('incoming-caller-name');
+  if (callerEl) callerEl.textContent = callerName;
+
   document.getElementById('celeb-online-waiting-box')?.classList.add('hidden');
   document.getElementById('incoming-fan-call-box')?.classList.remove('hidden');
+  startCelebrityIncomingRingtone();
 }
 
-function acceptIncomingFanCall() {
+function approveIncomingFanCall() {
+  stopCelebrityIncomingRingtone();
+  playGateBeep(true);
+
   document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
   document.getElementById('celeb-active-call-box')?.classList.remove('hidden');
-  alert('Connecting 1-on-1 VIP Video Call with fan Arjun Nair!');
+
+  // Start active call timer
+  celebActiveCallSeconds = 0;
+  if (celebActiveCallTimer) clearInterval(celebActiveCallTimer);
+  const timerEl = document.getElementById('celeb-active-call-timer');
+  if (timerEl) timerEl.textContent = '00:00';
+
+  celebActiveCallTimer = setInterval(() => {
+    celebActiveCallSeconds++;
+    const m = String(Math.floor(celebActiveCallSeconds / 60)).padStart(2, '0');
+    const s = String(celebActiveCallSeconds % 60).padStart(2, '0');
+    if (timerEl) timerEl.textContent = `${m}:${s}`;
+  }, 1000);
+
+  // Broadcast approval across browser tabs
+  localStorage.setItem('fc_celeb_call_state', JSON.stringify({ state: 'connected', time: Date.now() }));
+  alert('✅ Call Approved! 1-on-1 VIP Video Call Connected with fan.');
 }
 
 function declineIncomingFanCall() {
+  stopCelebrityIncomingRingtone();
+  playGateBeep(false);
+
   document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
-  alert('Fan call declined.');
   if (celebAvailable) {
     document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
   } else {
     document.getElementById('celeb-offline-box')?.classList.remove('hidden');
   }
+
+  // Broadcast decline across browser tabs
+  localStorage.setItem('fc_celeb_call_state', JSON.stringify({ state: 'declined', time: Date.now() }));
+  alert('Fan call request declined.');
+}
+
+function toggleCelebrityCallMute() {
+  isCelebCallMuted = !isCelebCallMuted;
+  const btn = document.getElementById('btn-celeb-call-mute');
+  if (btn) {
+    btn.innerHTML = isCelebCallMuted 
+      ? '<i class="fa-solid fa-microphone-slash text-rose-400"></i><span>Unmute</span>' 
+      : '<i class="fa-solid fa-microphone"></i><span>Mute</span>';
+  }
 }
 
 function endCelebrityCall() {
+  stopCelebrityIncomingRingtone();
+  if (celebActiveCallTimer) {
+    clearInterval(celebActiveCallTimer);
+    celebActiveCallTimer = null;
+  }
   document.getElementById('celeb-active-call-box')?.classList.add('hidden');
   if (celebAvailable) {
     document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
   } else {
     document.getElementById('celeb-offline-box')?.classList.remove('hidden');
   }
-  alert('Call completed.');
+
+  localStorage.setItem('fc_celeb_call_state', JSON.stringify({ state: 'ended', time: Date.now() }));
+  alert(`Call ended. Total duration: ${Math.floor(celebActiveCallSeconds / 60)}m ${celebActiveCallSeconds % 60}s. Coins billed.`);
 }
 
 async function loadCelebrityOwnFeed() {
@@ -823,22 +932,32 @@ async function loadCelebrityOwnFeed() {
     const data = await res.json();
     if (data.success) {
       const container = document.getElementById('celeb-own-feed');
-      container.innerHTML = data.feed.map(post => `
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
-          <div class="p-4 flex items-center justify-between">
-            <span class="text-xs font-bold text-white">${post.celebrityName}</span>
-            <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
-          </div>
-          <img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">
-          <div class="p-4">
-            <p class="text-xs text-slate-300 mb-2">${post.caption}</p>
-            <div class="text-xs text-pink-400 font-semibold flex items-center gap-1">
-              <i class="fa-solid fa-heart"></i>
-              <span>${post.likesCount} Fan Likes</span>
+      container.innerHTML = data.feed.map(post => {
+        const isVideo = post.mediaType === 'VIDEO' || (post.mediaUrl && (post.mediaUrl.startsWith('data:video') || post.mediaUrl.endsWith('.mp4') || post.mediaUrl.endsWith('.webm')));
+        const mediaHtml = isVideo
+          ? `<video src="${post.mediaUrl}" controls playsinline class="w-full max-h-80 object-cover bg-black"></video>`
+          : `<img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">`;
+
+        return `
+          <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
+            <div class="p-4 flex items-center justify-between">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>${post.celebrityName}</span>
+                ${isVideo ? '<span class="px-1.5 py-0.5 rounded text-[9px] bg-pink-950/40 text-pink-300 border border-pink-500/30 font-bold">Video</span>' : ''}
+              </span>
+              <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
+            </div>
+            ${mediaHtml}
+            <div class="p-4">
+              <p class="text-xs text-slate-300 mb-2">${post.caption}</p>
+              <div class="text-xs text-pink-400 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-heart"></i>
+                <span>${post.likesCount} Fan Likes</span>
+              </div>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
   } catch (err) {
     console.error('Error loading celeb feed:', err);
@@ -1559,28 +1678,41 @@ async function loadCelebrityHub() {
     const data = await res.json();
     if (data.success) {
       const container = document.getElementById('celebrity-feed');
-      container.innerHTML = data.feed.map(post => `
-        <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
-          <div class="p-4 flex items-center gap-3">
-            <img src="${post.celebrityAvatar}" class="w-10 h-10 rounded-full object-cover border border-pink-500">
-            <div>
-              <h4 class="text-xs font-bold text-white">${post.celebrityName}</h4>
-              <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
+      container.innerHTML = data.feed.map(post => {
+        const isVideo = post.mediaType === 'VIDEO' || (post.mediaUrl && (post.mediaUrl.startsWith('data:video') || post.mediaUrl.endsWith('.mp4') || post.mediaUrl.endsWith('.webm')));
+        const mediaHtml = isVideo
+          ? `<video src="${post.mediaUrl}" controls playsinline class="w-full max-h-80 object-cover bg-black"></video>`
+          : `<img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">`;
+
+        return `
+          <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
+            <div class="p-4 flex items-center gap-3">
+              <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-10 h-10 rounded-full object-cover border border-blue-500 shadow">
+              <div>
+                <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>${post.celebrityName}</span>
+                  ${isVideo ? '<span class="px-1.5 py-0.5 rounded text-[9px] bg-pink-950/40 text-pink-300 border border-pink-500/30 font-bold">Video</span>' : ''}
+                </h4>
+                <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+            ${mediaHtml}
+            <div class="p-4">
+              <p class="text-xs text-slate-300 mb-3">${post.caption}</p>
+              <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+                <button onclick="likeCelebrityPost('${post.id}')" class="px-3 py-1.5 rounded-lg bg-pink-950/40 border border-pink-500/30 text-rose-400 hover:bg-pink-900/40 text-xs font-bold flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-heart"></i>
+                  <span id="like-count-${post.id}">${post.likesCount} Likes</span>
+                </button>
+                <span class="text-[10px] text-blue-400/80 font-medium flex items-center gap-1">
+                  <i class="fa-solid fa-circle-check text-blue-400"></i>
+                  <span>Verified Celebrity Post</span>
+                </span>
+              </div>
             </div>
           </div>
-          <img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">
-          <div class="p-4">
-            <p class="text-xs text-slate-300 mb-3">${post.caption}</p>
-            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-              <button onclick="likeCelebrityPost('${post.id}')" class="px-3 py-1.5 rounded-lg bg-pink-950/40 border border-pink-500/30 text-rose-400 hover:bg-pink-900/40 text-xs font-bold flex items-center gap-1.5 transition">
-                <i class="fa-solid fa-heart"></i>
-                <span id="like-count-${post.id}">${post.likesCount} Likes</span>
-              </button>
-              <span class="text-[10px] text-pink-400/80 font-medium">Verified Celebrity Post</span>
-            </div>
-          </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
   } catch (err) {
     console.error('Feed error:', err);
@@ -1900,6 +2032,7 @@ async function submitRichCreateEvent() {
     const data = await res.json();
     if (data.success) {
       alert('🎉 Event Published Successfully! Visible to all normal users nearby.');
+      document.getElementById('evt-banner-preview-box')?.classList.add('hidden');
       closeModal('modal-publish-event');
       loadOrganizationEvents();
     } else {
@@ -1928,6 +2061,8 @@ async function submitRichCreatePost() {
     return;
   }
 
+  const determinedType = currentCelebUploadedMediaType || (mediaUrl.startsWith('data:video') || mediaUrl.endsWith('.mp4') ? 'VIDEO' : 'IMAGE');
+
   try {
     const res = await fetch('/api/celebrities/posts', {
       method: 'POST',
@@ -1936,7 +2071,7 @@ async function submitRichCreatePost() {
         'Authorization': `Bearer ${currentToken}`
       },
       body: JSON.stringify({
-        mediaType: 'IMAGE',
+        mediaType: determinedType,
         mediaUrl,
         caption
       })
@@ -1944,8 +2079,9 @@ async function submitRichCreatePost() {
 
     const data = await res.json();
     if (data.success) {
-      alert('🌟 Post shared successfully with your fans!');
+      alert(`🌟 ${determinedType === 'VIDEO' ? 'Video' : 'Photo'} shared successfully with your fans!`);
       document.getElementById('media-input-caption').value = '';
+      document.getElementById('celeb-media-preview-box')?.classList.add('hidden');
       closeModal('modal-publish-media');
       loadCelebrityOwnFeed();
     } else {
@@ -2167,3 +2303,137 @@ function closeModal(id) {
     }
   }
 }
+
+// ----------------- DIRECT LOCAL DEVICE FILE UPLOADS (ALL LOGINS) -----------------
+
+let currentCelebUploadedMediaType = 'IMAGE';
+
+// 1. Profile Avatar Direct Device File Upload
+async function handleAvatarFileUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file (PNG, JPG, WebP) from your device.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const dataUrl = e.target.result;
+    const avatarEl = document.getElementById('user-avatar');
+    if (avatarEl) avatarEl.src = dataUrl;
+
+    if (currentUser) {
+      currentUser.avatarUrl = dataUrl;
+      try {
+        await fetch('/api/auth/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`
+          },
+          body: JSON.stringify({ avatarUrl: dataUrl })
+        });
+        localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
+        alert('🎉 Profile picture updated successfully from device files!');
+      } catch (err) {
+        console.error('Failed to update avatar:', err);
+      }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+// 2. Organization Event Banner Direct Device File Upload
+function handleEventBannerFileUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const input = document.getElementById('evt-input-banner');
+    if (input) input.value = dataUrl;
+
+    const previewBox = document.getElementById('evt-banner-preview-box');
+    const previewImg = document.getElementById('evt-banner-preview-img');
+    const previewName = document.getElementById('evt-banner-name');
+    const previewSize = document.getElementById('evt-banner-size');
+
+    if (previewImg) previewImg.src = dataUrl;
+    if (previewName) previewName.textContent = file.name;
+    if (previewSize) previewSize.textContent = `${(file.size / 1024).toFixed(1)} KB • Loaded from Device File`;
+    previewBox?.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+// 3. Celebrity Post Direct Device File Upload (Photos & Videos)
+function handleCelebMediaFileUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const isVideo = file.type.startsWith('video');
+  currentCelebUploadedMediaType = isVideo ? 'VIDEO' : 'IMAGE';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const input = document.getElementById('media-input-url');
+    if (input) input.value = dataUrl;
+
+    const previewBox = document.getElementById('celeb-media-preview-box');
+    const previewContent = document.getElementById('celeb-media-preview-content');
+    const previewName = document.getElementById('celeb-media-name');
+    const previewBadge = document.getElementById('celeb-media-type-badge');
+
+    if (previewContent) {
+      if (isVideo) {
+        previewContent.innerHTML = `<video src="${dataUrl}" controls playsinline class="w-full max-h-48 rounded-xl object-cover bg-black"></video>`;
+      } else {
+        previewContent.innerHTML = `<img src="${dataUrl}" class="w-full max-h-48 rounded-xl object-cover bg-slate-800">`;
+      }
+    }
+
+    if (previewName) previewName.textContent = file.name;
+    if (previewBadge) {
+      previewBadge.textContent = isVideo ? '🎬 Video Clip' : '📷 Photo File';
+      previewBadge.className = isVideo 
+        ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-950/40 text-pink-300 border border-pink-500/30' 
+        : 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/40 text-blue-300 border border-blue-500/30';
+    }
+    previewBox?.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+}
+
+// 4. Multi-tab Celebrity Call Approval & Status Sync Listener
+window.addEventListener('storage', (event) => {
+  // If celebrity receives call request from fan in another tab
+  if (event.key === 'fc_incoming_celeb_call' && event.newValue) {
+    if (currentUser?.role === 'CELEBRITY' && celebAvailable) {
+      try {
+        const payload = JSON.parse(event.newValue);
+        simulateIncomingFanCall(`${payload.caller} (VIP Fan)`);
+      } catch {}
+    }
+  }
+
+  // If fan is waiting and celebrity approves or declines
+  if (event.key === 'fc_celeb_call_state' && event.newValue) {
+    if (currentUser?.role === 'NORMAL') {
+      try {
+        const payload = JSON.parse(event.newValue);
+        if (payload.state === 'connected') {
+          setCallState('connected', true);
+          alert('🎉 Dulquer Sithara APPROVED your call! Connected now.');
+        } else if (payload.state === 'declined') {
+          setCallState('idle');
+          alert('❌ Dulquer Sithara declined the call request.');
+        } else if (payload.state === 'ended') {
+          setCallState('idle');
+        }
+      } catch {}
+    }
+  }
+});

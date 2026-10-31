@@ -11,7 +11,7 @@
   <!-- QR Code Scanning Engine (Camera & File Decoding) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <link rel="stylesheet" href="/style.css?v=9">
+  <link rel="stylesheet" href="/style.css?v=10">
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white">
 
@@ -123,9 +123,15 @@
             <span>Fan Earnings: ₹18,450</span>
           </div>
 
-          <!-- User Avatar & Name -->
+          <!-- User Avatar & Name (Click avatar to change from device files) -->
           <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
-            <img id="user-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-blue-500">
+            <div class="relative group cursor-pointer" onclick="document.getElementById('avatar-file-input').click()" title="Change profile picture from device">
+              <img id="user-avatar" src="" class="w-8 h-8 rounded-full object-cover border border-blue-500">
+              <div class="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] transition">
+                <i class="fa-solid fa-camera"></i>
+              </div>
+              <input type="file" id="avatar-file-input" accept="image/*" class="hidden" onchange="handleAvatarFileUpload(event)">
+            </div>
             <div class="hidden sm:block text-left">
               <p id="user-display-name" class="text-xs font-bold text-white"></p>
               <span id="user-role-badge" class="text-[10px] text-slate-400"></span>
@@ -458,23 +464,45 @@
                   </button>
                 </div>
 
-                <!-- State 3: Incoming Call Ringing Box -->
-                <div id="incoming-fan-call-box" class="hidden bg-slate-900 border border-blue-500/50 rounded-2xl p-6 text-center shadow-2xl animate-fade-in">
+                <!-- State 3: Incoming Call Approval Request Box -->
+                <div id="incoming-fan-call-box" class="hidden bg-slate-900 border border-blue-500/60 rounded-2xl p-6 text-center shadow-2xl animate-fade-in relative overflow-hidden">
+                  <div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-400 to-blue-500 animate-pulse"></div>
+                  
                   <div class="w-16 h-16 rounded-full bg-blue-600/30 text-blue-300 flex items-center justify-center mx-auto mb-3 text-2xl animate-pulse border border-blue-400/40">
                     <i class="fa-solid fa-video"></i>
                   </div>
-                  <h4 class="text-sm font-bold text-white">Arjun Nair (VIP Gold Fan)</h4>
-                  <p class="text-xs text-blue-300 mb-4 flex items-center justify-center gap-1.5">
+                  
+                  <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/60 border border-blue-500/40 text-blue-300 text-[11px] font-bold mb-2">
                     <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-                    <span>Incoming 1-on-1 VIP Video Call (Ringing...)</span>
-                  </p>
-                  <div class="flex gap-3 max-w-xs mx-auto">
-                    <button onclick="acceptIncomingFanCall()" class="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-950/50 flex items-center justify-center gap-1.5 transition">
-                      <i class="fa-solid fa-phone"></i>
-                      <span>Accept Call</span>
+                    <span>Incoming VIP Fan Call Request</span>
+                  </div>
+
+                  <h4 class="text-base font-extrabold text-white" id="incoming-caller-name">Arjun Nair</h4>
+                  <p class="text-xs text-slate-300 font-medium">VIP Gold Tier Fan • Kochi</p>
+                  
+                  <div class="my-4 p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-left text-xs space-y-1">
+                    <div class="flex items-center justify-between text-[11px]">
+                      <span class="text-slate-400">Call Type:</span>
+                      <span class="font-bold text-white flex items-center gap-1"><i class="fa-solid fa-video text-blue-400"></i> 1-on-1 VIP Video Call</span>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px]">
+                      <span class="text-slate-400">Billing Rate:</span>
+                      <span class="font-bold text-blue-400">75 Coins / Min</span>
+                    </div>
+                    <p class="text-[10px] text-blue-300/90 pt-1.5 border-t border-slate-800 flex items-center gap-1">
+                      <i class="fa-solid fa-shield-halved text-[9px]"></i>
+                      <span>കോൾ കണക്ട് ചെയ്യാൻ നിങ്ങളുടെ അനുമതി (Approval) ആവശ്യമാണ്.</span>
+                    </p>
+                  </div>
+
+                  <!-- Explicit Approval & Decline Actions -->
+                  <div class="flex gap-3 max-w-sm mx-auto">
+                    <button onclick="approveIncomingFanCall()" id="btn-approve-fan-call" class="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition transform active:scale-95">
+                      <i class="fa-solid fa-circle-check text-sm"></i>
+                      <span>Approve & Connect Call</span>
                     </button>
-                    <button onclick="declineIncomingFanCall()" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition">
-                      Decline
+                    <button onclick="declineIncomingFanCall()" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-200 text-xs font-semibold border border-slate-700 transition">
+                      <i class="fa-solid fa-xmark mr-1"></i> Decline
                     </button>
                   </div>
                 </div>
@@ -484,22 +512,31 @@
                   <div class="flex items-center justify-between mb-3 text-xs">
                     <span class="text-blue-400 font-bold flex items-center gap-1.5">
                       <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-                      <span>Fan Video Call in Progress</span>
+                      <span>VIP Video Call Active (Approved)</span>
                     </span>
-                    <span class="px-2.5 py-0.5 rounded-full bg-slate-800 text-blue-300 font-mono font-bold text-[11px] border border-slate-700">
-                      75 Coins / Min Active
+                    <span id="celeb-active-call-timer" class="px-2.5 py-0.5 rounded-full bg-slate-900 text-blue-300 font-mono font-bold text-xs border border-blue-500/30">
+                      00:00
                     </span>
                   </div>
                   <div class="w-full h-48 rounded-xl bg-slate-900 overflow-hidden mb-4 relative flex items-center justify-center border border-slate-800">
                     <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=250" class="w-24 h-24 rounded-full object-cover border-2 border-blue-400 shadow-xl">
                     <div class="absolute bottom-2 left-3 bg-black/70 px-2.5 py-1 rounded-md text-[10px] text-slate-200">
-                      Caller: Arjun Nair (Kochi)
+                      Connected: Arjun Nair (Kochi) • VIP Gold
+                    </div>
+                    <div class="absolute top-2 right-3 bg-blue-950/80 border border-blue-500/40 px-2 py-0.5 rounded-md text-[10px] text-blue-300 font-mono font-bold">
+                      75 Coins / Min
                     </div>
                   </div>
-                  <button onclick="endCelebrityCall()" class="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 flex items-center justify-center gap-1.5 transition">
-                    <i class="fa-solid fa-phone-slash"></i>
-                    <span>End Video Call</span>
-                  </button>
+                  <div class="flex items-center gap-3">
+                    <button onclick="toggleCelebrityCallMute()" id="btn-celeb-call-mute" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
+                      <i class="fa-solid fa-microphone"></i>
+                      <span>Mute</span>
+                    </button>
+                    <button onclick="endCelebrityCall()" class="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 flex items-center justify-center gap-1.5 transition">
+                      <i class="fa-solid fa-phone-slash"></i>
+                      <span>End Video Call</span>
+                    </button>
+                  </div>
                 </div>
 
               </div>
@@ -1051,8 +1088,47 @@
         </div>
 
         <div>
-          <label class="block text-slate-300 font-medium mb-1">Event Banner Image URL</label>
-          <input type="text" id="evt-input-banner" value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-[11px]">
+          <label class="block text-slate-300 font-medium mb-1.5 flex items-center justify-between">
+            <span>Event Banner Poster (പോസ്റ്റർ ഇമേജ്)</span>
+            <span class="text-[10px] text-blue-400 font-normal">Direct Device Upload</span>
+          </label>
+          
+          <!-- Direct Device File Upload Zone -->
+          <div id="evt-banner-dropzone" onclick="document.getElementById('evt-banner-file-input').click()" class="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl p-4 text-center cursor-pointer transition bg-slate-900/60 group">
+            <div class="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 group-hover:scale-110 flex items-center justify-center text-lg border border-blue-500/30 mx-auto mb-2 transition">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <p class="text-xs font-bold text-white mb-0.5">Browse Event Poster from Device</p>
+            <p class="text-[10px] text-slate-400 mb-2">ഡിവൈസിലുള്ള ഫയലുകളിൽ നിന്ന് ഇമേജ് തിരഞ്ഞെടുക്കുക (JPG, PNG, WebP)</p>
+            <button type="button" onclick="event.stopPropagation(); document.getElementById('evt-banner-file-input').click();" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow flex items-center gap-1.5 mx-auto transition">
+              <i class="fa-solid fa-folder-open"></i>
+              <span>Browse Device Files</span>
+            </button>
+            <input type="file" id="evt-banner-file-input" accept="image/*" class="hidden" onchange="handleEventBannerFileUpload(event)">
+          </div>
+
+          <!-- Banner Preview Area -->
+          <div id="evt-banner-preview-box" class="hidden mt-2 p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+            <img id="evt-banner-preview-img" src="" class="w-14 h-14 rounded-lg object-cover bg-slate-800 border border-slate-700">
+            <div class="overflow-hidden flex-1">
+              <p class="text-xs font-bold text-white truncate" id="evt-banner-name">banner.jpg</p>
+              <p class="text-[10px] text-blue-400 flex items-center gap-1 mt-0.5">
+                <i class="fa-solid fa-circle-check"></i>
+                <span id="evt-banner-size">Loaded from Device File</span>
+              </p>
+            </div>
+            <button type="button" onclick="document.getElementById('evt-banner-file-input').click()" class="text-xs text-blue-400 hover:underline px-2 py-1 font-semibold">Change</button>
+          </div>
+
+          <!-- Fallback or custom URL toggle -->
+          <div class="mt-2">
+            <button type="button" onclick="document.getElementById('evt-banner-url-container').classList.toggle('hidden')" class="text-[10px] text-slate-400 hover:text-blue-400 transition flex items-center gap-1">
+              <i class="fa-solid fa-link text-[9px]"></i> Or use Web Link / URL
+            </button>
+            <div id="evt-banner-url-container" class="hidden mt-1.5">
+              <input type="text" id="evt-input-banner" value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-[11px]" placeholder="https://example.com/poster.jpg">
+            </div>
+          </div>
         </div>
 
         <button onclick="submitRichCreateEvent()" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow mt-2">
@@ -1082,8 +1158,44 @@
         </div>
 
         <div>
-          <label class="block text-slate-300 font-medium mb-1">Image / Media URL</label>
-          <input type="text" id="media-input-url" value="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-[11px]">
+          <label class="block text-slate-300 font-medium mb-1.5 flex items-center justify-between">
+            <span>Photo / Video Media (ഇമേജ് അല്ലെങ്കിൽ വീഡിയോ)</span>
+            <span class="text-[10px] text-blue-400 font-normal">Direct Device Upload</span>
+          </label>
+
+          <!-- Direct Device File Upload Zone for Photo or Video -->
+          <div id="celeb-media-dropzone" onclick="document.getElementById('celeb-media-file-input').click()" class="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-2xl p-4 text-center cursor-pointer transition bg-slate-900/60 group">
+            <div class="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 group-hover:scale-110 flex items-center justify-center text-lg border border-blue-500/30 mx-auto mb-2 transition">
+              <i class="fa-solid fa-photo-film"></i>
+            </div>
+            <p class="text-xs font-bold text-white mb-0.5">Browse Photos or Videos from Device</p>
+            <p class="text-[10px] text-slate-400 mb-2">ഡിവൈസിലുള്ള ചിത്രങ്ങളോ വീഡിയോകളോ തിരഞ്ഞെടുക്കുക</p>
+            <button type="button" onclick="event.stopPropagation(); document.getElementById('celeb-media-file-input').click();" class="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow flex items-center gap-1.5 mx-auto transition">
+              <i class="fa-solid fa-folder-open"></i>
+              <span>Browse Device Storage</span>
+            </button>
+            <input type="file" id="celeb-media-file-input" accept="image/*,video/*" class="hidden" onchange="handleCelebMediaFileUpload(event)">
+          </div>
+
+          <!-- Media Preview Area (Handles both Image and Video) -->
+          <div id="celeb-media-preview-box" class="hidden mt-2 p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div id="celeb-media-preview-content"></div>
+            <div class="flex items-center justify-between pt-1 text-[11px]">
+              <span id="celeb-media-name" class="font-bold text-white truncate max-w-[200px]">media_file</span>
+              <span id="celeb-media-type-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/40 text-blue-300 border border-blue-500/30">Photo</span>
+            </div>
+            <button type="button" onclick="document.getElementById('celeb-media-file-input').click()" class="text-xs text-blue-400 hover:underline font-semibold block">Change Selected File</button>
+          </div>
+
+          <!-- Fallback or custom URL toggle -->
+          <div class="mt-2">
+            <button type="button" onclick="document.getElementById('celeb-media-url-container').classList.toggle('hidden')" class="text-[10px] text-slate-400 hover:text-blue-400 transition flex items-center gap-1">
+              <i class="fa-solid fa-link text-[9px]"></i> Or use Web Link / URL
+            </button>
+            <div id="celeb-media-url-container" class="hidden mt-1.5">
+              <input type="text" id="media-input-url" value="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-[11px]" placeholder="https://example.com/media.jpg">
+            </div>
+          </div>
         </div>
 
         <button onclick="submitRichCreatePost()" class="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow mt-2">
@@ -1189,6 +1301,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=9"></script>
+  <script src="/app.js?v=10"></script>
 </body>
 </html>
