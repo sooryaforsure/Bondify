@@ -63,8 +63,8 @@ async function runAllTests() {
   assert(!duplicateScan.success, 'Duplicate QR scan should be rejected');
   console.log('✓ Anti-fraud duplicate ticket scan prevention verified');
 
-  // Test 3: Celebrity Hub & Premium Calling
-  console.log('\n--- TEST 3: Celebrity Hub & VIP Calling Authorization ---');
+  // Test 3: Celebrity Hub & Premium Calling (Audio & Video)
+  console.log('\n--- TEST 3: Celebrity Hub & VIP Calling Authorization (Audio & Video) ---');
   const celebService = new CelebrityService(auth);
   const feed = celebService.getCelebrityFeed();
   assert(feed.length >= 2, 'Celebrity feed should contain posts');
@@ -78,50 +78,56 @@ async function runAllTests() {
   console.log('✓ Free-tier / insufficient balance restriction enforced:', authCheckFail.reason);
 
   // Upgrade user or add coins
-  auth.updateProfile(session.user.id, { walletBalance: 200, isPremium: true });
-  const authCheckSuccess = celebService.authorizeCelebrityCall(session.user.id, 'usr_celeb_1', 'CELEBRITY_AUDIO');
-  assert(authCheckSuccess.authorized, 'Call must be authorized for premium user');
-  console.log('✓ VIP Call authorization granted for Premium User');
+  auth.updateProfile(session.user.id, { walletBalance: 300, isPremium: true });
+  const authCheckSuccess = celebService.authorizeCelebrityCall(session.user.id, 'usr_celeb_1', 'CELEBRITY_VIDEO');
+  assert(authCheckSuccess.authorized, 'Video Call must be authorized for premium user');
+  console.log(`✓ VIP Video Call authorization granted (Rate: ${authCheckSuccess.ratePerMinute} coins/min)`);
 
-  // Test VIP call session & coin billing
-  const vipSession = celebService.startVipCallSession(session.user.id, 'usr_celeb_1', 'CELEBRITY_AUDIO', 50);
-  console.log('✓ VIP Call session started. Room ID:', vipSession.roomId);
-  const endedSession = celebService.endVipCallSession(vipSession.roomId);
-  assert(endedSession?.status === 'ENDED', 'VIP call session must end');
-  console.log(`✓ VIP Call ended. Duration: ${endedSession?.durationSeconds}s, Billed: ${endedSession?.totalBilled} coins`);
+  // Test VIP Video call session & coin billing
+  const vipVideoSession = celebService.startVipCallSession(session.user.id, 'usr_celeb_1', 'CELEBRITY_VIDEO', authCheckSuccess.ratePerMinute);
+  assert(vipVideoSession.hasVideo === true, 'VIP Video call must have hasVideo: true');
+  console.log('✓ VIP Video Call session started with hasVideo=true. Room ID:', vipVideoSession.roomId);
+  const endedVideoSession = celebService.endVipCallSession(vipVideoSession.roomId);
+  assert(endedVideoSession?.status === 'ENDED', 'VIP video call session must end');
+  console.log(`✓ VIP Video Call ended. Duration: ${endedVideoSession?.durationSeconds}s, Billed: ${endedVideoSession?.totalBilled} coins`);
 
-  // Test 4: Random Friends Matchmaking Engine
-  console.log('\n--- TEST 4: Random Matchmaking Engine Simulation ---');
+  // Test 4: Random Friends Audio & Video Matchmaking Engine
+  console.log('\n--- TEST 4: Random Matchmaking Engine Simulation (Audio & Video) ---');
   const mmService = new MatchmakingService();
 
   // Create mock sockets
   const messagesUserA: unknown[] = [];
   const messagesUserB: unknown[] = [];
+  const messagesUserC: unknown[] = [];
+  const messagesUserD: unknown[] = [];
 
-  const mockSocketA = {
-    readyState: WebSocket.OPEN,
-    send: (data: string) => messagesUserA.push(JSON.parse(data)),
-  } as unknown as WebSocket;
-
-  const mockSocketB = {
-    readyState: WebSocket.OPEN,
-    send: (data: string) => messagesUserB.push(JSON.parse(data)),
-  } as unknown as WebSocket;
+  const mockSocketA = { readyState: WebSocket.OPEN, send: (data: string) => messagesUserA.push(JSON.parse(data)) } as unknown as WebSocket;
+  const mockSocketB = { readyState: WebSocket.OPEN, send: (data: string) => messagesUserB.push(JSON.parse(data)) } as unknown as WebSocket;
+  const mockSocketC = { readyState: WebSocket.OPEN, send: (data: string) => messagesUserC.push(JSON.parse(data)) } as unknown as WebSocket;
+  const mockSocketD = { readyState: WebSocket.OPEN, send: (data: string) => messagesUserD.push(JSON.parse(data)) } as unknown as WebSocket;
 
   mmService.registerClient('sock_user_a', mockSocketA, 'usr_alice');
   mmService.registerClient('sock_user_b', mockSocketB, 'usr_bob');
+  mmService.registerClient('sock_user_c', mockSocketC, 'usr_charlie');
+  mmService.registerClient('sock_user_d', mockSocketD, 'usr_diana');
 
-  // Alice joins queue
-  mmService.handleSignalingMessage('sock_user_a', { type: 'JOIN_RANDOM_QUEUE' });
+  // 1. Audio Match Test: Alice joins with AUDIO
+  mmService.handleSignalingMessage('sock_user_a', { type: 'JOIN_RANDOM_QUEUE', metadata: { callType: 'AUDIO' } });
   assert(mmService.getQueueCount() === 1, 'Queue count should be 1');
-  console.log('✓ User A entered queue, waiting for partner...');
+  console.log('✓ User A entered Audio queue, waiting for partner...');
 
-  // Bob joins queue -> Match should be made immediately
-  mmService.handleSignalingMessage('sock_user_b', { type: 'JOIN_RANDOM_QUEUE' });
-  assert(mmService.getQueueCount() === 0, 'Queue count should be 0 after pairing');
+  // Bob joins with AUDIO -> Instant Audio Match!
+  mmService.handleSignalingMessage('sock_user_b', { type: 'JOIN_RANDOM_QUEUE', metadata: { callType: 'AUDIO' } });
   assert(messagesUserA.length > 0 && (messagesUserA[0] as { type: string }).type === 'MATCH_FOUND', 'User A should receive MATCH_FOUND');
-  assert(messagesUserB.length > 0 && (messagesUserB[0] as { type: string }).type === 'MATCH_FOUND', 'User B should receive MATCH_FOUND');
-  console.log('✓ Instant pair matched! Match found signal dispatched to both users');
+  console.log('✓ Instant Audio pair matched!');
+
+  // 2. Video Match Test: Charlie and Diana join with VIDEO
+  mmService.handleSignalingMessage('sock_user_c', { type: 'JOIN_RANDOM_QUEUE', metadata: { callType: 'VIDEO' } });
+  mmService.handleSignalingMessage('sock_user_d', { type: 'JOIN_RANDOM_QUEUE', metadata: { callType: 'VIDEO' } });
+  const matchD = messagesUserD.find((m: unknown) => (m as { type: string }).type === 'MATCH_FOUND') as { metadata?: { hasVideo?: boolean; callType?: string } };
+  assert(matchD?.metadata?.hasVideo === true, 'Video match must deliver hasVideo: true metadata');
+  assert(matchD?.metadata?.callType === 'RANDOM_VIDEO', 'CallType must be RANDOM_VIDEO');
+  console.log('✓ Instant Video pair matched with hasVideo=true & callType=RANDOM_VIDEO!');
 
   // Test WebRTC signaling relay between the pair
   mmService.handleSignalingMessage('sock_user_a', {

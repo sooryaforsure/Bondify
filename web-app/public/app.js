@@ -6,10 +6,14 @@ let socket = null;
 let currentTab = 'matchmaking';
 
 // Call & WebRTC State
+let matchingMode = 'AUDIO'; // 'AUDIO' or 'VIDEO'
 let callTimerInterval = null;
 let callDuration = 0;
 let isMuted = false;
+let isCameraOff = false;
+let localMediaStream = null;
 let currentCallPartner = null;
+let currentCallHasVideo = false;
 let selectedEventForBooking = null;
 let selectedTicketTier = null;
 let bookingQty = 1;
@@ -218,22 +222,116 @@ function handleSignalingMessage(payload) {
   }
 }
 
-// ----------------- RANDOM AUDIO MATCHMAKING -----------------
+// ----------------- RANDOM AUDIO & VIDEO MATCHMAKING -----------------
 
-function setCallState(state) {
+function setMatchingMode(mode) {
+  matchingMode = mode;
+
+  const btnAudio = document.getElementById('mode-btn-audio');
+  const btnVideo = document.getElementById('mode-btn-video');
+  const mainIcon = document.getElementById('idle-main-icon');
+  const idleTitle = document.getElementById('idle-title');
+  const idleDesc = document.getElementById('idle-desc');
+  const btnText = document.getElementById('connect-btn-text');
+  const btnIcon = document.getElementById('connect-btn-icon');
+
+  if (mode === 'VIDEO') {
+    btnVideo.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-sm';
+    btnAudio.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 text-slate-400 hover:text-white';
+    mainIcon.className = 'fa-solid fa-video text-pink-400';
+    idleTitle.textContent = 'Live Random Video Chat';
+    idleDesc.textContent = 'Connect 1-on-1 on live WebRTC video with online friends worldwide.';
+    btnText.textContent = 'Connect Random Video Friend';
+    btnIcon.className = 'fa-solid fa-video';
+  } else {
+    btnAudio.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 bg-indigo-600 text-white shadow-sm';
+    btnVideo.className = 'px-5 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 text-slate-400 hover:text-white';
+    mainIcon.className = 'fa-solid fa-microphone text-indigo-400';
+    idleTitle.textContent = 'Find Someone New';
+    idleDesc.textContent = 'Safe, instant anonymous audio matching with verified community members.';
+    btnText.textContent = 'Connect Random Friend';
+    btnIcon.className = 'fa-solid fa-phone-volume';
+  }
+}
+
+function setCallState(state, hasVideo = false) {
+  currentCallHasVideo = hasVideo;
   document.getElementById('call-state-idle').classList.add('hidden');
   document.getElementById('call-state-searching').classList.add('hidden');
   document.getElementById('call-state-connected').classList.add('hidden');
 
+  const videoViewport = document.getElementById('video-call-viewport');
+  const audioViewport = document.getElementById('audio-call-viewport');
+  const btnCamera = document.getElementById('btn-camera');
+
   if (state === 'idle') {
     document.getElementById('call-state-idle').classList.remove('hidden');
     stopCallTimer();
+    stopLocalCamera();
   } else if (state === 'searching') {
     document.getElementById('call-state-searching').classList.remove('hidden');
     stopCallTimer();
   } else if (state === 'connected') {
     document.getElementById('call-state-connected').classList.remove('hidden');
+    
+    if (hasVideo) {
+      videoViewport.classList.remove('hidden');
+      audioViewport.classList.add('hidden');
+      btnCamera.classList.remove('hidden');
+      startLocalCamera();
+    } else {
+      videoViewport.classList.add('hidden');
+      audioViewport.classList.remove('hidden');
+      btnCamera.classList.add('hidden');
+      stopLocalCamera();
+    }
     startCallTimer();
+  }
+}
+
+async function startLocalCamera() {
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      localMediaStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+      const localVideo = document.getElementById('local-video');
+      if (localVideo) {
+        localVideo.srcObject = localMediaStream;
+      }
+    }
+  } catch (err) {
+    console.log('[Camera] Using simulated camera stream or preview:', err.message);
+  }
+}
+
+function stopLocalCamera() {
+  if (localMediaStream) {
+    localMediaStream.getTracks().forEach(t => t.stop());
+    localMediaStream = null;
+  }
+}
+
+function toggleCamera() {
+  isCameraOff = !isCameraOff;
+  const overlay = document.getElementById('local-camera-off-overlay');
+  const btn = document.getElementById('btn-camera');
+
+  if (localMediaStream) {
+    localMediaStream.getVideoTracks().forEach(track => {
+      track.enabled = !isCameraOff;
+    });
+  }
+
+  if (isCameraOff) {
+    overlay.classList.remove('hidden');
+    btn.innerHTML = '<i class="fa-solid fa-video-slash text-rose-500"></i>';
+    btn.classList.add('bg-rose-950/40', 'border-rose-500/50');
+  } else {
+    overlay.classList.add('hidden');
+    btn.innerHTML = '<i class="fa-solid fa-video"></i>';
+    btn.classList.remove('bg-rose-950/40', 'border-rose-500/50');
   }
 }
 
@@ -244,24 +342,31 @@ function startRandomMatching() {
 
   setCallState('searching');
 
-  // Send JOIN_RANDOM_QUEUE signal
+  // Send JOIN_RANDOM_QUEUE signal with callType preference
   socket.send(JSON.stringify({
     type: 'JOIN_RANDOM_QUEUE',
     userId: currentUser.id,
-    metadata: { audioOnly: true }
+    metadata: {
+      callType: matchingMode,
+      audioOnly: matchingMode === 'AUDIO'
+    }
   }));
 
-  // Demo fallback: If no second user is online in sandbox after 4 seconds, match with a friendly bot/peer!
+  // Demo fallback: If no second user is online in sandbox after 3.5 seconds, match with peer
   setTimeout(() => {
     const searching = !document.getElementById('call-state-searching').classList.contains('hidden');
     if (searching) {
       onMatchFound({
         roomId: 'room_demo_match_' + Date.now(),
         targetUserId: 'usr_partner_demo',
-        metadata: { isInitiator: true }
+        metadata: {
+          isInitiator: true,
+          callType: matchingMode === 'VIDEO' ? 'RANDOM_VIDEO' : 'RANDOM_AUDIO',
+          hasVideo: matchingMode === 'VIDEO'
+        }
       });
     }
-  }, 4000);
+  }, 3500);
 }
 
 function cancelMatching() {
@@ -276,27 +381,43 @@ function cancelMatching() {
 
 function onMatchFound(payload) {
   currentCallPartner = payload.targetUserId;
+  const hasVideo = payload.metadata?.hasVideo === true || payload.metadata?.callType === 'RANDOM_VIDEO';
   
   // Random peer avatar & name
   const names = ['Kavya S.', 'Arjun Menon', 'Sneha V.', 'Fahad K.', 'Deepak Raj'];
   const avatars = [
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150'
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400',
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400'
   ];
 
-  document.getElementById('peer-name').textContent = names[Math.floor(Math.random() * names.length)];
-  document.getElementById('peer-avatar').src = avatars[Math.floor(Math.random() * avatars.length)];
+  const matchedName = names[Math.floor(Math.random() * names.length)];
+  const matchedAvatar = avatars[Math.floor(Math.random() * avatars.length)];
 
-  setCallState('connected');
+  document.getElementById('peer-name').textContent = matchedName;
+  document.getElementById('peer-avatar').src = matchedAvatar;
+  document.getElementById('remote-peer-video-name').textContent = matchedName;
+  document.getElementById('remote-peer-video-avatar').src = matchedAvatar;
+
+  // Video fallback element setup
+  const remoteVideo = document.getElementById('remote-video');
+  const fallback = document.getElementById('remote-video-fallback');
+  if (hasVideo) {
+    // Show live peer video preview
+    fallback.classList.remove('hidden');
+    remoteVideo.classList.add('hidden');
+  }
+
+  setCallState('connected', hasVideo);
 }
 
 function skipToNextPerson() {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({
       type: 'NEXT_PERSON',
-      userId: currentUser.id
+      userId: currentUser.id,
+      metadata: { callType: matchingMode }
     }));
   }
   setCallState('searching');
@@ -308,7 +429,11 @@ function skipToNextPerson() {
       onMatchFound({
         roomId: 'room_demo_next_' + Date.now(),
         targetUserId: 'usr_partner_next',
-        metadata: { isInitiator: true }
+        metadata: {
+          isInitiator: true,
+          callType: matchingMode === 'VIDEO' ? 'RANDOM_VIDEO' : 'RANDOM_AUDIO',
+          hasVideo: matchingMode === 'VIDEO'
+        }
       });
     }
   }, 2500);
@@ -327,6 +452,13 @@ function endCurrentCall() {
 function toggleMute() {
   isMuted = !isMuted;
   const btn = document.getElementById('btn-mute');
+
+  if (localMediaStream) {
+    localMediaStream.getAudioTracks().forEach(track => {
+      track.enabled = !isMuted;
+    });
+  }
+
   if (isMuted) {
     btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
     btn.classList.add('bg-rose-950/40', 'border-rose-500/50');
@@ -344,12 +476,16 @@ function startCallTimer() {
     const mins = String(Math.floor(callDuration / 60)).padStart(2, '0');
     const secs = String(callDuration % 60).padStart(2, '0');
     document.getElementById('call-timer').textContent = `${mins}:${secs}`;
+    const videoTimer = document.getElementById('video-call-timer');
+    if (videoTimer) videoTimer.textContent = `${mins}:${secs}`;
   }, 1000);
 }
 
 function stopCallTimer() {
   clearInterval(callTimerInterval);
   document.getElementById('call-timer').textContent = '00:00';
+  const videoTimer = document.getElementById('video-call-timer');
+  if (videoTimer) videoTimer.textContent = '00:00';
 }
 
 // ----------------- NEARBY EVENTS & TICKETING -----------------
@@ -677,11 +813,19 @@ function startVipCallSession() {
   closeModal('modal-vip-call');
   switchTab('matchmaking');
   
-  // Directly simulate connected state with Celebrity
-  document.getElementById('peer-name').textContent = selectedCelebrityForCall.celeb.fullName + ' (VIP)';
-  document.getElementById('peer-avatar').src = selectedCelebrityForCall.celeb.avatarUrl;
-  setCallState('connected');
-  alert(`Connecting 1-on-1 VIP WebRTC Call with ${selectedCelebrityForCall.celeb.fullName}!`);
+  const hasVideo = selectedCelebrityForCall.callType === 'CELEBRITY_VIDEO';
+
+  // Set peer name and avatar for celebrity
+  const celebName = selectedCelebrityForCall.celeb.fullName + ' (VIP)';
+  const celebAvatar = selectedCelebrityForCall.celeb.avatarUrl;
+
+  document.getElementById('peer-name').textContent = celebName;
+  document.getElementById('peer-avatar').src = celebAvatar;
+  document.getElementById('remote-peer-video-name').textContent = celebName;
+  document.getElementById('remote-peer-video-avatar').src = celebAvatar;
+
+  setCallState('connected', hasVideo);
+  alert(`Connecting 1-on-1 VIP WebRTC ${hasVideo ? 'Video' : 'Audio'} Call with ${selectedCelebrityForCall.celeb.fullName}!`);
 }
 
 // ----------------- CUSTOMER CARE SUPPORT DESK -----------------

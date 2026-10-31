@@ -44,20 +44,24 @@ export class MatchmakingService {
     if (!conn) return;
 
     switch (payload.type) {
-      case 'JOIN_RANDOM_QUEUE':
-        this.joinQueue(conn, payload.metadata?.audioOnly !== false);
+      case 'JOIN_RANDOM_QUEUE': {
+        const callType = (payload.metadata?.callType as 'AUDIO' | 'VIDEO') || (payload.metadata?.audioOnly === false ? 'VIDEO' : 'AUDIO');
+        this.joinQueue(conn, callType);
         break;
+      }
 
       case 'LEAVE_RANDOM_QUEUE':
         this.removeFromQueue(conn.userId);
         this.send(conn.socket, { type: 'LEAVE_RANDOM_QUEUE', message: 'Left matchmaking queue' });
         break;
 
-      case 'NEXT_PERSON':
+      case 'NEXT_PERSON': {
+        const lastCallType = (payload.metadata?.callType as 'AUDIO' | 'VIDEO') || 'AUDIO';
         this.handleHangup(socketId, 'NEXT_PERSON');
-        // Immediately rejoin queue for new match
-        this.joinQueue(conn, true);
+        // Immediately rejoin queue for new match with same callType preference
+        this.joinQueue(conn, lastCallType);
         break;
+      }
 
       case 'END_CALL':
         this.handleHangup(socketId, 'END_CALL');
@@ -74,7 +78,7 @@ export class MatchmakingService {
     }
   }
 
-  private joinQueue(conn: ClientConnection, audioOnly: boolean = true) {
+  private joinQueue(conn: ClientConnection, callType: 'AUDIO' | 'VIDEO' = 'AUDIO') {
     // Check if already in queue
     const existingIndex = this.queue.findIndex(q => q.userId === conn.userId);
     if (existingIndex !== -1) {
@@ -86,7 +90,7 @@ export class MatchmakingService {
       userId: conn.userId,
       socketId,
       joinedAt: Date.now(),
-      audioOnly,
+      callType,
       lastMatchedWith: conn.lastPartnerId ? [conn.lastPartnerId] : []
     };
 
@@ -103,7 +107,7 @@ export class MatchmakingService {
   private processQueue() {
     if (this.queue.length < 2) return;
 
-    // Scan queue for eligible pairs
+    // Scan queue for eligible pairs matching the same callType (AUDIO with AUDIO, VIDEO with VIDEO)
     for (let i = 0; i < this.queue.length; i++) {
       const candidateA = this.queue[i];
       const connA = this.activeConnections.get(candidateA.socketId);
@@ -117,6 +121,9 @@ export class MatchmakingService {
         // Skip if same user opened two tabs
         if (candidateA.userId === candidateB.userId) continue;
 
+        // Ensure matching callType (Audio to Audio, Video to Video)
+        if (candidateA.callType !== candidateB.callType) continue;
+
         // Avoid immediate back-to-back rematch if other candidates exist
         const recentlyMatched = (candidateA.lastMatchedWith?.includes(candidateB.userId)) && this.queue.length > 2;
         if (recentlyMatched) continue;
@@ -126,13 +133,13 @@ export class MatchmakingService {
         this.queue.splice(j, 1);
         this.queue.splice(i, 1);
 
-        this.establishMatch(connA, connB);
+        this.establishMatch(connA, connB, candidateA.callType);
         return; // Recurse or process next on subsequent triggers
       }
     }
   }
 
-  private establishMatch(connA: ClientConnection, connB: ClientConnection) {
+  private establishMatch(connA: ClientConnection, connB: ClientConnection, callType: 'AUDIO' | 'VIDEO') {
     const roomId = `room_match_${crypto.randomUUID()}`;
 
     connA.currentRoomId = roomId;
@@ -145,11 +152,12 @@ export class MatchmakingService {
 
     const session: CallSession = {
       callId: `call_${crypto.randomUUID()}`,
-      callType: 'RANDOM_AUDIO',
+      callType: callType === 'VIDEO' ? 'RANDOM_VIDEO' : 'RANDOM_AUDIO',
       callerId: connA.userId,
       receiverId: connB.userId,
       roomId,
       startedAt: Date.now(),
+      hasVideo: callType === 'VIDEO',
       status: 'CONNECTED'
     };
 
@@ -162,7 +170,8 @@ export class MatchmakingService {
       targetUserId: connB.userId,
       metadata: {
         isInitiator: true,
-        callType: 'RANDOM_AUDIO'
+        callType: session.callType,
+        hasVideo: session.hasVideo
       }
     });
 
@@ -173,7 +182,8 @@ export class MatchmakingService {
       targetUserId: connA.userId,
       metadata: {
         isInitiator: false,
-        callType: 'RANDOM_AUDIO'
+        callType: session.callType,
+        hasVideo: session.hasVideo
       }
     });
   }

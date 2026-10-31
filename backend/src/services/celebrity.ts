@@ -151,6 +151,7 @@ export class CelebrityService {
       startedAt: Date.now(),
       ratePerMinute,
       totalBilled: 0,
+      hasVideo: callType === 'CELEBRITY_VIDEO',
       status: 'CONNECTED'
     };
 

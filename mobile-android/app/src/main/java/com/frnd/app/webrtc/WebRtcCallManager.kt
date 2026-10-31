@@ -13,6 +13,9 @@ class WebRtcCallManager(private val context: Context) {
     private var peerConnection: PeerConnection? = null
     private var localAudioTrack: AudioTrack? = null
     private var localAudioSource: AudioSource? = null
+    private var localVideoTrack: VideoTrack? = null
+    private var localVideoSource: VideoSource? = null
+    private var videoCapturer: VideoCapturer? = null
 
     init {
         initializePeerConnectionFactory()
@@ -29,6 +32,7 @@ class WebRtcCallManager(private val context: Context) {
             .createPeerConnectionFactory()
 
         createLocalAudioTrack()
+        createLocalVideoTrack()
     }
 
     private fun createLocalAudioTrack() {
@@ -43,10 +47,43 @@ class WebRtcCallManager(private val context: Context) {
         localAudioTrack?.setEnabled(true)
     }
 
+    private fun createLocalVideoTrack() {
+        videoCapturer = createCameraCapturer()
+        videoCapturer?.let { capturer ->
+            val surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", EglBase.create().eglBaseContext)
+            localVideoSource = peerConnectionFactory?.createVideoSource(capturer.isScreencast)
+            capturer.initialize(surfaceTextureHelper, context, localVideoSource?.capturerObserver)
+            capturer.startCapture(1280, 720, 30)
+
+            localVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSv0", localVideoSource)
+            localVideoTrack?.setEnabled(true)
+        }
+    }
+
+    private fun createCameraCapturer(): VideoCapturer? {
+        val enumerator = Camera2Enumerator(context)
+        val deviceNames = enumerator.deviceNames
+
+        // Prefer front-facing camera
+        for (deviceName in deviceNames) {
+            if (enumerator.isFrontFacing(deviceName)) {
+                return enumerator.createCapturer(deviceName, null)
+            }
+        }
+        for (deviceName in deviceNames) {
+            if (!enumerator.isFrontFacing(deviceName)) {
+                return enumerator.createCapturer(deviceName, null)
+            }
+        }
+        return null
+    }
+
     fun startPeerConnection(
         iceServers: List<PeerConnection.IceServer>,
+        includeVideo: Boolean = false,
         onIceCandidate: (IceCandidate) -> Unit,
-        onAudioTrackReceived: (AudioTrack) -> Unit
+        onAudioTrackReceived: (AudioTrack) -> Unit,
+        onVideoTrackReceived: ((VideoTrack) -> Unit)? = null
     ) {
         val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
@@ -62,6 +99,8 @@ class WebRtcCallManager(private val context: Context) {
                 val track = transceiver?.receiver?.track()
                 if (track is AudioTrack) {
                     onAudioTrackReceived(track)
+                } else if (track is VideoTrack) {
+                    onVideoTrackReceived?.invoke(track)
                 }
             }
 
@@ -76,10 +115,19 @@ class WebRtcCallManager(private val context: Context) {
             override fun onRenegotiationNeeded() {}
         })
 
-        // Add local audio track
+        // Add local tracks
         localAudioTrack?.let {
             peerConnection?.addTrack(it, listOf("ARDAMS"))
         }
+        if (includeVideo) {
+            localVideoTrack?.let {
+                peerConnection?.addTrack(it, listOf("ARDAMS"))
+            }
+        }
+    }
+
+    fun setCameraEnabled(enabled: Boolean) {
+        localVideoTrack?.setEnabled(enabled)
     }
 
     fun createOffer(onSuccess: (SessionDescription) -> Unit) {

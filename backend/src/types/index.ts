@@ -47,13 +47,13 @@ export interface MatchmakingQueueEntry {
   socketId: string;
   joinedAt: number;
   preferredLanguage?: string;
-  audioOnly: boolean;
+  callType: 'AUDIO' | 'VIDEO';
   lastMatchedWith?: string[]; // IDs of users recently matched to avoid immediate duplicates
 }
 
 export interface CallSession {
   callId: string;
-  callType: 'RANDOM_AUDIO' | 'CELEBRITY_AUDIO' | 'CELEBRITY_VIDEO' | 'SUPPORT_VOIP';
+  callType: 'RANDOM_AUDIO' | 'RANDOM_VIDEO' | 'CELEBRITY_AUDIO' | 'CELEBRITY_VIDEO' | 'SUPPORT_VOIP';
   callerId: string;
   receiverId?: string;
   roomId: string;
@@ -62,6 +62,7 @@ export interface CallSession {
   durationSeconds?: number;
   ratePerMinute?: number;
   totalBilled?: number;
+  hasVideo?: boolean;
   status: 'RINGING' | 'CONNECTED' | 'ENDED' | 'REJECTED';
 }
 
