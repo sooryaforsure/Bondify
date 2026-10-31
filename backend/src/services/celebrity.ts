@@ -184,4 +184,95 @@ export class CelebrityService {
     this.activeVipCalls.delete(roomId);
     return session;
   }
+
+  // Cross-device live signaling state
+  private pendingLiveCalls: Map<string, any> = new Map();
+
+  ringCelebrity(
+    callerId: string,
+    callerName: string,
+    callerAvatar: string | undefined,
+    celebrityId: string,
+    callType: 'CELEBRITY_AUDIO' | 'CELEBRITY_VIDEO',
+    offerSdp?: string
+  ): any {
+    // Purge stale calls older than 2 minutes or finished
+    for (const [id, c] of this.pendingLiveCalls.entries()) {
+      if (Date.now() - c.createdAt > 120000 || c.status === 'ENDED' || c.status === 'DECLINED') {
+        this.pendingLiveCalls.delete(id);
+      }
+    }
+
+    const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const call = {
+      callId,
+      callerId,
+      callerName,
+      callerAvatar,
+      celebrityId,
+      callType,
+      status: 'RINGING',
+      createdAt: Date.now(),
+      offerSdp,
+      iceCandidates: []
+    };
+    this.pendingLiveCalls.set(callId, call);
+    return call;
+  }
+
+  getLiveCallStatus(query: { callId?: string; celebrityId?: string; callerId?: string }): any {
+    if (query.callId) {
+      return this.pendingLiveCalls.get(query.callId) || null;
+    }
+    if (query.celebrityId) {
+      for (const call of this.pendingLiveCalls.values()) {
+        if (call.celebrityId === query.celebrityId && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
+          return call;
+        }
+      }
+    }
+    if (query.callerId) {
+      for (const call of this.pendingLiveCalls.values()) {
+        if (call.callerId === query.callerId && call.status !== 'ENDED') {
+          return call;
+        }
+      }
+    }
+    return null;
+  }
+
+  respondToLiveCall(callId: string, action: 'APPROVE' | 'DECLINE', answerSdp?: string): any {
+    const call = this.pendingLiveCalls.get(callId);
+    if (!call) throw new Error('Call session not found');
+    if (action === 'APPROVE') {
+      call.status = 'APPROVED';
+      call.approvedAt = Date.now();
+      if (answerSdp) call.answerSdp = answerSdp;
+    } else {
+      call.status = 'DECLINED';
+      call.endedAt = Date.now();
+    }
+    return call;
+  }
+
+  relayCallSignal(callId: string, signal: { type: string; sdp?: string; candidate?: any; fromRole: string }): any {
+    const call = this.pendingLiveCalls.get(callId);
+    if (!call) throw new Error('Call not found');
+    if (signal.type === 'RTC_OFFER' && signal.sdp) call.offerSdp = signal.sdp;
+    if (signal.type === 'RTC_ANSWER' && signal.sdp) call.answerSdp = signal.sdp;
+    if (signal.type === 'RTC_ICE_CANDIDATE' && signal.candidate) {
+      call.iceCandidates = call.iceCandidates || [];
+      call.iceCandidates.push({ candidate: signal.candidate, fromRole: signal.fromRole });
+    }
+    return call;
+  }
+
+  endLiveCall(callId: string, endedBy: string): any {
+    const call = this.pendingLiveCalls.get(callId);
+    if (!call) return null;
+    call.status = 'ENDED';
+    call.endedAt = Date.now();
+    call.endedBy = endedBy;
+    return call;
+  }
 }

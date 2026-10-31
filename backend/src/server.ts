@@ -253,6 +253,50 @@ export class FrndServer {
       return this.jsonResponse(result);
     }
 
+    // --- CELEBRITY LIVE CALL SIGNALING ROUTES (Cross-device & Multi-network) ---
+    if (path === '/api/celebrities/call/ring' && method === 'POST') {
+      const body = await req.json();
+      const call = this.celebrityService.ringCelebrity(
+        body.callerId || 'usr_normal_1',
+        body.callerName || 'Arjun Nair',
+        body.callerAvatar,
+        body.celebrityId || 'usr_celeb_1',
+        body.callType || 'CELEBRITY_VIDEO',
+        body.offerSdp
+      );
+      return this.jsonResponse({ success: true, call });
+    }
+
+    if (path === '/api/celebrities/call/status' && method === 'GET') {
+      const callId = url.searchParams.get('callId') || undefined;
+      const celebrityId = url.searchParams.get('celebrityId') || undefined;
+      const callerId = url.searchParams.get('callerId') || undefined;
+      const call = this.celebrityService.getLiveCallStatus({ callId, celebrityId, callerId });
+      return this.jsonResponse({ success: true, call });
+    }
+
+    if (path === '/api/celebrities/call/respond' && method === 'POST') {
+      const body = await req.json();
+      const call = this.celebrityService.respondToLiveCall(
+        body.callId,
+        body.action || 'APPROVE',
+        body.answerSdp
+      );
+      return this.jsonResponse({ success: true, call });
+    }
+
+    if (path === '/api/celebrities/call/signal' && method === 'POST') {
+      const body = await req.json();
+      const call = this.celebrityService.relayCallSignal(body.callId, body.signal);
+      return this.jsonResponse({ success: true, call });
+    }
+
+    if (path === '/api/celebrities/call/end' && method === 'POST') {
+      const body = await req.json();
+      const call = this.celebrityService.endLiveCall(body.callId, body.endedBy || 'USER');
+      return this.jsonResponse({ success: true, call });
+    }
+
     // --- SUPPORT DESK ROUTES ---
     if (path === '/api/support/tickets' && method === 'GET') {
       const user = await this.authenticate(req);

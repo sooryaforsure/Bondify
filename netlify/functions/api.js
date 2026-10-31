@@ -287,6 +287,93 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, post: newPost }) };
   }
 
+  // Live Cross-device Call Signaling
+  if (path === '/celebrities/call/ring' && method === 'POST') {
+    const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const call = {
+      callId,
+      callerId: body.callerId || 'usr_normal_1',
+      callerName: body.callerName || 'Arjun Nair',
+      callerAvatar: body.callerAvatar,
+      celebrityId: body.celebrityId || 'usr_celeb_1',
+      callType: body.callType || 'CELEBRITY_VIDEO',
+      status: 'RINGING',
+      createdAt: Date.now(),
+      offerSdp: body.offerSdp,
+      iceCandidates: []
+    };
+    if (!global._liveCalls) global._liveCalls = new Map();
+    global._liveCalls.set(callId, call);
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
+  if (path === '/celebrities/call/status' && method === 'GET') {
+    if (!global._liveCalls) global._liveCalls = new Map();
+    const callId = event.queryStringParameters?.callId;
+    const celebrityId = event.queryStringParameters?.celebrityId;
+    const callerId = event.queryStringParameters?.callerId;
+    let found = null;
+    if (callId) {
+      found = global._liveCalls.get(callId) || null;
+    } else if (celebrityId) {
+      for (const c of global._liveCalls.values()) {
+        if (c.celebrityId === celebrityId && (c.status === 'RINGING' || c.status === 'APPROVED' || c.status === 'CONNECTED')) {
+          found = c;
+          break;
+        }
+      }
+    } else if (callerId) {
+      for (const c of global._liveCalls.values()) {
+        if (c.callerId === callerId && c.status !== 'ENDED') {
+          found = c;
+          break;
+        }
+      }
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call: found }) };
+  }
+
+  if (path === '/celebrities/call/respond' && method === 'POST') {
+    if (!global._liveCalls) global._liveCalls = new Map();
+    const call = global._liveCalls.get(body.callId);
+    if (call) {
+      if (body.action === 'APPROVE') {
+        call.status = 'APPROVED';
+        call.approvedAt = Date.now();
+        if (body.answerSdp) call.answerSdp = body.answerSdp;
+      } else {
+        call.status = 'DECLINED';
+        call.endedAt = Date.now();
+      }
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
+  if (path === '/celebrities/call/signal' && method === 'POST') {
+    if (!global._liveCalls) global._liveCalls = new Map();
+    const call = global._liveCalls.get(body.callId);
+    if (call && body.signal) {
+      if (body.signal.type === 'RTC_OFFER' && body.signal.sdp) call.offerSdp = body.signal.sdp;
+      if (body.signal.type === 'RTC_ANSWER' && body.signal.sdp) call.answerSdp = body.signal.sdp;
+      if (body.signal.type === 'RTC_ICE_CANDIDATE' && body.signal.candidate) {
+        call.iceCandidates = call.iceCandidates || [];
+        call.iceCandidates.push({ candidate: body.signal.candidate, fromRole: body.signal.fromRole });
+      }
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
+  if (path === '/celebrities/call/end' && method === 'POST') {
+    if (!global._liveCalls) global._liveCalls = new Map();
+    const call = global._liveCalls.get(body.callId);
+    if (call) {
+      call.status = 'ENDED';
+      call.endedAt = Date.now();
+      call.endedBy = body.endedBy || 'USER';
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
   // 9. Admin metrics & moderation
   if (path === '/admin/metrics' && method === 'GET') {
     return {
