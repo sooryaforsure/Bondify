@@ -70,9 +70,17 @@ async function handleSimpleLogin() {
   const phone = document.getElementById('input-phone').value.trim();
   const otp = document.getElementById('input-otp').value.trim();
 
+  const roleMap = {
+    'usr_normal_1': { role: 'NORMAL', name: 'Arjun Nair' },
+    'usr_celeb_1': { role: 'CELEBRITY', name: 'Dulquer Sithara' },
+    'usr_org_1': { role: 'ORGANIZATION', name: 'Kochi Live Arena Events' },
+    'usr_support_1': { role: 'SUPPORT', name: 'Rahul (Customer Care Support)' },
+    'usr_admin_1': { role: 'SUPER_ADMIN', name: 'Super Admin (Platform Control)' }
+  };
+  const fallback = roleMap[userId] || { role: 'NORMAL', name: 'User' };
   const user = allUsers.find(u => u.id === userId);
-  const role = user ? user.role : 'NORMAL';
-  const fullName = user ? user.fullName : 'User';
+  const role = user ? user.role : fallback.role;
+  const fullName = user ? user.fullName : fallback.name;
 
   try {
     const res = await fetch('/api/auth/verify-otp', {
@@ -1268,109 +1276,196 @@ async function sendSupportExecutiveReply() {
 
 // ----------------- SUPER ADMIN LOGIC -----------------
 
+function renderAdminMetricsGrid(m) {
+  const grid = document.getElementById('admin-metrics-grid');
+  if (!grid) return;
+  const rev = (m.totalRevenueInRupees || 0).toLocaleString();
+  grid.innerHTML = `
+    <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
+      <div class="flex items-center justify-between text-xs mb-2">
+        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Ecosystem Users</span>
+        <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
+          <i class="fa-solid fa-users"></i>
+        </span>
+      </div>
+      <p class="text-2xl font-black text-white mt-1">${m.totalUsers || 0}</p>
+      <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
+        <i class="fa-solid fa-arrow-trend-up"></i>
+        <span>100% Platform Verified</span>
+      </p>
+    </div>
+
+    <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
+      <div class="flex items-center justify-between text-xs mb-2">
+        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Active Geo Events</span>
+        <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
+          <i class="fa-solid fa-calendar-days"></i>
+        </span>
+      </div>
+      <p class="text-2xl font-black text-white mt-1">${m.totalEvents || 0}</p>
+      <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
+        <i class="fa-solid fa-ticket"></i>
+        <span>${m.totalBookings || 0} Passes Sold</span>
+      </p>
+    </div>
+
+    <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
+      <div class="flex items-center justify-between text-xs mb-2">
+        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Verified Celebrities</span>
+        <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
+          <i class="fa-solid fa-star"></i>
+        </span>
+      </div>
+      <p class="text-2xl font-black text-white mt-1">${m.totalCelebrities || 0}</p>
+      <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>VIP Video Channels Live</span>
+      </p>
+    </div>
+
+    <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
+      <div class="flex items-center justify-between text-xs mb-2">
+        <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Gross Platform Revenue</span>
+        <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
+          <i class="fa-solid fa-coins"></i>
+        </span>
+      </div>
+      <p class="text-2xl font-black text-blue-400 mt-1">₹${rev}</p>
+      <p class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+        <i class="fa-solid fa-circle-check text-blue-400"></i>
+        <span>Settlement Verified</span>
+      </p>
+    </div>
+  `;
+}
+
+function renderAdminUsersTable(usersList) {
+  const table = document.getElementById('admin-users-table');
+  if (!table) return;
+
+  const users = (usersList && usersList.length > 0) ? usersList : (allUsers || []);
+
+  const countBadge = document.getElementById('admin-users-count');
+  if (countBadge) {
+    countBadge.textContent = `${users.length} Total Users`;
+  }
+
+  if (!users || users.length === 0) {
+    table.innerHTML = `
+      <tr>
+        <td colspan="5" class="px-5 py-8 text-center text-slate-400">
+          <div class="flex flex-col items-center justify-center gap-2">
+            <i class="fa-solid fa-users-slash text-2xl text-slate-600"></i>
+            <span class="text-xs font-semibold">No registered users found</span>
+            <button onclick="loadAdminMetrics()" class="mt-2 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition flex items-center gap-1.5 mx-auto">
+              <i class="fa-solid fa-arrows-rotate"></i> Try Reloading Users
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  table.innerHTML = users.map(u => {
+    const isRootAdmin = u.role === 'SUPER_ADMIN';
+    const isBanned = Boolean(u.isBanned);
+
+    let roleBadgeClass = 'bg-blue-950/40 text-blue-300 border-blue-500/30';
+    let roleIcon = 'fa-user';
+    if (u.role === 'SUPER_ADMIN') {
+      roleBadgeClass = 'bg-blue-600 text-white border-blue-400';
+      roleIcon = 'fa-crown';
+    } else if (u.role === 'CELEBRITY') {
+      roleBadgeClass = 'bg-blue-950/50 text-blue-300 border-blue-500/40';
+      roleIcon = 'fa-star';
+    } else if (u.role === 'ORGANIZATION') {
+      roleBadgeClass = 'bg-slate-800 text-slate-200 border-slate-600';
+      roleIcon = 'fa-building';
+    } else if (u.role === 'SUPPORT') {
+      roleBadgeClass = 'bg-blue-950/30 text-blue-300 border-blue-500/20';
+      roleIcon = 'fa-headset';
+    }
+
+    return `
+      <tr class="hover:bg-blue-950/20 transition">
+        <td class="px-5 py-3.5 flex items-center gap-3 font-medium">
+          <img src="${u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}" class="w-8 h-8 rounded-full object-cover border border-slate-700 shadow-sm flex-shrink-0">
+          <div class="overflow-hidden">
+            <p class="font-bold text-white text-xs truncate flex items-center gap-1.5">
+              <span>${u.fullName}</span>
+              ${u.isPremium ? '<span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold">VIP</span>' : ''}
+            </p>
+            <span class="text-[10px] text-slate-400 font-mono block truncate">${u.id}</span>
+          </div>
+        </td>
+        <td class="px-5 py-3.5 font-mono text-[11px] text-slate-300 whitespace-nowrap">
+          ${u.phoneNumber || 'N/A'}
+        </td>
+        <td class="px-5 py-3.5 whitespace-nowrap">
+          <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold border flex items-center gap-1.5 w-fit ${roleBadgeClass}">
+            <i class="fa-solid ${roleIcon} text-[9px]"></i>
+            <span>${u.role}</span>
+          </span>
+        </td>
+        <td class="px-5 py-3.5 whitespace-nowrap">
+          <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold border flex items-center gap-1.5 w-fit ${isBanned ? 'bg-rose-950/40 text-rose-300 border-rose-500/40' : 'bg-blue-950/40 text-blue-300 border-blue-500/30'}">
+            <span class="w-1.5 h-1.5 rounded-full ${isBanned ? 'bg-rose-400' : 'bg-blue-400 animate-pulse'}"></span>
+            <span>${isBanned ? 'Suspended' : 'Active Account'}</span>
+          </span>
+        </td>
+        <td class="px-5 py-3.5 text-right whitespace-nowrap">
+          ${!isRootAdmin ? `
+            <button onclick="toggleBanUser('${u.id}', ${!isBanned})" class="px-3 py-1.5 rounded-xl text-xs font-bold shadow transition flex items-center gap-1.5 ml-auto ${isBanned ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-800 hover:bg-rose-600/90 text-slate-300 hover:text-white border border-slate-700'}">
+              <i class="fa-solid ${isBanned ? 'fa-user-check' : 'fa-ban'}"></i>
+              <span>${isBanned ? 'Unban User' : 'Ban User'}</span>
+            </button>
+          ` : `
+            <span class="px-2.5 py-1 rounded-lg text-[10px] text-blue-300 bg-blue-950/40 border border-blue-500/30 font-bold uppercase tracking-wider inline-flex items-center gap-1">
+              <i class="fa-solid fa-lock text-[9px]"></i> Root Protected
+            </span>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
 async function loadAdminMetrics() {
   if (!currentToken || currentUser?.role !== 'SUPER_ADMIN') return;
+
   try {
     const res = await fetch('/api/admin/metrics', {
       headers: { 'Authorization': `Bearer ${currentToken}` }
     });
     const data = await res.json();
     if (data.success) {
-      const m = data.metrics;
-      document.getElementById('admin-metrics-grid').innerHTML = `
-        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Ecosystem Users</span>
-            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
-              <i class="fa-solid fa-users"></i>
-            </span>
-          </div>
-          <p class="text-2xl font-black text-white mt-1">${m.totalUsers}</p>
-          <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
-            <i class="fa-solid fa-arrow-trend-up"></i>
-            <span>+100% Verified Accounts</span>
-          </p>
-        </div>
-
-        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Active Geo Events</span>
-            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
-              <i class="fa-solid fa-calendar-days"></i>
-            </span>
-          </div>
-          <p class="text-2xl font-black text-white mt-1">${m.totalEvents}</p>
-          <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
-            <i class="fa-solid fa-ticket"></i>
-            <span>${m.totalBookings} Passes Sold</span>
-          </p>
-        </div>
-
-        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Verified Celebrities</span>
-            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
-              <i class="fa-solid fa-star"></i>
-            </span>
-          </div>
-          <p class="text-2xl font-black text-white mt-1">${m.totalCelebrities}</p>
-          <p class="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
-            <i class="fa-solid fa-shield-halved"></i>
-            <span>VIP Video Channels Live</span>
-          </p>
-        </div>
-
-        <div class="fc-glass-card p-5 border border-slate-800 transition-all hover:scale-[1.02]">
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span class="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Gross Platform Revenue</span>
-            <span class="w-8 h-8 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-sm border border-blue-500/30">
-              <i class="fa-solid fa-coins"></i>
-            </span>
-          </div>
-          <p class="text-2xl font-black text-blue-400 mt-1">₹${m.totalRevenueInRupees.toLocaleString()}</p>
-          <p class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-            <i class="fa-solid fa-circle-check text-blue-400"></i>
-            <span>Settlement Verified</span>
-          </p>
-        </div>
-      `;
-
-      document.getElementById('admin-users-table').innerHTML = allUsers.map(u => `
-        <tr class="hover:bg-blue-950/20 transition">
-          <td class="px-5 py-3.5 flex items-center gap-2.5 font-medium">
-            <img src="${u.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}" class="w-7 h-7 rounded-full object-cover border border-slate-700">
-            <div>
-              <p class="font-bold text-white text-xs">${u.fullName}</p>
-              <span class="text-[10px] text-slate-400 font-mono">${u.id}</span>
-            </div>
-          </td>
-          <td class="px-5 py-3.5 font-mono text-[11px] text-slate-300">${u.phoneNumber}</td>
-          <td class="px-5 py-3.5">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/40 text-blue-300 border border-blue-500/30">
-              ${u.role}
-            </span>
-          </td>
-          <td class="px-5 py-3.5">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${u.isBanned ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-blue-950/40 text-blue-400 border border-blue-500/30'}">
-              ${u.isBanned ? 'Suspended' : 'Active'}
-            </span>
-          </td>
-          <td class="px-5 py-3.5 text-right">
-            ${u.role !== 'SUPER_ADMIN' ? `
-              <button onclick="toggleBanUser('${u.id}', ${!u.isBanned})" class="px-3 py-1 rounded-lg text-[11px] font-bold shadow transition ${u.isBanned ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white border border-slate-700'}">
-                ${u.isBanned ? '<i class="fa-solid fa-user-check mr-1"></i>Unban' : '<i class="fa-solid fa-ban mr-1"></i>Ban'}
-              </button>
-            ` : '<span class="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Root Protected</span>'}
-          </td>
-        </tr>
-      `).join('');
+      if (data.metrics) {
+        renderAdminMetricsGrid(data.metrics);
+      }
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        allUsers = data.users;
+        renderAdminUsersTable(allUsers);
+        return;
+      }
     }
   } catch (err) {
-    console.error('Admin metrics error:', err);
+    console.warn('Admin metrics error:', err);
+  }
+
+  // Guaranteed fallback: fetch users explicitly via /api/users
+  try {
+    await fetchAllUsers();
+    renderAdminUsersTable(allUsers);
+  } catch (err) {
+    console.error('Failed to load users for admin table:', err);
   }
 }
 
 async function toggleBanUser(targetUserId, ban) {
+  const actionText = ban ? 'ban/suspend' : 'unban/reactivate';
+  if (!confirm(`Are you sure you want to ${actionText} this user account?`)) return;
+
   try {
     const res = await fetch('/api/admin/ban', {
       method: 'POST',
@@ -1382,11 +1477,13 @@ async function toggleBanUser(targetUserId, ban) {
     });
     const data = await res.json();
     if (data.success) {
-      await fetchAllUsers();
-      loadAdminMetrics();
+      await loadAdminMetrics();
+    } else {
+      alert(data.error || 'Failed to update user moderation status.');
     }
   } catch (err) {
     console.error('Ban error:', err);
+    alert('Network error while updating user status.');
   }
 }
 

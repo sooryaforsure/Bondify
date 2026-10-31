@@ -298,7 +298,17 @@ export class FrndServer {
         throw new Error('Super admin access required');
       }
       const metrics = this.adminService.getPlatformMetrics();
-      return this.jsonResponse({ success: true, metrics });
+      const users = this.authService.getAllUsers();
+      return this.jsonResponse({ success: true, metrics, users });
+    }
+
+    if (path === '/api/admin/users' && method === 'GET') {
+      const user = await this.authenticate(req);
+      if (user.role !== 'SUPER_ADMIN') {
+        throw new Error('Super admin access required');
+      }
+      const users = this.authService.getAllUsers();
+      return this.jsonResponse({ success: true, users });
     }
 
     if (path === '/api/admin/ban' && method === 'POST') {
