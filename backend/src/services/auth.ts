@@ -296,7 +296,7 @@ export class AuthService {
       );
 
       const signatureBytes = this.base64UrlDecode(encodedSignature);
-      const isValid = await crypto.subtle.verify('HMAC', key, signatureBytes, dataToVerify);
+      const isValid = await crypto.subtle.verify('HMAC', key, signatureBytes as unknown as BufferSource, dataToVerify);
       if (!isValid) return null;
 
       const payloadJson = new TextDecoder().decode(this.base64UrlDecode(encodedPayload));

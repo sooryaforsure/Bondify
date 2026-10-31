@@ -1,7 +1,8 @@
 import { 
   MatchmakingQueueEntry, 
   CallSession, 
-  SignalingPayload 
+  SignalingPayload,
+  SignalingMessageType 
 } from '../types/index.ts';
 
 interface ClientConnection {

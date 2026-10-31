@@ -13,13 +13,11 @@
 <body class="bg-[#0b1120] text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white">
 
   <!-- ============================================================== -->
-  <!-- 1. CLEAN & SIMPLE LOGIN SCREEN (Exact user-requested layout)    -->
+  <!-- 1. CLEAN & SIMPLE LOGIN SCREEN (Friends Connect)                -->
   <!-- ============================================================== -->
   <div id="auth-view" class="flex-1 flex flex-col items-center justify-center p-4 py-12 relative overflow-hidden">
-    
     <div class="max-w-md w-full mx-auto relative z-10">
       
-      <!-- Main Card -->
       <div class="bg-[#111928] border border-slate-800 rounded-2xl p-6 sm:p-7 shadow-2xl">
         
         <!-- Brand Header (FC Icon + Title + Subtitle) -->
@@ -28,9 +26,7 @@
             FC
           </div>
           <div>
-            <h1 class="text-xl font-bold tracking-tight text-white leading-tight">
-              Friends Connect
-            </h1>
+            <h1 class="text-xl font-bold tracking-tight text-white leading-tight">Friends Connect</h1>
             <p class="text-xs text-slate-400">Mobile Number + OTP Login</p>
           </div>
         </div>
@@ -84,7 +80,7 @@
 
 
   <!-- ============================================================== -->
-  <!-- 2. AUTHORIZED DASHBOARD VIEW (Strictly role-segregated)         -->
+  <!-- 2. AUTHORIZED DASHBOARD VIEW                                   -->
   <!-- ============================================================== -->
   <div id="dashboard-view" class="hidden flex-1 flex flex-col">
     
@@ -103,7 +99,7 @@
           </div>
         </div>
 
-        <!-- User Specific Info & Logout -->
+        <!-- Right Side: Role Specific Actions & Profile -->
         <div class="flex items-center gap-3">
           
           <!-- Normal User Premium Button / Status -->
@@ -118,7 +114,7 @@
             </div>
           </div>
 
-          <!-- Celebrity Total Earnings (No points/coins needed for celeb) -->
+          <!-- Celebrity Total Earnings Badge -->
           <div id="celebrity-earnings-area" class="hidden px-3 py-1 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-300 text-xs font-bold flex items-center gap-1.5">
             <i class="fa-solid fa-coins text-amber-400"></i>
             <span>Fan Earnings: ₹18,450</span>
@@ -142,17 +138,15 @@
 
       </div>
 
-      <!-- Navigation Tabs (Only shows tabs authorized for this user role) -->
+      <!-- Navigation Tabs (Rendered per role) -->
       <div class="border-t border-slate-800 bg-[#0e1626]">
         <div class="max-w-7xl mx-auto px-4 flex items-center justify-between overflow-x-auto">
-          <nav class="flex space-x-2 py-2" id="authorized-nav-tabs">
-            <!-- Rendered dynamically strictly per role -->
-          </nav>
+          <nav class="flex space-x-2 py-2" id="authorized-nav-tabs"></nav>
         </div>
       </div>
     </header>
 
-    <!-- MAIN ROLE-BASED DASHBOARD CONTENT -->
+    <!-- MAIN ROLE DASHBOARD CONTENT -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">
       
       <!-- ============================================== -->
@@ -160,13 +154,12 @@
       <!-- ============================================== -->
       <div id="dashboard-normal" class="hidden space-y-6">
         
-        <!-- Tab: Random Connect (Audio & Video) -->
+        <!-- Tab 1: Random Connect (Audio & Video) -->
         <div id="normal-tab-connect" class="normal-section">
           <div class="max-w-2xl mx-auto text-center py-4">
             <h2 class="text-2xl font-extrabold text-white mb-1">Random Friends Matchmaking</h2>
             <p class="text-slate-400 text-xs mb-5">ഓൺലൈനിലുള്ള മറ്റ് സുഹൃത്തുക്കളുമായി ഓഡിയോ അല്ലെങ്കിൽ വീഡിയോ കോളിൽ സംസാരിക്കുക</p>
 
-            <!-- Mode Selector -->
             <div class="inline-flex rounded-full bg-slate-900 border border-slate-800 p-1 mb-6">
               <button onclick="setMatchingMode('AUDIO')" id="mode-btn-audio" class="px-5 py-2 rounded-full text-xs font-bold bg-blue-600 text-white">
                 <i class="fa-solid fa-headset mr-1"></i>Audio Call
@@ -204,7 +197,6 @@
 
               <!-- Connected State -->
               <div id="call-state-connected" class="hidden flex flex-col items-center py-2">
-                <!-- Video Viewport -->
                 <div id="video-call-viewport" class="hidden w-full max-w-md mb-4 relative rounded-2xl overflow-hidden bg-black aspect-video shadow-xl">
                   <video id="remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
                   <div id="remote-video-fallback" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950">
@@ -212,7 +204,6 @@
                     <p id="remote-peer-video-name" class="text-xs font-bold text-slate-200">Online Friend</p>
                     <span class="text-[10px] text-emerald-400 mt-1">Live Video Feed</span>
                   </div>
-                  <!-- Local PiP -->
                   <div class="absolute bottom-2 right-2 w-24 h-32 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 shadow-md">
                     <video id="local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
                     <div id="local-camera-off-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-400 text-xs">
@@ -221,7 +212,6 @@
                   </div>
                 </div>
 
-                <!-- Audio Viewport -->
                 <div id="audio-call-viewport" class="flex flex-col items-center">
                   <img id="peer-avatar" src="" class="w-16 h-16 rounded-full object-cover border-2 border-emerald-500 mb-2">
                   <h3 id="peer-name" class="text-base font-bold text-white mb-0.5">Online Friend</h3>
@@ -229,7 +219,6 @@
                   <div class="text-xl font-mono font-bold text-slate-200 mb-3" id="call-timer">00:00</div>
                 </div>
 
-                <!-- Action Toolbar -->
                 <div class="flex items-center gap-3 mt-2">
                   <button onclick="toggleMute()" id="btn-mute" class="w-11 h-11 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center text-sm shadow">
                     <i class="fa-solid fa-microphone"></i>
@@ -251,31 +240,49 @@
           </div>
         </div>
 
-        <!-- Tab: Nearby Events -->
-        <div id="normal-tab-events" class="normal-section hidden">
-          <div class="mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <!-- Tab 2: Nearby Events & My Bookings -->
+        <div id="normal-tab-events" class="normal-section hidden space-y-4">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
             <div>
               <h2 class="text-xl font-bold text-white">Events Near You</h2>
               <p class="text-xs text-slate-400">നിങ്ങളുടെ ലൊക്കേഷനിലുള്ള സംഗീതപരിപാടികളും ഇവന്റുകളും ടിക്കറ്റുകളും</p>
             </div>
-            <div class="flex rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-xs">
-              <button onclick="filterEventsDistance(10)" class="px-2.5 py-1 rounded-md text-slate-400" id="dist-10">10 km</button>
-              <button onclick="filterEventsDistance(50)" class="px-2.5 py-1 rounded-md bg-blue-600 text-white font-medium" id="dist-50">50 km</button>
-              <button onclick="filterEventsDistance(0)" class="px-2.5 py-1 rounded-md text-slate-400" id="dist-all">All</button>
+            
+            <!-- Sub tabs: Explore vs My Bookings -->
+            <div class="flex items-center gap-2">
+              <div class="flex rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-xs">
+                <button onclick="toggleEventsSubView('explore')" id="btn-sub-explore" class="px-3 py-1.5 rounded-md bg-blue-600 text-white font-medium">Explore Events</button>
+                <button onclick="toggleEventsSubView('bookings')" id="btn-sub-bookings" class="px-3 py-1.5 rounded-md text-slate-400 hover:text-white">My Tickets & QR</button>
+              </div>
+
+              <div id="events-distance-filters" class="flex rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-xs">
+                <button onclick="filterEventsDistance(10)" class="px-2 py-1 rounded-md text-slate-400" id="dist-10">10km</button>
+                <button onclick="filterEventsDistance(50)" class="px-2 py-1 rounded-md bg-blue-600 text-white font-medium" id="dist-50">50km</button>
+                <button onclick="filterEventsDistance(0)" class="px-2 py-1 rounded-md text-slate-400" id="dist-all">All</button>
+              </div>
             </div>
           </div>
-          <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+          <!-- Explore Grid -->
+          <div id="events-explore-container">
+            <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+          </div>
+
+          <!-- My Bookings List -->
+          <div id="events-my-bookings-container" class="hidden">
+            <h3 class="text-sm font-bold text-white mb-3">My Confirmed Tickets (ഗേറ്റിൽ കാണിക്കാനുള്ള ഡിജിറ്റൽ പാസ്സുകൾ)</h3>
+            <div id="my-bookings-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+          </div>
         </div>
 
-        <!-- Tab: Celebrity Hub -->
+        <!-- Tab 3: Celebrity Hub -->
         <div id="normal-tab-celebrity" class="normal-section hidden">
           <div class="mb-5">
-            <h2 class="text-xl font-bold text-white">Celebrity Hub & Updates</h2>
-            <p class="text-xs text-slate-400">സെലിബ്രിറ്റികളുടെ പോസ്റ്റുകൾ കാണുക; പ്രീമിയം യൂസേഴ്സിന് നേരിട്ട് വിളിക്കാം!</p>
+            <h2 class="text-xl font-bold text-white">Celebrity Hub & Fan Feed</h2>
+            <p class="text-xs text-slate-400">സെലിബ്രിറ്റികളുടെ പോസ്റ്റുകൾ കാണുക; പ്രീമിയം യൂസേഴ്സിന് നേരിട്ട് VIP വിളിക്കാം!</p>
           </div>
 
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left: Featured Celebrity Card with Call action -->
             <div class="lg:col-span-1 space-y-4">
               <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5 text-center">
                 <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-20 h-20 rounded-full mx-auto object-cover border-2 border-pink-500 mb-3 shadow">
@@ -284,32 +291,21 @@
                   <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
                 </h3>
                 <p class="text-xs text-slate-400 mb-4">Playback Singer & Celebrity Artist</p>
-
-                <!-- Premium Locked / Unlocked Call Controls -->
-                <div id="normal-celeb-call-controls" class="space-y-2">
-                  <!-- Rendered dynamically based on isPremium -->
-                </div>
+                <div id="normal-celeb-call-controls" class="space-y-2"></div>
               </div>
             </div>
 
-            <!-- Right: Celebrity Feed Posts -->
             <div class="lg:col-span-2 space-y-5" id="celebrity-feed"></div>
           </div>
         </div>
 
-        <!-- Tab: Customer Care -->
+        <!-- Tab 4: Customer Care Helpdesk -->
         <div id="normal-tab-support" class="normal-section hidden">
           <div class="max-w-3xl mx-auto space-y-4">
             
-            <!-- In-Place Customer Care Live VoIP Calling Card -->
+            <!-- In-Place Dedicated VoIP Calling Card -->
             <div id="support-voip-call-card" class="hidden bg-gradient-to-r from-emerald-950/80 via-slate-900 to-[#111928] border-2 border-emerald-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden transition-all duration-300">
-              
-              <!-- Subtle Background Glow -->
-              <div class="absolute -top-16 -right-16 w-48 h-48 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
-
               <div class="flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
-                
-                <!-- Left: Support Officer Avatar & Status -->
                 <div class="flex items-center gap-3.5">
                   <div class="relative">
                     <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150" class="w-14 h-14 rounded-full object-cover border-2 border-emerald-400 shadow-md">
@@ -331,7 +327,6 @@
                   </div>
                 </div>
 
-                <!-- Middle: Animated Voice Frequency Wave -->
                 <div id="support-voice-waves" class="flex items-center gap-1.5 px-3 py-2 bg-slate-950/60 rounded-xl border border-slate-800/80">
                   <span class="w-1 bg-emerald-500 rounded-full animate-wave h-3"></span>
                   <span class="w-1 bg-emerald-400 rounded-full animate-wave h-6" style="animation-delay: 0.15s;"></span>
@@ -340,19 +335,16 @@
                   <span class="w-1 bg-emerald-500 rounded-full animate-wave h-3" style="animation-delay: 0.2s;"></span>
                 </div>
 
-                <!-- Right: In-Call Actions (Mute & Hangup) -->
                 <div class="flex items-center gap-2.5">
-                  <button onclick="toggleSupportCallMute()" id="btn-support-call-mute" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-sm shadow transition" title="Mute/Unmute Mic">
+                  <button onclick="toggleSupportCallMute()" id="btn-support-call-mute" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-sm shadow">
                     <i class="fa-solid fa-microphone"></i>
                   </button>
-                  <button onclick="endSupportVoipCall()" class="px-4 py-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-600/30 flex items-center gap-1.5 transition">
+                  <button onclick="endSupportVoipCall()" class="px-4 py-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg flex items-center gap-1.5">
                     <i class="fa-solid fa-phone-slash"></i>
                     <span>End Call</span>
                   </button>
                 </div>
-
               </div>
-
             </div>
 
             <!-- Customer Care Chat Box -->
@@ -362,7 +354,7 @@
                   <h4 class="text-sm font-semibold text-white">Customer Care Support (Live Desk)</h4>
                   <p class="text-[11px] text-emerald-400">Live Executive Available 24/7</p>
                 </div>
-                <button onclick="startSupportVoipCall()" id="btn-start-support-voip" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow transition">
+                <button onclick="startSupportVoipCall()" id="btn-start-support-voip" class="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow">
                   <i class="fa-solid fa-phone"></i>
                   <span>Call Support (VoIP)</span>
                 </button>
@@ -400,7 +392,7 @@
           </div>
 
           <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400">Call Receiving Status:</span>
+            <span class="text-xs text-slate-400">Call Receiving:</span>
             <button onclick="toggleCelebrityAvailability()" id="celeb-status-btn" class="px-4 py-2 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs shadow flex items-center gap-1.5">
               <i class="fa-solid fa-circle text-[8px] animate-pulse"></i>
               <span id="celeb-status-label">Online (Accepting Calls)</span>
@@ -413,13 +405,12 @@
           <!-- Column 1: Live Incoming Fan Calls Receiver Console -->
           <div class="lg:col-span-1 space-y-4">
             <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5">
-              <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+              <h3 class="text-sm font-bold text-white mb-1 flex items-center gap-2">
                 <i class="fa-solid fa-phone-volume text-emerald-400"></i>
                 Incoming Fan Calls Desk
               </h3>
               <p class="text-[11px] text-slate-400 mb-4">പ്രീമിയം ആരാധകരിൽ നിന്നുള്ള ഇൻകമിംഗ് കോളുകൾ ഇവിടെ സ്വീകരിക്കാം</p>
 
-              <!-- Incoming Call Notification Box -->
               <div id="incoming-fan-call-box" class="bg-gradient-to-b from-purple-950/40 to-slate-900 border border-purple-500/40 rounded-2xl p-4 text-center">
                 <div class="w-12 h-12 rounded-full bg-purple-600/30 text-purple-300 flex items-center justify-center mx-auto mb-2 text-xl animate-pulse">
                   <i class="fa-solid fa-video"></i>
@@ -427,16 +418,16 @@
                 <h4 class="text-xs font-bold text-white">Arjun Nair (VIP Fan)</h4>
                 <p class="text-[10px] text-purple-300 mb-3">Incoming VIP Video Call...</p>
                 <div class="flex gap-2">
-                  <button onclick="acceptIncomingFanCall()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow transition">
-                    <i class="fa-solid fa-phone mr-1"></i>Accept
+                  <button onclick="acceptIncomingFanCall()" class="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow">
+                    <i class="fa-solid fa-phone mr-1"></i>Accept Call
                   </button>
-                  <button onclick="declineIncomingFanCall()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white text-xs">
+                  <button onclick="declineIncomingFanCall()" class="px-3 py-2 rounded-xl bg-slate-800 text-slate-400 text-xs">
                     Decline
                   </button>
                 </div>
               </div>
 
-              <!-- Active Call Session (When Accepted) -->
+              <!-- Active Call Session -->
               <div id="celeb-active-call-box" class="hidden bg-black rounded-2xl p-4 text-center border border-emerald-500/50 mt-3">
                 <p class="text-[11px] text-emerald-400 font-bold mb-2 flex items-center justify-center gap-1">
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
@@ -451,6 +442,13 @@
                 </button>
               </div>
 
+              <!-- Priority Support Hotline for Celebrity -->
+              <div class="mt-4 pt-4 border-t border-slate-800">
+                <button onclick="openGenericSupportModal('Celebrity VIP Line')" class="w-full py-2.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2">
+                  <i class="fa-solid fa-headset text-pink-400"></i>
+                  <span>Contact Helpdesk (VIP Support)</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -459,15 +457,14 @@
             <div class="bg-[#111928] border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
               <div>
                 <h3 class="text-sm font-bold text-white">My Media Posts & Feed Updates</h3>
-                <p class="text-[11px] text-slate-400">നിങ്ങളുടെ ആരാധകർക്കായി പുതിയ ചിത്രങ്ങളും വീഡിയോകളും പോസ്റ്റ് ചെയ്യുക</p>
+                <p class="text-[11px] text-slate-400">ആരാധകർക്കായി പുതിയ ചിത്രങ്ങളും വീഡിയോകളും പോസ്റ്റ് ചെയ്യുക</p>
               </div>
-              <button onclick="openCreatePostModal()" class="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow flex items-center gap-1.5 transition">
-                <i class="fa-solid fa-plus"></i>
-                <span>Post Photo/Video</span>
+              <button onclick="openRichCreatePostModal()" class="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>Publish Photo/Video</span>
               </button>
             </div>
 
-            <!-- Celebrity's own feed list -->
             <div id="celeb-own-feed" class="space-y-4"></div>
           </div>
 
@@ -493,10 +490,16 @@
             </div>
           </div>
 
-          <button onclick="openCreateEventModal()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-2 transition">
-            <i class="fa-solid fa-plus"></i>
-            <span>Publish New Event</span>
-          </button>
+          <div class="flex items-center gap-2.5">
+            <button onclick="openGenericSupportModal('Organization Business Desk')" class="px-3.5 py-2.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-headset text-amber-400"></i>
+              <span>Support Desk</span>
+            </button>
+            <button onclick="openRichCreateEventModal()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-2 transition">
+              <i class="fa-solid fa-plus"></i>
+              <span>Publish New Event</span>
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -517,7 +520,6 @@
                 </button>
               </div>
 
-              <!-- Scanner result feedback -->
               <div id="scan-result-box" class="hidden mt-4 p-3 rounded-xl border text-xs"></div>
             </div>
           </div>
@@ -583,7 +585,6 @@
           <p class="text-xs text-slate-400">മുഴുവൻ സിസ്റ്റം നിയന്ത്രണവും യൂസർ മോഡറേഷനും വരുമാന സ്ഥിതിവിവരക്കണക്കുകളും</p>
         </div>
 
-        <!-- Metrics Cards -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="admin-metrics-grid"></div>
 
         <!-- User Management Table -->
@@ -613,7 +614,9 @@
 
   </div>
 
-  <!-- MODALS (Ticket Booking & VIP Call) -->
+  <!-- ==================== MODALS ==================== -->
+
+  <!-- 1. TICKET BOOKING & QR MODAL -->
   <div id="modal-ticket" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
     <div class="bg-[#111928] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
       <button onclick="closeModal('modal-ticket')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
@@ -652,7 +655,133 @@
           <img id="qr-image" src="" alt="Ticket QR Code" class="w-full h-full object-contain">
         </div>
         <p id="qr-hash-display" class="font-mono text-[10px] text-slate-400 bg-slate-950 py-1.5 px-3 rounded-lg border border-slate-800 break-all mb-4"></p>
-        <button onclick="closeModal('modal-ticket')" class="px-6 py-2 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold">Done</button>
+        <div class="flex items-center justify-center gap-2">
+          <button onclick="closeModal('modal-ticket'); toggleEventsSubView('bookings');" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow flex items-center gap-1.5">
+            <i class="fa-solid fa-ticket"></i>
+            <span>View in My Tickets</span>
+          </button>
+          <button onclick="closeModal('modal-ticket')" class="px-5 py-2 rounded-xl bg-slate-800 text-slate-200 text-xs font-semibold">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. PUBLISH EVENT MODAL (For Organizations) -->
+  <div id="modal-publish-event" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="bg-[#111928] border border-slate-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative">
+      <button onclick="closeModal('modal-publish-event')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <h3 class="text-base font-bold text-white mb-1 flex items-center gap-2">
+        <i class="fa-solid fa-calendar-plus text-amber-400"></i>
+        Publish New Event (പുതിയ ഇവന്റ് പോസ്റ്റ് ചെയ്യുക)
+      </h3>
+      <p class="text-xs text-slate-400 mb-4">Fill in event location, date, and ticket tiers</p>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Event Title</label>
+          <input type="text" id="evt-input-title" placeholder="e.g. Kerala Live Rock & Fusion Fest" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Category</label>
+            <select id="evt-input-category" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white">
+              <option>Music & Concert</option>
+              <option>Tech & Innovation</option>
+              <option>Cultural & Food</option>
+              <option>Sports & Fitness</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">City</label>
+            <input type="text" id="evt-input-city" value="Kochi" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Venue Name & Address</label>
+          <input type="text" id="evt-input-venue" value="Marine Drive Festival Grounds, Kochi" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">General Ticket Price (₹)</label>
+            <input type="number" id="evt-input-price" value="499" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white">
+          </div>
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Total Capacity</label>
+            <input type="number" id="evt-input-qty" value="500" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Event Banner Image URL</label>
+          <input type="text" id="evt-input-banner" value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-[11px]">
+        </div>
+
+        <button onclick="submitRichCreateEvent()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow mt-2">
+          Publish Event Now
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. PUBLISH CELEBRITY MEDIA POST MODAL -->
+  <div id="modal-publish-media" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="bg-[#111928] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+      <button onclick="closeModal('modal-publish-media')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <h3 class="text-base font-bold text-white mb-1 flex items-center gap-2">
+        <i class="fa-solid fa-cloud-arrow-up text-pink-400"></i>
+        Post to Fan Feed (ആരാധകർക്കായി പോസ്റ്റ് ചെയ്യുക)
+      </h3>
+      <p class="text-xs text-slate-400 mb-4">Share rehearsal photos, backstage moments & updates</p>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Post Caption</label>
+          <textarea id="media-input-caption" rows="3" placeholder="What’s on your mind? Share an update with your fans..." class="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Image / Media URL</label>
+          <input type="text" id="media-input-url" value="https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800" class="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-[11px]">
+        </div>
+
+        <button onclick="submitRichCreatePost()" class="w-full py-3 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow mt-2">
+          Share with Followers
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. GENERIC HELP / SUPPORT MODAL (For Org & Celeb) -->
+  <div id="modal-generic-support" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="bg-[#111928] border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+      <button onclick="closeModal('modal-generic-support')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <h3 class="text-base font-bold text-white mb-1" id="generic-support-title">Contact Support Desk</h3>
+      <p class="text-xs text-emerald-400 mb-4">Dedicated Helpdesk Executive Online</p>
+
+      <div class="space-y-3 text-xs">
+        <textarea id="generic-support-text" rows="3" placeholder="Type your inquiry or request..." class="w-full bg-[#1e293b] border border-slate-700 rounded-xl p-3 text-white"></textarea>
+        
+        <div class="flex gap-2">
+          <button onclick="sendGenericSupportQuery()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold">
+            Send Message
+          </button>
+          <button onclick="alert('Connected to Helpdesk Voice Support!'); closeModal('modal-generic-support');" class="px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-bold flex items-center gap-1">
+            <i class="fa-solid fa-phone"></i>
+            <span>VoIP Call</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

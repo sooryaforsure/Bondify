@@ -896,14 +896,36 @@ async function loadCelebrityHub() {
           </div>
           <img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">
           <div class="p-4">
-            <p class="text-xs text-slate-300 mb-2">${post.caption}</p>
-            <span class="text-xs text-rose-400 font-bold"><i class="fa-solid fa-heart mr-1"></i>${post.likesCount}</span>
+            <p class="text-xs text-slate-300 mb-3">${post.caption}</p>
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+              <button onclick="likeCelebrityPost('${post.id}')" class="px-3 py-1.5 rounded-lg bg-pink-950/40 border border-pink-500/30 text-rose-400 hover:bg-pink-900/40 text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-heart"></i>
+                <span id="like-count-${post.id}">${post.likesCount} Likes</span>
+              </button>
+              <span class="text-[10px] text-pink-400/80 font-medium">Verified Celebrity Post</span>
+            </div>
           </div>
         </div>
       `).join('');
     }
   } catch (err) {
     console.error('Feed error:', err);
+  }
+}
+
+async function likeCelebrityPost(postId) {
+  try {
+    const res = await fetch(`/api/celebrities/like/${postId}`, {
+      method: 'POST'
+    });
+    const data = await res.json();
+    if (data.success) {
+      const el = document.getElementById(`like-count-${postId}`);
+      if (el) el.textContent = `${data.likes} Likes`;
+      else loadCelebrityHub();
+    }
+  } catch (err) {
+    console.error('Like error:', err);
   }
 }
 
@@ -1063,47 +1085,246 @@ async function confirmTicketBooking() {
   }
 }
 
-function openCreateEventModal() {
-  const title = prompt('Enter Event Title:');
-  if (!title) return;
-  const venue = prompt('Enter Venue Name & City:') || 'Marine Drive Grounds, Kochi';
-  const price = parseInt(prompt('General Ticket Price (₹):') || '499', 10);
+// ----------------- SUB-VIEWS: NEARBY EVENTS VS MY BOOKINGS -----------------
 
-  fetch('/api/events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
-    body: JSON.stringify({
-      title,
-      description: 'Grand Live Event organized by Kochi Live Arena Events',
-      category: 'Music Festival',
-      venueName: venue,
-      address: 'Kochi, Kerala',
-      city: 'Kochi',
-      latitude: 9.9723,
-      longitude: 76.2783,
-      startTime: new Date(Date.now() + 86400000 * 7).toISOString(),
-      endTime: new Date(Date.now() + 86400000 * 7 + 18000000).toISOString(),
-      ticketTiers: [{ name: 'General Pass', price, totalQuantity: 500 }]
-    })
-  }).then(() => {
-    alert('Event Published Successfully!');
-    loadOrganizationEvents();
-  });
+function toggleEventsSubView(subView) {
+  const btnExplore = document.getElementById('btn-sub-explore');
+  const btnBookings = document.getElementById('btn-sub-bookings');
+  const exploreContainer = document.getElementById('events-explore-container');
+  const distFilters = document.getElementById('events-distance-filters');
+  const bookingsContainer = document.getElementById('events-my-bookings-container');
+
+  if (subView === 'explore') {
+    if (btnExplore) btnExplore.className = 'px-3 py-1.5 rounded-md bg-blue-600 text-white font-medium';
+    if (btnBookings) btnBookings.className = 'px-3 py-1.5 rounded-md text-slate-400 hover:text-white';
+    if (exploreContainer) exploreContainer.classList.remove('hidden');
+    if (distFilters) distFilters.classList.remove('hidden');
+    if (bookingsContainer) bookingsContainer.classList.add('hidden');
+    loadNearbyEvents();
+  } else {
+    if (btnExplore) btnExplore.className = 'px-3 py-1.5 rounded-md text-slate-400 hover:text-white';
+    if (btnBookings) btnBookings.className = 'px-3 py-1.5 rounded-md bg-blue-600 text-white font-medium';
+    if (exploreContainer) exploreContainer.classList.add('hidden');
+    if (distFilters) distFilters.classList.add('hidden');
+    if (bookingsContainer) bookingsContainer.classList.remove('hidden');
+    renderMyBookings();
+  }
+}
+
+async function renderMyBookings() {
+  const container = document.getElementById('my-bookings-list');
+  if (!container) return;
+  if (!currentToken) {
+    container.innerHTML = '<p class="text-xs text-slate-400">Please log in to view your tickets.</p>';
+    return;
+  }
+
+  container.innerHTML = '<div class="col-span-2 text-center py-8 text-xs text-slate-400"><i class="fa-solid fa-spinner animate-spin mr-2"></i>Loading your digital passes...</div>';
+
+  try {
+    const res = await fetch('/api/events/my-bookings', {
+      headers: { 'Authorization': `Bearer ${currentToken}` }
+    });
+    const data = await res.json();
+    if (data.success && data.bookings && data.bookings.length > 0) {
+      container.innerHTML = data.bookings.map(b => `
+        <div class="bg-[#111928] border border-amber-500/30 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase tracking-wider">Pass ID: ${b.id.slice(-6)}</span>
+              <h4 class="text-sm font-bold text-white mt-1.5">${b.eventTitle}</h4>
+              <p class="text-xs text-slate-400">${b.tierName} • ${b.quantity} Ticket(s)</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${b.status === 'CONFIRMED' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-300'}">
+              ${b.status}
+            </span>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-4 my-2">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(b.qrCodeHash)}" class="w-20 h-20 bg-white p-1 rounded-lg shadow shrink-0">
+            <div class="overflow-hidden">
+              <p class="text-[10px] text-slate-400 font-medium">Anti-Fraud Gate Hash:</p>
+              <p class="font-mono text-[11px] text-amber-400 font-bold truncate select-all">${b.qrCodeHash}</p>
+              <p class="text-[10px] text-emerald-400 mt-1"><i class="fa-solid fa-circle-check mr-1"></i>Official Entry Verified Pass</p>
+              <button onclick="navigator.clipboard.writeText('${b.qrCodeHash}'); alert('Copied Ticket Pass Code: ${b.qrCodeHash}');" class="mt-1.5 px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                <i class="fa-solid fa-copy mr-1"></i>Copy Pass Code
+              </button>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
+            <span class="text-slate-400">Total Paid: <strong class="text-white">₹${b.totalPrice}</strong></span>
+            <span class="text-[11px] text-slate-500">${new Date(b.bookedAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      container.innerHTML = `
+        <div class="col-span-2 text-center py-10 bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+          <i class="fa-solid fa-ticket-simple text-3xl text-slate-600 mb-2"></i>
+          <h4 class="text-xs font-bold text-slate-300">നിങ്ങൾ ഇതുവരെ ടിക്കറ്റുകൾ ബുക്ക് ചെയ്തിട്ടില്ല</h4>
+          <p class="text-[11px] text-slate-500 mt-1 mb-4">No active tickets found. Book concert passes from the Explore tab!</p>
+          <button onclick="toggleEventsSubView('explore')" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow">
+            Explore Events Now
+          </button>
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error('My bookings error:', err);
+    container.innerHTML = '<p class="text-xs text-rose-400">Error loading your tickets. Please try again.</p>';
+  }
+}
+
+// ----------------- RICH MODAL ACTIONS (ORG, CELEB & SUPPORT) -----------------
+
+function openRichCreateEventModal() {
+  document.getElementById('modal-publish-event')?.classList.remove('hidden');
+}
+
+function openCreateEventModal() {
+  openRichCreateEventModal();
+}
+
+async function submitRichCreateEvent() {
+  const title = document.getElementById('evt-input-title').value.trim();
+  const category = document.getElementById('evt-input-category').value;
+  const city = document.getElementById('evt-input-city').value.trim() || 'Kochi';
+  const venue = document.getElementById('evt-input-venue').value.trim() || 'Marine Drive Grounds, Kochi';
+  const price = parseInt(document.getElementById('evt-input-price').value || '499', 10);
+  const qty = parseInt(document.getElementById('evt-input-qty').value || '500', 10);
+  const bannerUrl = document.getElementById('evt-input-banner').value.trim() || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800';
+
+  if (!title) {
+    alert('Please enter an event title.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        title,
+        description: `Grand Live Event organized by ${currentUser ? currentUser.fullName : 'Organization'}`,
+        category,
+        venueName: venue,
+        address: `${venue}, ${city}`,
+        city,
+        latitude: 9.9723,
+        longitude: 76.2783,
+        startTime: new Date(Date.now() + 86400000 * 7).toISOString(),
+        endTime: new Date(Date.now() + 86400000 * 7 + 18000000).toISOString(),
+        bannerUrl,
+        ticketTiers: [{ name: 'General Pass', price, totalQuantity: qty }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('🎉 Event Published Successfully! Visible to all normal users nearby.');
+      closeModal('modal-publish-event');
+      loadOrganizationEvents();
+    } else {
+      alert(data.error || 'Failed to publish event.');
+    }
+  } catch (err) {
+    console.error('Publish event error:', err);
+    alert('Error publishing event.');
+  }
+}
+
+function openRichCreatePostModal() {
+  document.getElementById('modal-publish-media')?.classList.remove('hidden');
 }
 
 function openCreatePostModal() {
-  const caption = prompt('Enter Post Caption:');
-  if (!caption) return;
-  const mediaUrl = prompt('Enter Image URL (or press Enter for default):') || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800';
+  openRichCreatePostModal();
+}
 
-  fetch('/api/celebrities/posts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
-    body: JSON.stringify({ mediaType: 'IMAGE', mediaUrl, caption })
-  }).then(() => {
-    alert('Post shared with your fans!');
-    loadCelebrityOwnFeed();
-  });
+async function submitRichCreatePost() {
+  const caption = document.getElementById('media-input-caption').value.trim();
+  const mediaUrl = document.getElementById('media-input-url').value.trim() || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800';
+
+  if (!caption) {
+    alert('Please enter a caption for your update.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/celebrities/posts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        mediaType: 'IMAGE',
+        mediaUrl,
+        caption
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('🌟 Post shared successfully with your fans!');
+      document.getElementById('media-input-caption').value = '';
+      closeModal('modal-publish-media');
+      loadCelebrityOwnFeed();
+    } else {
+      alert(data.error || 'Failed to publish post.');
+    }
+  } catch (err) {
+    console.error('Publish post error:', err);
+    alert('Error publishing post.');
+  }
+}
+
+let currentSupportDeskName = 'Support Desk';
+
+function openGenericSupportModal(deskName) {
+  currentSupportDeskName = deskName || 'Support Desk';
+  const titleEl = document.getElementById('generic-support-title');
+  if (titleEl) titleEl.textContent = `Contact ${currentSupportDeskName}`;
+  document.getElementById('modal-generic-support')?.classList.remove('hidden');
+}
+
+async function sendGenericSupportQuery() {
+  const textarea = document.getElementById('generic-support-text');
+  const content = textarea.value.trim();
+  if (!content) {
+    alert('Please enter your query or message.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/support/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        ticketId: 'ticket_sample_101',
+        content: `[${currentSupportDeskName}] ${content}`
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert('✅ Your message has been routed to Rahul (Helpdesk Support Executive). You will receive a response shortly.');
+      textarea.value = '';
+      closeModal('modal-generic-support');
+    } else {
+      alert(data.error || 'Failed to send support query.');
+    }
+  } catch (err) {
+    console.error('Support query error:', err);
+    alert('Error sending support query.');
+  }
 }
 
 function closeModal(id) {
