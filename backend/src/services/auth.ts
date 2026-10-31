@@ -204,6 +204,26 @@ export class AuthService {
     return { token, user };
   }
 
+  async adminLogin(identifier: string, password: string): Promise<AuthSession> {
+    const cleanId = identifier.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    let targetUser: User | undefined;
+
+    if ((cleanId === 'admin@frnd.app' || cleanId === 'admin' || cleanId === '+919876543214') && cleanPass === 'admin123') {
+      targetUser = this.users.get('usr_admin_1');
+    } else if ((cleanId === 'support@frnd.app' || cleanId === 'support' || cleanId === '+919876543213') && cleanPass === 'support123') {
+      targetUser = this.users.get('usr_support_1');
+    }
+
+    if (!targetUser) {
+      throw new Error('Invalid administrative credentials or password.');
+    }
+
+    const token = await this.generateJwt({ userId: targetUser.id, role: targetUser.role, phone: targetUser.phoneNumber });
+    return { token, user: targetUser };
+  }
+
   getUser(userId: string): User | undefined {
     return this.users.get(userId);
   }

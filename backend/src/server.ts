@@ -128,6 +128,12 @@ export class FrndServer {
       return this.jsonResponse({ success: true, session });
     }
 
+    if (path === '/api/auth/admin-login' && method === 'POST') {
+      const body = await req.json();
+      const session = await this.authService.adminLogin(body.identifier, body.password);
+      return this.jsonResponse({ success: true, session });
+    }
+
     if (path === '/api/auth/me' && method === 'GET') {
       const user = await this.authenticate(req);
       return this.jsonResponse({ success: true, user });

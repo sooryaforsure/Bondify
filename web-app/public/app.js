@@ -23,15 +23,214 @@ let activeDistanceFilter = 50;
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', async () => {
   await fetchAllUsers();
-  // Default login as Rahul (Normal User)
-  await switchUserRole('usr_normal_1');
+
+  // Check saved session in localStorage
+  const savedSession = localStorage.getItem('frnd_session');
+  if (savedSession) {
+    try {
+      const parsed = JSON.parse(savedSession);
+      currentUser = parsed.user;
+      currentToken = parsed.token;
+      showDashboard();
+    } catch {
+      showAuthScreen();
+    }
+  } else {
+    // Show login screen by default
+    showAuthScreen();
+  }
+});
+
+// ----------------- AUTHENTICATION & LOGIN WORKFLOW -----------------
+
+function showAuthScreen() {
+  document.getElementById('auth-view').classList.remove('hidden');
+  document.getElementById('dashboard-view').classList.add('hidden');
+}
+
+function showDashboard() {
+  document.getElementById('auth-view').classList.add('hidden');
+  document.getElementById('dashboard-view').classList.remove('hidden');
+
+  updateUserUI();
+  updateRoleSpecificUI();
   initWebSocket();
+
+  // Load appropriate default tab
+  if (currentUser.role === 'SUPER_ADMIN') {
+    switchTab('admin');
+  } else if (currentUser.role === 'SUPPORT') {
+    switchTab('support');
+  } else if (currentUser.role === 'ORGANIZATION') {
+    switchTab('events');
+  } else if (currentUser.role === 'CELEBRITY') {
+    switchTab('celebrity');
+  } else {
+    switchTab('matchmaking');
+  }
+
   loadNearbyEvents();
   loadCelebrityHub();
   loadSupportTickets();
-});
+}
 
-// ----------------- USER & ROLE MANAGEMENT -----------------
+function switchAuthTab(tab) {
+  const tabOtp = document.getElementById('auth-tab-otp');
+  const tabAdmin = document.getElementById('auth-tab-admin');
+  const tabDemo = document.getElementById('auth-tab-demo');
+
+  const formOtp = document.getElementById('auth-form-otp');
+  const formAdmin = document.getElementById('auth-form-admin');
+  const formDemo = document.getElementById('auth-form-demo');
+
+  // Reset tabs
+  [tabOtp, tabAdmin, tabDemo].forEach(el => {
+    el.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 text-slate-400 hover:text-white';
+  });
+  [formOtp, formAdmin, formDemo].forEach(el => el.classList.add('hidden'));
+
+  if (tab === 'otp') {
+    tabOtp.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-indigo-600 text-white shadow';
+    formOtp.classList.remove('hidden');
+  } else if (tab === 'admin') {
+    tabAdmin.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-purple-600 text-white shadow';
+    formAdmin.classList.remove('hidden');
+  } else if (tab === 'demo') {
+    tabDemo.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 bg-amber-500 text-slate-950 shadow';
+    formDemo.classList.remove('hidden');
+  }
+}
+
+async function requestOtp() {
+  const phone = document.getElementById('input-phone').value.trim();
+  if (!phone) {
+    alert('Please enter your mobile number.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneNumber: phone })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const hint = document.getElementById('otp-hint-message');
+      hint.classList.remove('hidden');
+      document.getElementById('input-otp').value = data.debugOtp || '123456';
+    } else {
+      alert(data.error || 'Failed to send OTP');
+    }
+  } catch (err) {
+    console.error('OTP request error:', err);
+  }
+}
+
+async function handleOtpLogin() {
+  const phone = document.getElementById('input-phone').value.trim();
+  const otp = document.getElementById('input-otp').value.trim();
+  const role = document.querySelector('input[name="auth-role"]:checked')?.value || 'NORMAL';
+  const fullName = document.getElementById('input-fullname').value.trim();
+
+  if (!phone || !otp) {
+    alert('Please enter your mobile number and OTP.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phoneNumber: phone,
+        otp,
+        role,
+        fullName
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      currentUser = data.session.user;
+      currentToken = data.session.token;
+      localStorage.setItem('frnd_session', JSON.stringify({ user: currentUser, token: currentToken }));
+      showDashboard();
+    } else {
+      alert(data.error || 'Invalid OTP. Please enter 123456.');
+    }
+  } catch (err) {
+    console.error('Login error:', err);
+    alert('Login error. Please check your network.');
+  }
+}
+
+async function handleAdminLogin() {
+  const identifier = document.getElementById('admin-input-id').value.trim();
+  const password = document.getElementById('admin-input-password').value.trim();
+
+  if (!identifier || !password) {
+    alert('Please enter your admin email and password.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      currentUser = data.session.user;
+      currentToken = data.session.token;
+      localStorage.setItem('frnd_session', JSON.stringify({ user: currentUser, token: currentToken }));
+      showDashboard();
+    } else {
+      alert(data.error || 'Invalid admin credentials.');
+    }
+  } catch (err) {
+    console.error('Admin login error:', err);
+    alert('Login error. Check credentials.');
+  }
+}
+
+async function quickDemoLogin(userId) {
+  const target = allUsers.find(u => u.id === userId);
+  if (!target) return;
+
+  if (target.role === 'SUPER_ADMIN') {
+    document.getElementById('admin-input-id').value = 'admin@frnd.app';
+    document.getElementById('admin-input-password').value = 'admin123';
+    await handleAdminLogin();
+  } else if (target.role === 'SUPPORT') {
+    document.getElementById('admin-input-id').value = 'support@frnd.app';
+    document.getElementById('admin-input-password').value = 'support123';
+    await handleAdminLogin();
+  } else {
+    document.getElementById('input-phone').value = target.phoneNumber;
+    document.getElementById('input-otp').value = '123456';
+    const radio = document.querySelector(`input[name="auth-role"][value="${target.role}"]`);
+    if (radio) radio.checked = true;
+    await handleOtpLogin();
+  }
+}
+
+function handleLogout() {
+  if (confirm('Are you sure you want to log out?')) {
+    localStorage.removeItem('frnd_session');
+    currentUser = null;
+    currentToken = null;
+    if (socket) {
+      socket.close();
+      socket = null;
+    }
+    stopCallTimer();
+    stopLocalCamera();
+    showAuthScreen();
+  }
+}
 
 async function fetchAllUsers() {
   try {
@@ -45,65 +244,26 @@ async function fetchAllUsers() {
   }
 }
 
-async function switchUserRole(userId) {
-  const user = allUsers.find(u => u.id === userId);
-  if (!user) return;
-
-  // Auto-login or verify OTP for this user
-  try {
-    const res = await fetch('/api/auth/verify-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phoneNumber: user.phoneNumber,
-        otp: '123456',
-        role: user.role,
-        fullName: user.fullName
-      })
-    });
-    const data = await res.json();
-    if (data.success) {
-      currentUser = data.session.user;
-      currentToken = data.session.token;
-      updateUserUI();
-
-      // Reconnect socket with new user identity
-      if (socket) {
-        socket.close();
-      }
-      initWebSocket();
-
-      // Show/Hide Role specific elements
-      updateRoleSpecificUI();
-    }
-  } catch (err) {
-    console.error('Login error:', err);
-  }
-}
-
 function updateUserUI() {
   if (!currentUser) return;
 
   document.getElementById('user-display-name').textContent = currentUser.fullName;
   document.getElementById('user-role-badge').textContent = currentUser.role;
+  document.getElementById('header-user-role-label').textContent = currentUser.fullName + ` (${currentUser.role})`;
   document.getElementById('user-wallet-coins').textContent = currentUser.walletBalance;
   document.getElementById('user-avatar').src = currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
 
-  // Highlight active role button
-  document.querySelectorAll('.role-btn').forEach(btn => btn.classList.remove('ring-2', 'ring-indigo-400'));
-  const activeBtnId = {
-    'NORMAL': 'role-btn-normal',
-    'ORGANIZATION': 'role-btn-org',
-    'CELEBRITY': 'role-btn-celeb',
-    'SUPPORT': 'role-btn-support',
-    'SUPER_ADMIN': 'role-btn-admin'
-  }[currentUser.role];
-  if (activeBtnId) {
-    document.getElementById(activeBtnId)?.classList.add('ring-2', 'ring-indigo-400');
+  const walletContainer = document.getElementById('header-wallet-container');
+  if (currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'SUPPORT') {
+    walletContainer.classList.add('hidden');
+  } else {
+    walletContainer.classList.remove('hidden');
   }
 }
 
 function updateRoleSpecificUI() {
+  if (!currentUser) return;
+
   const adminTab = document.getElementById('tab-admin');
   const postEventBtn = document.getElementById('btn-post-event');
   const postMediaBtn = document.getElementById('btn-post-media');
@@ -114,7 +274,6 @@ function updateRoleSpecificUI() {
     loadAdminMetrics();
   } else {
     adminTab.classList.add('hidden');
-    if (currentTab === 'admin') switchTab('matchmaking');
   }
 
   // Organization Post Event Button
@@ -208,7 +367,6 @@ function handleSignalingMessage(payload) {
       break;
 
     case 'CALL_OFFER':
-      // Simulated answer back for 2-way WebRTC handshake
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type: 'CALL_ANSWER',
@@ -352,7 +510,7 @@ function startRandomMatching() {
     }
   }));
 
-  // Demo fallback: If no second user is online in sandbox after 3.5 seconds, match with peer
+  // Demo fallback
   setTimeout(() => {
     const searching = !document.getElementById('call-state-searching').classList.contains('hidden');
     if (searching) {
@@ -383,7 +541,6 @@ function onMatchFound(payload) {
   currentCallPartner = payload.targetUserId;
   const hasVideo = payload.metadata?.hasVideo === true || payload.metadata?.callType === 'RANDOM_VIDEO';
   
-  // Random peer avatar & name
   const names = ['Kavya S.', 'Arjun Menon', 'Sneha V.', 'Fahad K.', 'Deepak Raj'];
   const avatars = [
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
@@ -400,11 +557,9 @@ function onMatchFound(payload) {
   document.getElementById('remote-peer-video-name').textContent = matchedName;
   document.getElementById('remote-peer-video-avatar').src = matchedAvatar;
 
-  // Video fallback element setup
   const remoteVideo = document.getElementById('remote-video');
   const fallback = document.getElementById('remote-video-fallback');
   if (hasVideo) {
-    // Show live peer video preview
     fallback.classList.remove('hidden');
     remoteVideo.classList.add('hidden');
   }
@@ -422,7 +577,6 @@ function skipToNextPerson() {
   }
   setCallState('searching');
 
-  // Trigger next match simulation
   setTimeout(() => {
     const searching = !document.getElementById('call-state-searching').classList.contains('hidden');
     if (searching) {
@@ -647,7 +801,6 @@ async function confirmTicketBooking() {
       document.getElementById('ticket-booking-form').classList.add('hidden');
       document.getElementById('ticket-qr-result').classList.remove('hidden');
 
-      // Generate dynamic QR code image via standard public SVG QR generator API
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(booking.qrCodeHash)}`;
       document.getElementById('qr-image').src = qrApiUrl;
       document.getElementById('qr-hash-display').textContent = booking.qrCodeHash;
@@ -663,14 +816,12 @@ async function confirmTicketBooking() {
 
 async function loadCelebrityHub() {
   try {
-    // 1. Load Celebrities List
     const celebsRes = await fetch('/api/celebrities/list');
     const celebsData = await celebsRes.json();
     if (celebsData.success) {
       renderCelebritiesList(celebsData.celebrities);
     }
 
-    // 2. Load Feed Posts
     const feedRes = await fetch('/api/celebrities/feed');
     const feedData = await feedRes.json();
     if (feedData.success) {
@@ -718,7 +869,6 @@ function renderCelebrityFeed(posts) {
   const container = document.getElementById('celebrity-feed');
   container.innerHTML = posts.map(post => `
     <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-      <!-- Author Header -->
       <div class="p-4 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-10 h-10 rounded-full object-cover border border-pink-500/50">
@@ -736,7 +886,6 @@ function renderCelebrityFeed(posts) {
         </button>
       </div>
 
-      <!-- Media Content (Image or Video) -->
       ${post.mediaType === 'VIDEO' ? `
         <div class="bg-black relative max-h-[420px] flex items-center justify-center">
           <video src="${post.mediaUrl}" controls class="w-full max-h-[420px] object-contain"></video>
@@ -745,7 +894,6 @@ function renderCelebrityFeed(posts) {
         <img src="${post.mediaUrl}" class="w-full max-h-[420px] object-cover">
       `}
 
-      <!-- Caption & Like Bar -->
       <div class="p-4">
         <p class="text-xs text-slate-300 mb-3">${post.caption}</p>
         <div class="flex items-center gap-4 text-xs text-slate-400">
@@ -815,7 +963,6 @@ function startVipCallSession() {
   
   const hasVideo = selectedCelebrityForCall.callType === 'CELEBRITY_VIDEO';
 
-  // Set peer name and avatar for celebrity
   const celebName = selectedCelebrityForCall.celeb.fullName + ' (VIP)';
   const celebAvatar = selectedCelebrityForCall.celeb.avatarUrl;
 
@@ -833,6 +980,7 @@ function startVipCallSession() {
 let activeSupportTicket = null;
 
 async function loadSupportTickets() {
+  if (!currentToken) return;
   try {
     const res = await fetch('/api/support/tickets', {
       headers: { 'Authorization': `Bearer ${currentToken}` }
@@ -901,7 +1049,6 @@ async function sendSupportMessage() {
       activeSupportTicket.messages.push(data.message);
       renderSupportMessages(activeSupportTicket.messages);
 
-      // Automated support agent reply simulation after 1.5 seconds if sent by normal/org/celeb user
       if (currentUser.role !== 'SUPPORT') {
         setTimeout(async () => {
           activeSupportTicket.messages.push({
@@ -925,13 +1072,14 @@ function startSupportVoipCall() {
   switchTab('matchmaking');
   document.getElementById('peer-name').textContent = 'FRND Customer Care (VoIP)';
   document.getElementById('peer-avatar').src = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150';
-  setCallState('connected');
+  setCallState('connected', false);
   alert('Connected to FRND Helpdesk via in-app VoIP Audio Call!');
 }
 
 // ----------------- SUPER ADMIN OPERATIONS -----------------
 
 async function loadAdminMetrics() {
+  if (!currentToken || currentUser?.role !== 'SUPER_ADMIN') return;
   try {
     const res = await fetch('/api/admin/metrics', {
       headers: { 'Authorization': `Bearer ${currentToken}` }
