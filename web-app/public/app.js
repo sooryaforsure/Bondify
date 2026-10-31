@@ -859,18 +859,14 @@ async function loadOrganizationEvents() {
   } catch (err) {
     console.error('Error loading org events:', err);
   }
-
-  // Pre-load browser passes for 1-click Gate scanner testing
-  loadBrowserBookedTickets();
 }
 
-// ----------------- GATE QR CODE SCANNER (CAMERA, FILE & BROWSER) -----------------
+// ----------------- GATE QR CODE SCANNER (CAMERA & DEVICE FILES) -----------------
 
 let currentGateScanMode = 'camera';
 let gateHtml5QrScanner = null;
 let gateCameraStream = null;
 let isGateCameraRunning = false;
-let browserBookedPasses = [];
 
 function playGateBeep(isSuccess = true) {
   try {
@@ -890,23 +886,20 @@ function playGateBeep(isSuccess = true) {
 
 function setGateScanMode(mode) {
   currentGateScanMode = mode;
-  ['camera', 'file', 'browser'].forEach(m => {
+  ['camera', 'file'].forEach(m => {
     const btn = document.getElementById(`btn-scanmode-${m}`);
     const view = document.getElementById(`gate-scanview-${m}`);
     if (m === mode) {
-      if (btn) btn.className = 'py-1.5 rounded-lg text-[11px] font-semibold bg-blue-600 text-white flex items-center justify-center gap-1 transition';
+      if (btn) btn.className = 'py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white flex items-center justify-center gap-1.5 transition';
       view?.classList.remove('hidden');
     } else {
-      if (btn) btn.className = 'py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1 transition';
+      if (btn) btn.className = 'py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition';
       view?.classList.add('hidden');
     }
   });
 
   if (mode !== 'camera' && isGateCameraRunning) {
     stopGateCameraScanner();
-  }
-  if (mode === 'browser') {
-    loadBrowserBookedTickets();
   }
 }
 
@@ -1062,7 +1055,7 @@ async function handleQrImageUpload(event) {
       const decodedResult = await html5Qr.scanFile(file, true);
       await html5Qr.clear();
       if (decodedResult) {
-        onQrCodeDetected(decodedResult, 'Image File');
+        onQrCodeDetected(decodedResult, 'Device File');
         return;
       }
     } catch (err) {
@@ -1079,7 +1072,7 @@ async function handleQrImageUpload(event) {
         const detector = new BarcodeDetector({ formats: ['qr_code'] });
         const codes = await detector.detect(img);
         if (codes && codes.length > 0) {
-          onQrCodeDetected(codes[0].rawValue, 'Image File');
+          onQrCodeDetected(codes[0].rawValue, 'Device File');
           return;
         }
       }
@@ -1093,7 +1086,7 @@ async function handleQrImageUpload(event) {
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imgData.data, imgData.width, imgData.height);
         if (code && code.data) {
-          onQrCodeDetected(code.data, 'Image File');
+          onQrCodeDetected(code.data, 'Device File');
           return;
         }
       }
@@ -1102,58 +1095,12 @@ async function handleQrImageUpload(event) {
       if (box) {
         box.classList.remove('hidden');
         box.className = 'mt-3 p-3.5 rounded-2xl border border-rose-500/40 bg-rose-950/30 text-rose-300 text-xs';
-        box.innerHTML = '<strong>Scan Error:</strong> Could not detect a valid QR code in this image. Please upload a clearer ticket screenshot.';
+        box.innerHTML = '<strong>Scan Error:</strong> Could not detect a valid QR code in this image. Please select a clearer ticket image from device files.';
       }
     } catch (decodeErr) {
       console.error('File decode error:', decodeErr);
     }
   };
-}
-
-async function loadBrowserBookedTickets() {
-  const select = document.getElementById('select-browser-ticket');
-  if (!select) return;
-  select.innerHTML = '<option value="">Loading passes from browser...</option>';
-
-  try {
-    const res = await fetch('/api/events/all-bookings');
-    const data = await res.json();
-    if (data.success && data.bookings && data.bookings.length > 0) {
-      browserBookedPasses = data.bookings;
-      select.innerHTML = `
-        <option value="">-- Choose Attendee Pass (${browserBookedPasses.length} Available) --</option>
-        ${browserBookedPasses.map((b, i) => `
-          <option value="${b.qrCodeHash}">
-            ${i + 1}. ${b.userName} • ${b.eventTitle} [${b.tierName || 'Entry'}] (${b.isUsed ? 'ALREADY USED' : 'ACTIVE PASS'})
-          </option>
-        `).join('')}
-      `;
-    } else {
-      select.innerHTML = '<option value="">No booked passes found in browser</option>';
-    }
-  } catch (err) {
-    console.error('Error loading browser tickets:', err);
-    select.innerHTML = '<option value="">Failed to load passes</option>';
-  }
-}
-
-function onBrowserTicketSelectChange() {
-  const select = document.getElementById('select-browser-ticket');
-  const hash = select?.value;
-  if (hash) {
-    const input = document.getElementById('input-scan-qr');
-    if (input) input.value = hash;
-  }
-}
-
-function scanSelectedBrowserPass() {
-  const select = document.getElementById('select-browser-ticket');
-  const hash = select?.value;
-  if (!hash) {
-    alert('Please select an attendee ticket pass from the dropdown first.');
-    return;
-  }
-  onQrCodeDetected(hash, 'Browser Attendee Pass');
 }
 
 async function handleScanTicket() {
@@ -1219,10 +1166,6 @@ async function handleScanTicket() {
         <p class="text-[11px] text-slate-300 mt-1">${data.message}</p>
         ${data.booking ? `<p class="text-[10px] text-slate-400 mt-0.5">Assigned to: <strong>${data.booking.userName}</strong> (${data.booking.eventTitle})</p>` : ''}
       `;
-    }
-
-    if (currentGateScanMode === 'browser') {
-      loadBrowserBookedTickets();
     }
   } catch (err) {
     console.error('Ticket verification error:', err);
