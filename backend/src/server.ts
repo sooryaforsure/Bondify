@@ -351,6 +351,7 @@ export class FrndServer {
       return new Response(file, {
         headers: {
           'Content-Type': contentType,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
           ...this.corsHeaders(),
         },
       });
@@ -361,6 +362,7 @@ export class FrndServer {
         return new Response(indexHtml, {
           headers: {
             'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
             ...this.corsHeaders(),
           },
         });

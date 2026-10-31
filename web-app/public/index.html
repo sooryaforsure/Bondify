@@ -8,9 +8,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=5">
 </head>
-<body class="bg-[#0b1120] text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white">
+<body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-blue-500 selection:text-white">
 
   <!-- ============================================================== -->
   <!-- 1. CLEAN & SIMPLE LOGIN SCREEN (Friends Connect)                -->
@@ -592,18 +592,53 @@
                   </p>
                 </div>
               </div>
-              <button onclick="openGenericSupportModal('Celebrity VIP Line')" class="px-4 py-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-1.5">
-                <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
-                <span>Open Popout View</span>
-              </button>
             </div>
 
-            <!-- In-Place Working VoIP Call Card for Celebrity Tab -->
+            <!-- Dedicated In-Place VoIP Voice Calling Card for Celebrity Tab -->
             <div class="mb-5">
-              <button id="btn-celeb-tab-voip" onclick="startModalSupportVoipCall()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition">
+              <!-- Call Button (when idle) -->
+              <button id="btn-celeb-tab-voip" onclick="startCelebTabVoipCall()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 transition">
                 <i class="fa-solid fa-phone-volume"></i>
-                <span>Start Direct VoIP Voice Call to Rahul</span>
+                <span>Start Direct VoIP Voice Call to Rahul (Helpdesk Officer)</span>
               </button>
+
+              <!-- Live In-Place Calling Card (when ringing / connected) -->
+              <div id="celeb-tab-voip-card" class="hidden bg-slate-900/90 border border-emerald-500/50 rounded-2xl p-4 shadow-xl">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2.5">
+                    <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" class="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow">
+                    <div>
+                      <h4 class="text-xs font-bold text-white">Rahul (Helpdesk Executive)</h4>
+                      <p id="celeb-tab-call-status" class="text-[11px] text-emerald-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-phone-volume animate-pulse text-amber-400"></i>
+                        <span>Calling Helpdesk... Ringing</span>
+                      </p>
+                    </div>
+                  </div>
+                  <span id="celeb-tab-call-timer" class="font-mono text-xs font-bold px-3 py-1 rounded-md bg-black text-emerald-400 border border-emerald-500/40">00:00</span>
+                </div>
+
+                <!-- Waves & Controls -->
+                <div class="flex items-center justify-between pt-2.5 border-t border-slate-800">
+                  <div id="celeb-tab-waves" class="flex items-center gap-1 h-5 opacity-40">
+                    <span class="w-1 bg-emerald-400 h-2 rounded-full animate-pulse"></span>
+                    <span class="w-1 bg-emerald-400 h-4 rounded-full animate-pulse" style="animation-delay: 0.1s"></span>
+                    <span class="w-1 bg-emerald-400 h-5 rounded-full animate-pulse" style="animation-delay: 0.2s"></span>
+                    <span class="w-1 bg-emerald-400 h-3 rounded-full animate-pulse" style="animation-delay: 0.3s"></span>
+                    <span class="w-1 bg-emerald-400 h-2 rounded-full animate-pulse" style="animation-delay: 0.4s"></span>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <button onclick="toggleCelebTabVoipMute()" id="btn-celeb-tab-mute" class="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-xs shadow">
+                      <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <button onclick="endCelebTabVoipCall()" class="px-4 py-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-950/50 flex items-center gap-1.5 transition">
+                      <i class="fa-solid fa-phone-slash"></i>
+                      <span>End Call</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Messages Stream -->
@@ -633,8 +668,6 @@
 
           </div>
         </div>
-
-      </div>
 
       </div>
 
@@ -1046,6 +1079,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js"></script>
+  <script src="/app.js?v=5"></script>
 </body>
 </html>

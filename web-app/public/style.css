@@ -1,78 +1,138 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
+/* ============================================================== */
+/* 1. THEME DESIGN SYSTEM VARIABLES                              */
+/* ============================================================== */
 :root {
   --font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --bg-gradient: radial-gradient(ellipse 90% 80% at 50% -20%, rgba(30, 58, 138, 0.15), rgba(7, 13, 24, 1));
-  --surface-card: rgba(14, 23, 42, 0.85);
-  --border-card: rgba(51, 65, 85, 0.6);
-  --border-focus: rgba(59, 130, 246, 0.7);
+  
+  /* Standard App Theme: Dark Midnight Aurora & Sapphire */
+  --bg-base: #060913;
+  --bg-gradient: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(37, 99, 235, 0.28), transparent 75%),
+                 radial-gradient(circle at 10% 20%, rgba(14, 165, 233, 0.16), transparent 45%),
+                 radial-gradient(circle at 90% 80%, rgba(99, 102, 241, 0.14), transparent 45%),
+                 linear-gradient(180deg, #070c18 0%, #03050a 100%);
+  --header-bg: rgba(8, 14, 28, 0.88);
+  --header-border: rgba(56, 189, 248, 0.22);
+  --card-bg: rgba(11, 20, 38, 0.82);
+  --card-border: rgba(56, 189, 248, 0.2);
+  --card-hover-border: rgba(96, 165, 250, 0.5);
+  --card-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.65), 0 0 25px -5px rgba(37, 99, 235, 0.15);
+  --input-bg: rgba(13, 23, 44, 0.88);
+  --input-border: rgba(59, 130, 246, 0.32);
+  --brand-gradient: linear-gradient(135deg, #2563eb, #4f46e5, #06b6d4);
+  --brand-glow: 0 0 20px rgba(37, 99, 235, 0.5);
+}
+
+/* 2. SUPER ADMIN EXCLUSIVE ROYAL AMETHYST & GOLD COMMAND PALETTE */
+body.theme-super-admin {
+  --bg-base: #090412;
+  --bg-gradient: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(168, 85, 247, 0.28), transparent 75%),
+                 radial-gradient(circle at 10% 20%, rgba(245, 158, 11, 0.18), transparent 45%),
+                 radial-gradient(circle at 90% 80%, rgba(147, 51, 234, 0.14), transparent 45%),
+                 linear-gradient(180deg, #0d061a 0%, #05020a 100%);
+  --header-bg: rgba(16, 7, 28, 0.92);
+  --header-border: rgba(168, 85, 247, 0.38);
+  --card-bg: rgba(22, 11, 38, 0.86);
+  --card-border: rgba(168, 85, 247, 0.35);
+  --card-hover-border: rgba(216, 180, 254, 0.65);
+  --card-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.65), 0 0 25px -5px rgba(168, 85, 247, 0.22);
+  --input-bg: rgba(26, 12, 48, 0.88);
+  --input-border: rgba(168, 85, 247, 0.4);
+  --brand-gradient: linear-gradient(135deg, #f59e0b, #d97706, #9333ea);
+  --brand-glow: 0 0 25px rgba(245, 158, 11, 0.6), 0 0 35px rgba(168, 85, 247, 0.4);
+}
+
+/* ============================================================== */
+/* 3. GLOBAL PAGE STYLES                                          */
+/* ============================================================== */
+html, body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  font-family: var(--font-family);
-  background-color: #070d18;
-  background-image: var(--bg-gradient);
-  background-attachment: fixed;
-  color: #f1f5f9;
+  font-family: var(--font-family) !important;
+  background-color: var(--bg-base) !important;
+  background-image: var(--bg-gradient) !important;
+  background-attachment: fixed !important;
+  color: #f1f5f9 !important;
   letter-spacing: -0.015em;
   transition: background-color 0.4s ease, background-image 0.4s ease;
 }
 
-/* ============================================================== */
-/* SUPER ADMIN LUXURY ROYAL AMETHYST & GOLD COMMAND CENTER THEME  */
-/* ============================================================== */
-body.theme-super-admin {
-  background-color: #080312;
-  background-image: radial-gradient(ellipse 90% 80% at 50% -20%, rgba(147, 51, 234, 0.22), rgba(8, 3, 18, 1));
+/* Glass Header */
+.fc-header,
+header {
+  background: var(--header-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid var(--header-border) !important;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5) !important;
+  transition: all 0.4s ease;
 }
 
-body.theme-super-admin header {
-  background: rgba(15, 7, 32, 0.92) !important;
-  border-bottom: 1px solid rgba(168, 85, 247, 0.35) !important;
-  box-shadow: 0 4px 30px rgba(147, 51, 234, 0.18) !important;
+/* Glass Cards throughout the app */
+.fc-glass-card,
+.admin-card-surface,
+div[class*="bg-[#111928]"],
+div[class*="bg-[#0e172a]"] {
+  background: var(--card-bg) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid var(--card-border) !important;
+  box-shadow: var(--card-shadow) !important;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-body.theme-super-admin #header-brand-icon {
-  background: linear-gradient(135deg, #7e22ce, #9333ea, #a855f7) !important;
-  box-shadow: 0 0 15px rgba(168, 85, 247, 0.6) !important;
+.fc-glass-card:hover,
+.admin-card-surface:hover {
+  border-color: var(--card-hover-border) !important;
 }
 
-body.theme-super-admin #header-brand-title {
-  color: #faf5ff !important;
+/* Form Inputs, Dropdowns & Textareas */
+input, select, textarea {
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--input-border) !important;
+  color: #f8fafc !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
+  outline: none !important;
+}
+
+body.theme-super-admin input:focus,
+body.theme-super-admin select:focus,
+body.theme-super-admin textarea:focus {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.3) !important;
+}
+
+/* Brand Icon Accent */
+#header-brand-icon {
+  background: var(--brand-gradient) !important;
+  box-shadow: var(--brand-glow) !important;
 }
 
 body.theme-super-admin #header-role-title {
-  color: #c084fc !important;
+  color: #fbbf24 !important;
 }
 
-body.theme-super-admin .admin-card-surface {
-  background: rgba(19, 10, 40, 0.82) !important;
-  border: 1px solid rgba(168, 85, 247, 0.32) !important;
-  box-shadow: 0 10px 30px -10px rgba(147, 51, 234, 0.22) !important;
+/* Sub-nav row background */
+div[class*="bg-[#0e1626]"] {
+  background: rgba(8, 14, 28, 0.7) !important;
 }
-
-body.theme-super-admin .admin-card-surface:hover {
-  border-color: rgba(192, 132, 252, 0.6) !important;
-  box-shadow: 0 14px 35px -8px rgba(168, 85, 247, 0.35) !important;
+body.theme-super-admin div[class*="bg-[#0e1626]"] {
+  background: rgba(14, 6, 24, 0.75) !important;
 }
 
 /* ============================================================== */
-/* STANDARD REFINED PREMIUM STYLING & GLASS CARDS                 */
+/* 4. ANIMATIONS & UTILITIES                                      */
 /* ============================================================== */
-.fc-glass-card {
-  background: var(--surface-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-card);
-  border-radius: 1.25rem;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.fc-glass-card:hover {
-  border-color: rgba(71, 85, 105, 0.8);
-}
-
-/* Audio wave animation */
 @keyframes wave {
   0%, 100% {
     height: 6px;
@@ -86,18 +146,18 @@ body.theme-super-admin .admin-card-surface:hover {
   animation: wave 1.2s ease-in-out infinite;
 }
 
-/* Custom modern scrollbars */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(10, 16, 30, 0.4);
+  background: rgba(8, 14, 28, 0.4);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.7);
+  background: rgba(71, 85, 105, 0.6);
   border-radius: 9999px;
 }
 

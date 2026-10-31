@@ -114,8 +114,13 @@ function handleLogout() {
     stopCallTimer();
     stopLocalCamera();
     clearInterval(supportCallInterval);
+    clearInterval(genericSupportRefreshTimer);
+    clearInterval(celebSupportRefreshTimer);
+    clearInterval(celebTabVoipInterval);
     document.getElementById('support-voip-call-card')?.classList.add('hidden');
     document.getElementById('btn-start-support-voip')?.classList.remove('opacity-50', 'pointer-events-none');
+    document.getElementById('celeb-tab-voip-card')?.classList.add('hidden');
+    document.getElementById('btn-celeb-tab-voip')?.classList.remove('hidden');
     showAuthScreen();
   }
 }
@@ -593,6 +598,10 @@ function stopCallTimer() {
 
 let celebAvailable = localStorage.getItem('fc_celeb_available') !== 'false';
 let activeCelebrityTab = 'calls';
+let celebSupportRefreshTimer = null;
+let celebTabVoipInterval = null;
+let celebTabVoipDuration = 0;
+let isCelebTabVoipMuted = false;
 
 function switchCelebrityTab(tabId) {
   activeCelebrityTab = tabId;
@@ -608,8 +617,12 @@ function switchCelebrityTab(tabId) {
   document.querySelectorAll('.celeb-section').forEach(sec => sec.classList.add('hidden'));
   document.getElementById(`celeb-section-${tabId}`)?.classList.remove('hidden');
 
+  clearInterval(celebSupportRefreshTimer);
   if (tabId === 'feed') loadCelebrityOwnFeed();
-  if (tabId === 'support') loadCelebrityTabSupportMessages();
+  if (tabId === 'support') {
+    loadCelebrityTabSupportMessages();
+    celebSupportRefreshTimer = setInterval(loadGenericSupportMessages, 3000);
+  }
   if (tabId === 'calls') updateCelebrityCallUI();
 }
 
@@ -621,6 +634,10 @@ async function sendCelebTabSupportMessage() {
   const input = document.getElementById('celeb-tab-support-input');
   const text = input.value.trim();
   if (!text) return;
+
+  if (!currentSupportTicketId) {
+    await loadGenericSupportMessages();
+  }
 
   try {
     const res = await fetch('/api/support/messages', {
@@ -642,6 +659,82 @@ async function sendCelebTabSupportMessage() {
     }
   } catch (err) {
     console.error('Support send error:', err);
+  }
+}
+
+function startCelebTabVoipCall() {
+  const card = document.getElementById('celeb-tab-voip-card');
+  const btn = document.getElementById('btn-celeb-tab-voip');
+  const status = document.getElementById('celeb-tab-call-status');
+  const timer = document.getElementById('celeb-tab-call-timer');
+  const waves = document.getElementById('celeb-tab-waves');
+
+  card?.classList.remove('hidden');
+  btn?.classList.add('hidden');
+
+  if (status) status.innerHTML = '<i class="fa-solid fa-phone-volume animate-pulse text-amber-400"></i><span>Calling VIP Helpdesk... Ringing</span>';
+  if (waves) waves.classList.add('opacity-40');
+  if (timer) timer.textContent = '00:00';
+  celebTabVoipDuration = 0;
+
+  setTimeout(() => {
+    if (status) status.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping mr-1"></span><span>Connected • HD Voice Audio</span>';
+    if (waves) waves.classList.remove('opacity-40');
+
+    clearInterval(celebTabVoipInterval);
+    celebTabVoipInterval = setInterval(() => {
+      celebTabVoipDuration++;
+      const mins = String(Math.floor(celebTabVoipDuration / 60)).padStart(2, '0');
+      const secs = String(celebTabVoipDuration % 60).padStart(2, '0');
+      if (timer) timer.textContent = `${mins}:${secs}`;
+    }, 1000);
+  }, 1500);
+}
+
+function toggleCelebTabVoipMute() {
+  isCelebTabVoipMuted = !isCelebTabVoipMuted;
+  const btn = document.getElementById('btn-celeb-tab-mute');
+  if (btn) {
+    if (isCelebTabVoipMuted) {
+      btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
+      btn.classList.add('bg-rose-950/50', 'border-rose-500/50');
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+      btn.classList.remove('bg-rose-950/50', 'border-rose-500/50');
+    }
+  }
+}
+
+async function endCelebTabVoipCall() {
+  clearInterval(celebTabVoipInterval);
+  const durationSec = celebTabVoipDuration;
+  celebTabVoipDuration = 0;
+
+  document.getElementById('celeb-tab-voip-card')?.classList.add('hidden');
+  document.getElementById('btn-celeb-tab-voip')?.classList.remove('hidden');
+
+  const mins = String(Math.floor(durationSec / 60)).padStart(2, '0');
+  const secs = String(durationSec % 60).padStart(2, '0');
+  const logMsg = `📞 VIP VoIP Voice Support Call ended • Duration: ${mins}:${secs}`;
+
+  try {
+    if (!currentSupportTicketId) {
+      await loadGenericSupportMessages();
+    }
+    await fetch('/api/support/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        ticketId: currentSupportTicketId,
+        content: logMsg
+      })
+    });
+    await loadGenericSupportMessages();
+  } catch (err) {
+    console.error('Call log error:', err);
   }
 }
 
@@ -1516,7 +1609,8 @@ async function openGenericSupportModal(deskName) {
 async function loadGenericSupportMessages() {
   if (!currentToken) return;
   const container = document.getElementById('modal-support-messages-list');
-  if (!container) return;
+  const tabContainer = document.getElementById('modal-support-messages-list-tab');
+  if (!container && !tabContainer) return;
 
   try {
     const res = await fetch('/api/support/tickets', {
@@ -1528,17 +1622,19 @@ async function loadGenericSupportMessages() {
       currentSupportTicketId = ticket.id;
 
       if (!ticket.messages || ticket.messages.length === 0) {
-        container.innerHTML = `
+        const emptyHtml = `
           <div class="text-center py-8 text-xs text-slate-400">
             <i class="fa-solid fa-headset text-2xl text-slate-600 mb-2"></i>
-            <p class="font-bold text-slate-300">Welcome to ${currentSupportDeskName}!</p>
+            <p class="font-bold text-slate-300">Welcome to Priority Support Desk!</p>
             <p class="text-[11px] text-slate-500 mt-1">No messages yet. Send your query below to get instant assistance from Rahul.</p>
           </div>
         `;
+        if (container) container.innerHTML = emptyHtml;
+        if (tabContainer) tabContainer.innerHTML = emptyHtml;
         return;
       }
 
-      container.innerHTML = ticket.messages.map(msg => {
+      const html = ticket.messages.map(msg => {
         const isMe = msg.senderId === currentUser.id;
         if (isMe) {
           return `
@@ -1567,10 +1663,12 @@ async function loadGenericSupportMessages() {
         }
       }).join('');
 
-      container.scrollTop = container.scrollHeight;
-      const tabContainer = document.getElementById('modal-support-messages-list-tab');
+      if (container) {
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+      }
       if (tabContainer) {
-        tabContainer.innerHTML = container.innerHTML;
+        tabContainer.innerHTML = html;
         tabContainer.scrollTop = tabContainer.scrollHeight;
       }
     }
