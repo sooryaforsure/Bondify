@@ -468,34 +468,35 @@
                     </div>
                   </div>
 
-                  <!-- STATE 1: RINGING / WAITING OVERLAY -->
-                  <div id="inchat-call-ringing-card" class="flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
-                    <div class="relative mb-4">
-                      <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-white/40 shadow-2xl animate-pulse">
-                      <div class="absolute -inset-2 rounded-full border-2 border-dashed border-white/60 animate-spin"></div>
+                  <!-- 1. Remote Celebrity Video (Always in DOM, shows Dulquer when connected) -->
+                  <video id="normal-inchat-remote-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-cover bg-black z-0"></video>
+
+                  <!-- 2. Local User Camera Container (Full background while ringing; transforms to PiP when connected) -->
+                  <div id="inchat-local-camera-wrapper" class="absolute inset-0 w-full h-full transition-all duration-500 z-10 overflow-hidden">
+                    <video id="normal-inchat-local-video" autoplay muted playsinline class="w-full h-full object-cover bg-slate-950"></video>
+                    <div id="inchat-cam-off-overlay" class="hidden absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center text-slate-300">
+                      <i class="fa-solid fa-video-slash text-3xl mb-2 text-rose-400"></i>
+                      <span class="text-xs font-bold">Camera is Turned Off</span>
                     </div>
-                    <h3 class="text-base sm:text-lg font-extrabold text-white mb-1 flex items-center gap-1.5 justify-center">
+                    <div id="inchat-pip-label" class="hidden absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/70 text-[9px] text-white font-mono">You</div>
+                  </div>
+
+                  <!-- 3. Ringing Overlay Card (Centered over camera while calling) -->
+                  <div id="inchat-call-ringing-card" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-20 bg-black/50 backdrop-blur-sm pointer-events-none">
+                    <div class="relative mb-4">
+                      <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover border-4 border-white/60 shadow-2xl animate-pulse">
+                      <div class="absolute -inset-2 rounded-full border-2 border-dashed border-white/80 animate-spin"></div>
+                    </div>
+                    <h3 class="text-base sm:text-lg font-extrabold text-white mb-1 flex items-center gap-1.5 justify-center drop-shadow">
                       <span>Dulquer Sithara</span>
                       <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
                     </h3>
-                    <p id="inchat-ringing-subtitle" class="text-xs text-blue-300 font-bold mb-2">Ringing... Waiting for approval</p>
-                    <p class="text-[11px] text-slate-300 max-w-xs">സെലിബ്രിറ്റി കോൾ സ്വീകരിക്കുന്നതിനായി കാത്തിരിക്കുന്നു. അപ്രൂവ് ചെയ്താൽ ഉടൻ ലൈവ് കണക്റ്റ് ആകും.</p>
-                  </div>
-
-                  <!-- STATE 2: LIVE VIDEO FEEDS (Celebrity Remote Camera + Local PiP) -->
-                  <div id="inchat-call-live-card" class="hidden absolute inset-0 w-full h-full">
-                    <!-- Celebrity Remote Camera Feed -->
-                    <video id="normal-inchat-remote-video" autoplay playsinline class="w-full h-full object-cover bg-black"></video>
-                    
-                    <!-- Picture-in-Picture: Normal User's Local Camera Preview -->
-                    <div class="absolute bottom-20 right-3 sm:right-4 w-28 sm:w-36 h-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-white/40 bg-slate-900 shadow-2xl z-20 transition">
-                      <video id="normal-inchat-local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                      <div class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/70 text-[9px] text-white font-mono">You</div>
-                    </div>
+                    <p id="inchat-ringing-subtitle" class="text-xs text-blue-300 font-bold mb-2 drop-shadow">Ringing... Waiting for approval</p>
+                    <p class="text-[11px] text-slate-200 max-w-xs drop-shadow">സെലിബ്രിറ്റി കോൾ സ്വീകരിക്കുന്നതിനായി കാത്തിരിക്കുന്നു. അപ്രൂവ് ചെയ്താൽ ഉടൻ ലൈവ് കണക്റ്റ് ആകും.</p>
                   </div>
 
                   <!-- STATE 3: LIVE AUDIO CARD (For Audio Only Call) -->
-                  <div id="inchat-call-audio-card" class="hidden flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
+                  <div id="inchat-call-audio-card" class="hidden absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-20 bg-slate-950 pointer-events-none">
                     <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-24 h-24 rounded-full object-cover border-2 border-white/30 shadow-xl mb-3">
                     <h4 class="text-base font-bold text-white mb-1">Dulquer Sithara (VIP Audio Call)</h4>
                     <div class="flex items-center gap-1.5 my-3">
@@ -783,19 +784,15 @@
 
                   <!-- In-Call Control Buttons -->
                   <div class="flex items-center gap-3">
-                    <button onclick="toggleCelebrityCallMute()" id="btn-celeb-call-mute" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
+                    <button onclick="toggleCelebrityCallMute()" id="btn-celeb-call-mute" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer">
                       <i class="fa-solid fa-microphone"></i>
                       <span>Mute</span>
                     </button>
-                    <button onclick="toggleCelebrityCamera()" id="btn-celeb-camera" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
+                    <button onclick="toggleCelebrityCamera()" id="btn-celeb-camera" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer">
                       <i class="fa-solid fa-video"></i>
                       <span>Camera</span>
                     </button>
-                    <button onclick="toggleElementFullScreen('celeb-active-call-box')" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
-                      <i class="fa-solid fa-expand"></i>
-                      <span>Fullscreen</span>
-                    </button>
-                    <button onclick="endCelebrityCall()" class="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 flex items-center justify-center gap-1.5 transition">
+                    <button onclick="endCelebrityCall()" class="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-950/50 flex items-center justify-center gap-1.5 transition cursor-pointer">
                       <i class="fa-solid fa-phone-slash"></i>
                       <span>End Video Call</span>
                     </button>
@@ -1563,7 +1560,55 @@
     </div>
   </div>
 
+  <!-- GLOBAL INCOMING FAN CALL MODAL (Centrally popped up over everything on Celebrity screen) -->
+  <div id="global-celeb-incoming-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none">
+    <div class="relative w-full max-w-sm rounded-3xl bg-slate-900 border-2 border-white/30 p-6 text-center shadow-2xl overflow-hidden animate-fade-in">
+      
+      <!-- Pulsing top glow bar -->
+      <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-sky-400 to-emerald-400 animate-pulse"></div>
+
+      <!-- Calling Avatar with ripple rings -->
+      <div class="relative w-24 h-24 mx-auto mb-4">
+        <img id="global-incoming-caller-avatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200" class="w-24 h-24 rounded-full object-cover border-4 border-emerald-400 shadow-2xl relative z-10">
+        <div class="absolute -inset-2 rounded-full border-2 border-dashed border-emerald-400/80 animate-spin"></div>
+        <div class="absolute -inset-4 rounded-full border border-emerald-500/40 animate-ping"></div>
+      </div>
+
+      <!-- Badge -->
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-bold mb-3 shadow">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        <span>Incoming VIP Fan Video Call</span>
+      </div>
+
+      <!-- Caller Name & Details -->
+      <h3 id="global-incoming-caller-name" class="text-xl font-black text-white mb-1">Arjun Nair (VIP Fan)</h3>
+      <p class="text-xs text-slate-300 mb-4">VIP Fan Pass Holder • Kochi</p>
+
+      <!-- Earnings notice -->
+      <div class="p-3 rounded-2xl bg-slate-950/80 border border-white/10 text-xs text-slate-200 mb-6 flex items-center justify-between">
+        <span class="text-slate-400">Call Earnings:</span>
+        <span class="font-bold text-emerald-400 flex items-center gap-1">
+          <i class="fa-solid fa-coins"></i>
+          <span>₹150 / min (70% Share)</span>
+        </span>
+      </div>
+
+      <!-- Two Big Action Buttons -->
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="declineIncomingFanCall()" class="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-extrabold text-xs shadow-lg shadow-rose-950/60 transition flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-solid fa-phone-slash"></i>
+          <span>Decline</span>
+        </button>
+        <button onclick="approveIncomingFanCall()" class="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-lg shadow-emerald-950/60 transition flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-solid fa-phone-volume"></i>
+          <span>Accept Call</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=16"></script>
+  <script src="/app.js?v=17"></script>
 </body>
 </html>

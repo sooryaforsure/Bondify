@@ -196,9 +196,9 @@ export class CelebrityService {
     callType: 'CELEBRITY_AUDIO' | 'CELEBRITY_VIDEO',
     offerSdp?: string
   ): any {
-    // Purge stale calls older than 2 minutes or finished
+    // Purge any old calls for this celebrity or caller so new call is immediately fresh
     for (const [id, c] of this.pendingLiveCalls.entries()) {
-      if (Date.now() - c.createdAt > 120000 || c.status === 'ENDED' || c.status === 'DECLINED') {
+      if (c.celebrityId === celebrityId || c.callerId === callerId || Date.now() - c.createdAt > 120000) {
         this.pendingLiveCalls.delete(id);
       }
     }

@@ -257,14 +257,17 @@ export class FrndServer {
     if (path === '/api/celebrities/call/ring' && method === 'POST') {
       const body = await req.json();
       const celebTargetId = body.celebrityId || 'usr_celeb_1';
+      const callerDisplayName = body.callerName || body.caller || 'Arjun Nair';
       const call = this.celebrityService.ringCelebrity(
         body.callerId || 'usr_normal_1',
-        body.callerName || 'Arjun Nair',
+        callerDisplayName,
         body.callerAvatar,
         celebTargetId,
         body.callType || 'CELEBRITY_VIDEO',
         body.offerSdp
       );
+
+      console.log(`[CALL RING] Incoming call from ${callerDisplayName} (${body.callerId}) to celebrity ${celebTargetId}. CallId: ${call.callId}`);
 
       // Instant WebSocket push to celebrity device
       this.matchmakingService.sendToUser(celebTargetId, {
@@ -280,6 +283,9 @@ export class FrndServer {
       const celebrityId = url.searchParams.get('celebrityId') || undefined;
       const callerId = url.searchParams.get('callerId') || undefined;
       const call = this.celebrityService.getLiveCallStatus({ callId, celebrityId, callerId });
+      if (call) {
+        console.log(`[CALL STATUS] Queried by celeb=${celebrityId} caller=${callerId} callId=${callId} => Status: ${call.status}`);
+      }
       return this.jsonResponse({ success: true, call });
     }
 
@@ -290,6 +296,8 @@ export class FrndServer {
         body.action || 'APPROVE',
         body.answerSdp
       );
+
+      console.log(`[CALL RESPOND] Call ${body.callId} action: ${body.action}`);
 
       // Instant WebSocket push to normal user device
       if (call && call.callerId) {
@@ -322,6 +330,7 @@ export class FrndServer {
 
     if (path === '/api/celebrities/call/end' && method === 'POST') {
       const body = await req.json();
+      console.log(`[CALL END] Call ${body.callId} ended by ${body.endedBy}`);
       const call = this.celebrityService.endLiveCall(body.callId, body.endedBy || 'USER');
 
       if (call) {
