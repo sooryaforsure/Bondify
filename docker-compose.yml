@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  frnd-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: frnd-backend-api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgres://frnd_user:frnd_pass@frnd-postgres:5432/frnd_db
+      - REDIS_URL=redis://frnd-redis:6379
+      - COTURN_HOST=frnd-coturn
+    depends_on:
+      - frnd-postgres
+      - frnd-redis
+
+  frnd-postgres:
+    image: postgis/postgis:16-3.4
+    container_name: frnd-postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: frnd_user
+      POSTGRES_PASSWORD: frnd_pass
+      POSTGRES_DB: frnd_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  frnd-redis:
+    image: redis:7-alpine
+    container_name: frnd-redis-cache
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  frnd-coturn:
+    image: coturn/coturn:latest
+    container_name: frnd-turn-server
+    restart: always
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49152-49200:49152-49200/udp"
+    environment:
+      - TURN_USERNAME=frnd_turn_user
+      - TURN_PASSWORD=frnd_turn_secret_pass
+      - REALM=frnd.app
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,13 @@
+{
+  "name": "frnd-backend",
+  "version": "1.0.0",
+  "description": "FRND Multi-platform Social Discovery, Events & Celebrity Calling Platform Backend",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "jest"
+  },
+  "keywords": ["webrtc", "socket.io", "matchmaking", "events", "celebrity-calls", "postgis", "redis"],
+  "author": "FRND Team",
+  "license": "MIT"
+}
