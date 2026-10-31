@@ -798,8 +798,8 @@ async function startNormalToCelebCall(celebId, callType) {
   const searchingState = document.getElementById('call-state-searching');
   if (searchingState) {
     searchingState.classList.remove('hidden');
-    const title = searchingState.querySelector('h3');
-    const desc = searchingState.querySelector('p');
+    const title = document.getElementById('searching-state-title') || searchingState.querySelector('h3');
+    const desc = document.getElementById('searching-state-desc') || searchingState.querySelector('p');
     if (title) title.textContent = 'Calling Dulquer Sithara (Ringing...)';
     if (desc) desc.textContent = 'സെലിബ്രിറ്റി കോൾ അപ്രൂവ് ചെയ്യുന്നതിനായി കാത്തിരിക്കുന്നു (Waiting for Approval)...';
   }
@@ -809,6 +809,7 @@ async function startNormalToCelebCall(celebId, callType) {
 
 function setMatchingMode(mode) {
   matchingMode = mode;
+  isCelebActiveCall = false;
   const btnAudio = document.getElementById('mode-btn-audio');
   const btnVideo = document.getElementById('mode-btn-video');
   const mainIcon = document.getElementById('idle-main-icon');
@@ -828,6 +829,13 @@ function setMatchingMode(mode) {
     idleTitle.textContent = 'Find Someone New';
     btnText.textContent = 'Connect Random Friend';
   }
+
+  const title = document.getElementById('searching-state-title');
+  const desc = document.getElementById('searching-state-desc');
+  if (title) title.textContent = 'Finding an Online Friend...';
+  if (desc) desc.textContent = mode === 'VIDEO' 
+    ? 'Matching with an active random video chat user...' 
+    : 'Matching with an active user in the queue.';
 }
 
 function setCallState(state, hasVideo = false) {
@@ -849,9 +857,29 @@ function setCallState(state, hasVideo = false) {
     stopRemoteVideo();
     closeRtcPeerConnection();
     isCelebActiveCall = false;
+
+    // Always reset searching text back to Random Friends Matchmaking
+    const title = document.getElementById('searching-state-title');
+    const desc = document.getElementById('searching-state-desc');
+    if (title) title.textContent = 'Finding an Online Friend...';
+    if (desc) desc.textContent = 'Matching with an active user in the queue.';
+    const badgeTitle = document.getElementById('remote-video-badge-title');
+    if (badgeTitle) badgeTitle.textContent = 'Live Video Feed';
   } else if (state === 'searching') {
     document.getElementById('call-state-searching')?.classList.remove('hidden');
     stopCallTimer();
+
+    // If this is random matchmaking (not a celebrity call), guarantee random friend labels!
+    if (!isCelebActiveCall) {
+      const title = document.getElementById('searching-state-title');
+      const desc = document.getElementById('searching-state-desc');
+      if (title) title.textContent = 'Finding an Online Friend...';
+      if (desc) desc.textContent = matchingMode === 'VIDEO'
+        ? 'Matching with an active random video chat user...'
+        : 'Matching with an active user in the queue.';
+      const badgeTitle = document.getElementById('remote-video-badge-title');
+      if (badgeTitle) badgeTitle.textContent = 'Random Video Feed';
+    }
   } else if (state === 'connected') {
     document.getElementById('call-state-connected')?.classList.remove('hidden');
     if (hasVideo) {
@@ -956,18 +984,35 @@ function toggleCamera() {
 }
 
 function startRandomMatching() {
+  isCelebActiveCall = false; // Never a celebrity call!
+
+  // Reset searching UI strictly for random friend matchmaking
+  const title = document.getElementById('searching-state-title');
+  const desc = document.getElementById('searching-state-desc');
+  if (title) title.textContent = 'Finding an Online Friend...';
+  if (desc) desc.textContent = matchingMode === 'VIDEO'
+    ? 'Matching with an active random video chat user in queue...'
+    : 'Matching with an active user in the queue.';
+
+  const peerName = document.getElementById('peer-name');
+  if (peerName) peerName.textContent = 'Online Friend';
+  const badgeTitle = document.getElementById('remote-video-badge-title');
+  if (badgeTitle) badgeTitle.textContent = 'Random Video Feed';
+
   if (!socket || socket.readyState !== WebSocket.OPEN) initWebSocket();
   setCallState('searching');
 
-  socket.send(JSON.stringify({
-    type: 'JOIN_RANDOM_QUEUE',
-    userId: currentUser.id,
-    metadata: { callType: matchingMode, audioOnly: matchingMode === 'AUDIO' }
-  }));
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
+      type: 'JOIN_RANDOM_QUEUE',
+      userId: currentUser?.id,
+      metadata: { callType: matchingMode, audioOnly: matchingMode === 'AUDIO' }
+    }));
+  }
 
   setTimeout(() => {
     const searching = !document.getElementById('call-state-searching')?.classList.contains('hidden');
-    if (searching) {
+    if (searching && !isCelebActiveCall) {
       onMatchFound({
         roomId: 'room_demo_match_' + Date.now(),
         targetUserId: 'usr_partner_demo',
@@ -978,17 +1023,22 @@ function startRandomMatching() {
         }
       });
     }
-  }, 3500);
+  }, 3000);
 }
 
 function cancelMatching() {
+  if (isCelebActiveCall) {
+    endCurrentCall();
+    return;
+  }
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'LEAVE_RANDOM_QUEUE', userId: currentUser.id }));
+    socket.send(JSON.stringify({ type: 'LEAVE_RANDOM_QUEUE', userId: currentUser?.id }));
   }
   setCallState('idle');
 }
 
 function onMatchFound(payload) {
+  isCelebActiveCall = false;
   currentCallPartner = payload.targetUserId;
   const hasVideo = payload.metadata?.hasVideo === true || payload.metadata?.callType === 'RANDOM_VIDEO';
 
@@ -1006,6 +1056,8 @@ function onMatchFound(payload) {
   document.getElementById('peer-avatar').src = matchedAvatar;
   document.getElementById('remote-peer-video-name').textContent = matchedName;
   document.getElementById('remote-peer-video-avatar').src = matchedAvatar;
+  const badgeTitle = document.getElementById('remote-video-badge-title');
+  if (badgeTitle) badgeTitle.textContent = `${matchedName} (Online Friend)`;
 
   setCallState('connected', hasVideo);
   if (hasVideo) {
@@ -1014,14 +1066,20 @@ function onMatchFound(payload) {
 }
 
 function skipToNextPerson() {
+  isCelebActiveCall = false;
+  const title = document.getElementById('searching-state-title');
+  const desc = document.getElementById('searching-state-desc');
+  if (title) title.textContent = 'Finding an Online Friend...';
+  if (desc) desc.textContent = 'Connecting you to the next online friend...';
+
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type: 'NEXT_PERSON', userId: currentUser.id, metadata: { callType: matchingMode } }));
+    socket.send(JSON.stringify({ type: 'NEXT_PERSON', userId: currentUser?.id, metadata: { callType: matchingMode } }));
   }
   setCallState('searching');
 
   setTimeout(() => {
     const searching = !document.getElementById('call-state-searching')?.classList.contains('hidden');
-    if (searching) {
+    if (searching && !isCelebActiveCall) {
       onMatchFound({
         roomId: 'room_demo_next_' + Date.now(),
         targetUserId: 'usr_partner_next',

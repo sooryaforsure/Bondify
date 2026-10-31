@@ -11,7 +11,7 @@
   <!-- QR Code Scanning Engine (Camera & File Decoding) -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <link rel="stylesheet" href="/style.css?v=14">
+  <link rel="stylesheet" href="/style.css?v=15">
 </head>
 <body class="text-slate-100 min-h-screen flex flex-col font-sans selection:bg-white selection:text-black relative">
 
@@ -204,8 +204,8 @@
               <!-- Searching State -->
               <div id="call-state-searching" class="hidden flex flex-col items-center py-4">
                 <div class="w-16 h-16 rounded-full border-4 border-blue-500 border-t-transparent animate-spin mb-4"></div>
-                <h3 class="text-base font-bold text-white mb-1">Finding an Online Friend...</h3>
-                <p class="text-xs text-slate-400 mb-4">Matching with an active user in the queue.</p>
+                <h3 id="searching-state-title" class="text-base font-bold text-white mb-1">Finding an Online Friend...</h3>
+                <p id="searching-state-desc" class="text-xs text-slate-400 mb-4">Matching with an active user in the queue.</p>
                 <button onclick="cancelMatching()" class="px-5 py-1.5 rounded-full border border-slate-700 bg-slate-800 text-slate-300 text-xs">
                   Cancel
                 </button>
@@ -1334,6 +1334,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=14"></script>
+  <script src="/app.js?v=15"></script>
 </body>
 </html>
