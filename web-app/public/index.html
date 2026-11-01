@@ -416,14 +416,14 @@
                   </div>
                 </div>
 
-                <!-- Direct VIP Audio & Video Call Action Buttons -->
+                <!-- Direct VIP Audio & Video Call Action Buttons (Standard Symmetrical Layout) -->
                 <div class="flex items-center gap-2">
-                  <button onclick="handleCelebrityCallClick('usr_celeb_1', 'CELEBRITY_AUDIO')" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition shadow">
-                    <i class="fa-solid fa-phone text-sky-400"></i>
+                  <button onclick="handleCelebrityCallClick('usr_celeb_1', 'CELEBRITY_AUDIO')" class="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-white/20 hover:border-emerald-400/50 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer backdrop-blur-md" title="Start VIP Audio Call">
+                    <i class="fa-solid fa-phone text-emerald-400 text-xs"></i>
                     <span>VIP Audio</span>
                   </button>
-                  <button onclick="handleCelebrityCallClick('usr_celeb_1', 'CELEBRITY_VIDEO')" class="fc-chrome-btn px-4 py-2 rounded-xl text-black text-xs font-bold flex items-center gap-1.5 shadow">
-                    <i class="fa-solid fa-video text-rose-600"></i>
+                  <button onclick="handleCelebrityCallClick('usr_celeb_1', 'CELEBRITY_VIDEO')" class="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-white/20 hover:border-sky-400/50 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer backdrop-blur-md" title="Start VIP Video Call">
+                    <i class="fa-solid fa-video text-sky-400 text-xs"></i>
                     <span>VIP Video</span>
                   </button>
                 </div>
@@ -473,9 +473,9 @@
                     </div>
                   </div>
 
-                  <!-- 1. Remote Celebrity Video (Full Screen Background) -->
-                  <video id="normal-inchat-remote-video" autoplay playsinline webkit-playsinline class="hidden absolute inset-0 w-full h-full object-cover bg-black z-0"></video>
-                  <img id="normal-inchat-remote-frame" class="hidden absolute inset-0 w-full h-full object-cover bg-slate-950 z-0" alt="Celebrity Video">
+                  <!-- 1. Remote Celebrity Video (Centered 9:16 Mobile View on Laptop/Desktop) -->
+                  <video id="normal-inchat-remote-video" autoplay playsinline webkit-playsinline class="h-full aspect-[9/16] max-w-full object-cover bg-black z-10 shadow-2xl mx-auto"></video>
+                  <img id="normal-inchat-remote-frame" class="hidden h-full aspect-[9/16] max-w-full object-cover bg-slate-950 z-0 pointer-events-none shadow-2xl mx-auto" alt="Celebrity Video">
 
                   <!-- 2. Local User Camera Container (Full background while ringing; transforms to PiP in Top Right corner when connected) -->
                   <div id="inchat-local-camera-wrapper" class="absolute inset-0 w-full h-full transition-all duration-500 z-10 overflow-hidden">
@@ -516,10 +516,14 @@
                   </div>
 
                   <!-- BOTTOM FLOATING CONTROLS (INSIDE Fullscreen Container, Floating Instagram Dock!) -->
-                  <div class="absolute bottom-8 inset-x-0 z-30 flex items-center justify-center gap-5 px-4 pointer-events-auto">
+                  <div class="absolute bottom-8 inset-x-0 z-30 flex items-center justify-center gap-4 sm:gap-5 px-4 pointer-events-auto">
                     <!-- Mic Mute Button -->
                     <button onclick="toggleInChatCallMute()" id="btn-inchat-mute" class="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer" title="Mute/Unmute Mic">
                       <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <!-- Speaker Toggle Button (Loudspeaker On/Off) -->
+                    <button onclick="toggleInChatSpeaker()" id="btn-inchat-speaker" class="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer" title="Speaker Loudspeaker On/Off">
+                      <i id="btn-inchat-speaker-icon" class="fa-solid fa-volume-high"></i>
                     </button>
                     <!-- Camera On/Off Button -->
                     <button onclick="toggleInChatCamera()" id="btn-inchat-camera" class="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer" title="Turn Camera Off/On">
@@ -712,7 +716,7 @@
                   
                   <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/60 border border-blue-500/40 text-blue-300 text-[11px] font-bold mb-2">
                     <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-                    <span>Incoming VIP Fan Call Request</span>
+                    <span id="incoming-fan-call-badge-label">Incoming VIP Fan Call Request</span>
                   </div>
 
                   <h4 class="text-base font-extrabold text-white" id="incoming-caller-name">Arjun Nair</h4>
@@ -721,7 +725,7 @@
                   <div class="my-4 p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-left text-xs space-y-1">
                     <div class="flex items-center justify-between text-[11px]">
                       <span class="text-slate-400">Call Type:</span>
-                      <span class="font-bold text-white flex items-center gap-1"><i class="fa-solid fa-video text-blue-400"></i> 1-on-1 VIP Video Call</span>
+                      <span id="incoming-fan-call-type-label" class="font-bold text-white flex items-center gap-1"><i class="fa-solid fa-video text-blue-400"></i> 1-on-1 VIP Video Call</span>
                     </div>
                     <div class="flex items-center justify-between text-[11px]">
                       <span class="text-slate-400">Billing Rate:</span>
@@ -778,14 +782,14 @@
                     </div>
                   </div>
 
-                  <!-- Live Video Viewport for Celebrity (100% Fullscreen Background) -->
-                  <div class="absolute inset-0 w-full h-full bg-black overflow-hidden flex items-center justify-center">
-                    <!-- Fan's Live Video Feed (Covers whole screen) -->
-                    <video id="celeb-remote-video" autoplay playsinline webkit-playsinline class="hidden absolute inset-0 w-full h-full object-cover z-0"></video>
-                    <img id="celeb-remote-frame" class="hidden absolute inset-0 w-full h-full object-cover bg-slate-950 z-0" alt="Fan Video">
+                  <!-- Live Video Viewport for Celebrity (Centered 9:16 Mobile View on Laptop/Widescreen) -->
+                  <div class="absolute inset-0 w-full h-full bg-slate-950 overflow-hidden flex items-center justify-center">
+                    <!-- Fan's Live Video Feed (Centered 9:16 Mobile View on Laptop, Full on Mobile) -->
+                    <video id="celeb-remote-video" autoplay playsinline webkit-playsinline class="h-full aspect-[9/16] max-w-full object-cover bg-black z-10 shadow-2xl mx-auto"></video>
+                    <img id="celeb-remote-frame" class="hidden h-full aspect-[9/16] max-w-full object-cover bg-slate-950 z-0 pointer-events-none shadow-2xl mx-auto" alt="Fan Video">
 
                     <!-- Picture-in-Picture: Celebrity's Own Camera Preview (Top Right corner) -->
-                    <div class="absolute top-20 right-4 sm:top-24 sm:right-6 w-28 sm:w-36 h-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-white/40 bg-slate-900 shadow-2xl z-20 transition-all duration-300">
+                    <div id="celeb-local-camera-wrapper" class="absolute top-20 right-4 sm:top-24 sm:right-6 w-28 sm:w-36 h-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-white/40 bg-slate-900 shadow-2xl z-20 transition-all duration-300">
                       <video id="celeb-local-video" autoplay muted playsinline class="w-full h-full object-cover"></video>
                       <div id="celeb-camera-off-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 text-xs">
                         <i class="fa-solid fa-video-slash mb-1"></i>
@@ -793,12 +797,30 @@
                       </div>
                       <div class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-black/70 text-[9px] text-white font-mono">You</div>
                     </div>
+
+                    <!-- CELEBRITY AUDIO CALL CARD (For Audio Only Call on Celebrity Side) -->
+                    <div id="celeb-call-audio-card" class="hidden absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-20 bg-slate-950 pointer-events-none">
+                      <img id="celeb-audio-fan-avatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200" class="w-28 h-28 rounded-full object-cover border-4 border-emerald-500/60 shadow-2xl mb-4">
+                      <h4 id="celeb-audio-fan-name" class="text-lg font-bold text-white mb-1">Arjun Nair (VIP Audio Call)</h4>
+                      <div class="flex items-center gap-2 my-4">
+                        <span class="w-2 h-8 bg-emerald-400 rounded-full animate-bounce"></span>
+                        <span class="w-2 h-12 bg-white rounded-full animate-bounce [animation-delay:0.1s]"></span>
+                        <span class="w-2 h-10 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                        <span class="w-2 h-14 bg-white rounded-full animate-bounce [animation-delay:0.3s]"></span>
+                        <span class="w-2 h-8 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                      </div>
+                      <p class="text-xs text-emerald-400 font-mono">Encrypted High-Definition Audio Active</p>
+                    </div>
                   </div>
 
                   <!-- In-Call Control Buttons (Bottom Floating Instagram Dock) -->
-                  <div class="absolute bottom-8 inset-x-0 z-30 flex items-center justify-center gap-5 px-4 pointer-events-auto">
+                  <div class="absolute bottom-8 inset-x-0 z-30 flex items-center justify-center gap-4 sm:gap-5 px-4 pointer-events-auto">
                     <button onclick="toggleCelebrityCallMute()" id="btn-celeb-call-mute" class="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer" title="Mute/Unmute Mic">
                       <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <!-- Speaker Toggle Button (Loudspeaker On/Off) -->
+                    <button onclick="toggleCelebritySpeaker()" id="btn-celeb-speaker" class="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer" title="Speaker Loudspeaker On/Off">
+                      <i id="btn-celeb-speaker-icon" class="fa-solid fa-volume-high"></i>
                     </button>
                     <button onclick="toggleCelebrityCamera()" id="btn-celeb-camera" class="w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer" title="Camera On/Off">
                       <i class="fa-solid fa-video"></i>
@@ -1585,9 +1607,9 @@
       </div>
 
       <!-- Badge -->
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-bold mb-3 shadow">
+      <div id="global-incoming-call-badge-wrap" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-bold mb-3 shadow">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-        <span>Incoming VIP Fan Video Call</span>
+        <span id="global-incoming-call-type-badge">Incoming VIP Fan Video Call</span>
       </div>
 
       <!-- Caller Name & Details -->
@@ -1645,7 +1667,10 @@
     </button>
   </div>
 
+  <!-- Dedicated Unmuted Audio Element for Crystal-Clear Two-Way Audio Calling -->
+  <audio id="vip-remote-audio" autoplay playsinline></audio>
+
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=25"></script>
+  <script src="/app.js?v=31"></script>
 </body>
 </html>

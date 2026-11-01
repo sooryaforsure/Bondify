@@ -198,16 +198,11 @@ export class CelebrityService {
     clientCallId?: string
   ): any {
     const now = Date.now();
-    // End any existing active/ringing call for this celebrity or caller immediately so only 1 session exists
+    // When a new call is being initiated, immediately clear any previous calls for these parties
     for (const [id, c] of this.pendingLiveCalls.entries()) {
       const isExpired = now - c.createdAt > 120000;
-      const isTombstoneExpired = c.endedAt && (now - c.endedAt > 30000);
       const isSameParty = c.celebrityId === celebrityId || c.callerId === callerId;
-      if (isSameParty && (c.status === 'RINGING' || c.status === 'CONNECTED' || c.status === 'APPROVED')) {
-        c.status = 'ENDED';
-        c.endedAt = now;
-      }
-      if (isExpired || isTombstoneExpired) {
+      if (isSameParty || isExpired) {
         this.pendingLiveCalls.delete(id);
       }
     }
@@ -246,6 +241,9 @@ export class CelebrityService {
         }
         return direct;
       }
+      // CRITICAL FIX: If caller asked for a specific callId and it's NOT in pendingLiveCalls,
+      // NEVER return an old, different call's ENDED status! Return null immediately.
+      return null;
     }
 
     // 1st priority: Find NEWEST active/ringing call matching celebrity or caller
@@ -262,13 +260,13 @@ export class CelebrityService {
       return activeCalls[0];
     }
 
-    // 2nd priority: Recently declined/ended call (within 30s tombstone)
+    // 2nd priority: Recently declined/ended call (within strict 5s tombstone)
     const recentCalls: any[] = [];
     for (const call of this.pendingLiveCalls.values()) {
       const matchCeleb = query.celebrityId && (call.celebrityId === query.celebrityId || query.celebrityId === 'usr_celeb_1');
       const matchCaller = query.callerId && call.callerId === query.callerId;
       if ((matchCeleb || matchCaller) && (call.status === 'DECLINED' || call.status === 'ENDED')) {
-        if (call.endedAt && (now - call.endedAt < 30000)) {
+        if (call.endedAt && (now - call.endedAt < 5000)) {
           recentCalls.push(call);
         }
       }
@@ -369,17 +367,10 @@ export class CelebrityService {
   }
 
   endLiveCall(callId: string, endedBy: string): any {
-    let call = callId ? this.pendingLiveCalls.get(callId) : null;
-    if (!call) {
-      const candidates: any[] = [];
-      for (const c of this.pendingLiveCalls.values()) {
-        if (c.status === 'CONNECTED' || c.status === 'RINGING') {
-          candidates.push(c);
-        }
-      }
-      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      if (candidates.length > 0) call = candidates[0];
-    }
+    if (!callId) return null;
+    const call = this.pendingLiveCalls.get(callId);
+    // CRITICAL FIX: If this specific callId does not exist in pending calls,
+    // DO NOT touch other ringing calls! Return null immediately.
     if (!call) return null;
     call.status = 'ENDED';
     call.endedAt = Date.now();

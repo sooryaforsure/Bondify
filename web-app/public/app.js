@@ -60,8 +60,25 @@ function initAppPeer() {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:openrelay.metered.ca:80' }
-        ]
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:openrelay.metered.ca:80' },
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
+        ],
+        sdpSemantics: 'unified-plan'
       }
     });
 
@@ -74,15 +91,21 @@ function initAppPeer() {
       console.log('[PeerJS] Incoming call received from:', incomingCall.peer);
       activePeerCall = incomingCall;
 
+      const callId = incomingCall.metadata?.callId || activeServerCallId || ('call_' + Date.now());
+      activeServerCallId = callId;
+
+      const callType = incomingCall.metadata?.callType || 'CELEBRITY_VIDEO';
+      inChatCurrentCallType = callType;
+
       const callerName = incomingCall.metadata?.callerName || lastFanCallerName || 'Arjun Nair (VIP Fan)';
-      simulateIncomingFanCall(callerName, incomingCall.peer);
+      simulateIncomingFanCall(callerName, callId, callType);
 
       // Listen for remote disconnect from caller
       incomingCall.on('close', () => {
         console.log('[PeerJS] Call ended by caller');
         if (isCelebActiveCall) {
           endCelebrityCall(true);
-          alert('📞 Fan ended / disconnected the call.');
+          notifyCallEnded('📞 Fan ended / disconnected the call.');
         }
       });
 
@@ -150,47 +173,234 @@ async function acquireUserMediaSafely() {
     throw new Error('No mediaDevices support in browser');
   }
 
-  // Tier 1: User-facing camera (optimal for mobile devices)
+  // Tier 1: User-Facing HD Camera (ideal 720p/1080p, no rigid min constraints for mobile compatibility)
   try {
     return await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: true
+      video: {
+        facingMode: 'user',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
   } catch (err1) {
     console.log('[Camera] Tier 1 facingMode failed, trying desktop standard constraints:', err1?.name || err1);
   }
 
-  // Tier 2: Standard video + audio (desktop/laptop webcam & integrated mic)
+  // Tier 2: Flexible standard video + audio
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+  } catch (err2) {
+    console.log('[Camera] Tier 2 flexible video+audio failed, trying basic video+audio:', err2?.name || err2);
+  }
+
+  // Tier 3: Basic video + audio
   try {
     return await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true
     });
-  } catch (err2) {
-    console.log('[Camera] Tier 2 video+audio failed, trying video only:', err2?.name || err2);
+  } catch (err3) {
+    console.log('[Camera] Tier 3 basic failed, trying video only:', err3?.name || err3);
   }
 
-  // Tier 3: Video only (when microphone is missing or permission denied)
+  // Tier 4: Video only (when microphone is missing or permission denied)
   try {
     return await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: false
     });
-  } catch (err3) {
-    console.log('[Camera] Tier 3 video-only failed:', err3?.name || err3);
-    throw err3;
+  } catch (err4) {
+    console.log('[Camera] Tier 4 video-only failed:', err4?.name || err4);
+    throw err4;
   }
+}
+
+async function acquireUserAudioOnlySafely() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('No mediaDevices support in browser');
+  }
+  return await navigator.mediaDevices.getUserMedia({
+    video: false,
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    }
+  });
+}
+
+let isVipSpeakerOn = false;
+
+function updateSpeakerButtonsUI(enableSpeaker) {
+  const btnInchat = document.getElementById('btn-inchat-speaker');
+  const iconInchat = document.getElementById('btn-inchat-speaker-icon');
+  const btnCeleb = document.getElementById('btn-celeb-speaker');
+  const iconCeleb = document.getElementById('btn-celeb-speaker-icon');
+
+  const activeClass = 'w-14 h-14 rounded-full bg-emerald-500/30 text-emerald-300 border-2 border-emerald-400 flex items-center justify-center text-xl transition shadow-2xl shadow-emerald-950/60 active:scale-95 cursor-pointer';
+  const inactiveClass = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
+
+  [btnInchat, btnCeleb].forEach(btn => {
+    if (btn) btn.className = enableSpeaker ? activeClass : inactiveClass;
+  });
+
+  [iconInchat, iconCeleb].forEach(icon => {
+    if (icon) {
+      icon.className = enableSpeaker ? 'fa-solid fa-volume-high text-emerald-300' : 'fa-solid fa-volume-low text-slate-300';
+    }
+  });
+}
+
+async function setSpeakerphoneOutput(enableSpeaker, showToast = false) {
+  isVipSpeakerOn = !!enableSpeaker;
+  const audioEl = document.getElementById('vip-remote-audio');
+  const inchatVid = document.getElementById('normal-inchat-remote-video');
+  const celebVid = document.getElementById('celeb-remote-video');
+
+  // Volume: 1.0 for loud speaker, 0.35 for earpiece
+  if (audioEl) {
+    audioEl.volume = enableSpeaker ? 1.0 : 0.35;
+  }
+  if (inchatVid) {
+    inchatVid.volume = enableSpeaker ? 1.0 : 0.35;
+  }
+  if (celebVid) {
+    celebVid.volume = enableSpeaker ? 1.0 : 0.35;
+  }
+
+  // Hardware audio sink routing (Android Chrome / Edge / Chrome)
+  if (navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function') {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const outputs = devices.filter(d => d.kind === 'audiooutput');
+      if (outputs.length > 0) {
+        let chosenSink = '';
+        if (enableSpeaker) {
+          const spk = outputs.find(d => /speaker|loudspeaker|external/i.test(d.label));
+          if (spk) chosenSink = spk.deviceId;
+        } else {
+          const earp = outputs.find(d => /earpiece|receiver|phone|handset/i.test(d.label));
+          if (earp) chosenSink = earp.deviceId;
+        }
+
+        const applySink = async (el) => {
+          if (el && typeof el.setSinkId === 'function') {
+            try { await el.setSinkId(chosenSink); } catch {}
+          }
+        };
+
+        await applySink(audioEl);
+        await applySink(inchatVid);
+        await applySink(celebVid);
+      }
+    } catch (e) {
+      console.warn('[Speaker] setSinkId routing error:', e);
+    }
+  }
+
+  updateSpeakerButtonsUI(enableSpeaker);
+
+  if (showToast) {
+    showCallToast(enableSpeaker ? '🔊 Speaker On (Loudspeaker)' : '🎧 Earpiece / Default Output');
+  }
+}
+
+function toggleInChatSpeaker() {
+  setSpeakerphoneOutput(!isVipSpeakerOn, true);
+}
+
+function toggleCelebritySpeaker() {
+  setSpeakerphoneOutput(!isVipSpeakerOn, true);
+}
+
+function attachRemoteVideoStream(videoEl, frameImg, stream) {
+  if (!videoEl || !stream) return;
+  console.log('[attachRemoteVideoStream] Attaching remote stream to', videoEl.id, stream);
+
+  // 1. Unhide and display video element immediately
+  videoEl.classList.remove('hidden');
+  videoEl.style.display = 'block';
+  videoEl.srcObject = stream;
+
+  // 2. Ensure all incoming tracks are enabled
+  try {
+    stream.getVideoTracks().forEach(t => { t.enabled = true; });
+    stream.getAudioTracks().forEach(t => { t.enabled = true; });
+  } catch (e) {}
+
+  const onFrameReady = () => {
+    videoEl.classList.remove('hidden');
+    videoEl.style.display = 'block';
+    if (frameImg && (videoEl.videoWidth > 0 || videoEl.currentTime > 0)) {
+      frameImg.classList.add('hidden');
+      frameImg.style.display = 'none';
+    }
+  };
+
+  ['loadedmetadata', 'canplay', 'playing', 'timeupdate', 'resize'].forEach(evt => {
+    videoEl.addEventListener(evt, onFrameReady, { passive: true });
+  });
+
+  // 3. Play video with robust fallback
+  videoEl.muted = false;
+  videoEl.play().then(onFrameReady).catch(err => {
+    console.warn('[Video] Play unmuted blocked, falling back to muted video + audio element:', err);
+    videoEl.muted = true;
+    videoEl.play().then(onFrameReady).catch(() => {});
+  });
+}
+
+function playRemoteVipAudio(stream) {
+  if (!stream) return;
+  let audioEl = document.getElementById('vip-remote-audio');
+  if (!audioEl) {
+    audioEl = document.createElement('audio');
+    audioEl.id = 'vip-remote-audio';
+    audioEl.autoplay = true;
+    audioEl.playsInline = true;
+    document.body.appendChild(audioEl);
+  }
+  audioEl.srcObject = stream;
+  audioEl.muted = false;
+  audioEl.volume = isVipSpeakerOn ? 1.0 : 0.35;
+  audioEl.play().catch(err => {
+    console.warn('[VIP Audio Playback] Autoplay waiting for user gesture:', err);
+    const unlockAudio = () => {
+      audioEl.play().catch(() => {});
+      document.removeEventListener('click', unlockAudio);
+      document.removeEventListener('touchstart', unlockAudio);
+    };
+    document.addEventListener('click', unlockAudio, { once: true });
+    document.addEventListener('touchstart', unlockAudio, { once: true });
+  });
 }
 
 async function getOrCreateLocalCamera(isCeleb = false) {
   if (isCeleb) {
-    if (celebLocalStream && celebLocalStream.active) {
+    if (celebLocalStream && celebLocalStream.active && celebLocalStream.getVideoTracks().some(t => t.readyState === 'live')) {
       const localVid = document.getElementById('celeb-local-video');
       if (localVid) {
         localVid.srcObject = celebLocalStream;
         localVid.play().catch(() => {});
       }
       return celebLocalStream;
+    }
+    // If celebLocalStream exists but has NO live video tracks, stop it first
+    if (celebLocalStream) {
+      try { celebLocalStream.getTracks().forEach(t => t.stop()); } catch {}
+      celebLocalStream = null;
     }
     try {
       celebLocalStream = await acquireUserMediaSafely();
@@ -206,7 +416,7 @@ async function getOrCreateLocalCamera(isCeleb = false) {
     }
     return celebLocalStream;
   } else {
-    if (localMediaStream && localMediaStream.active) {
+    if (localMediaStream && localMediaStream.active && localMediaStream.getVideoTracks().some(t => t.readyState === 'live')) {
       const inChatLocalVid = document.getElementById('normal-inchat-local-video');
       if (inChatLocalVid) {
         inChatLocalVid.srcObject = localMediaStream;
@@ -218,6 +428,11 @@ async function getOrCreateLocalCamera(isCeleb = false) {
         localVid.play().catch(() => {});
       }
       return localMediaStream;
+    }
+    // If localMediaStream exists but has NO live video tracks, stop it first
+    if (localMediaStream) {
+      try { localMediaStream.getTracks().forEach(t => t.stop()); } catch {}
+      localMediaStream = null;
     }
     try {
       localMediaStream = await acquireUserMediaSafely();
@@ -354,12 +569,12 @@ function sendWebRtcSignal(signal) {
   }
 }
 
-// ----------------- LIVE VIDEO FRAME RELAY ENGINE (100% BLANK-SCREEN PREVENTION) -----------------
+// ----------------- LIVE VIDEO FRAME RELAY ENGINE (100% BLANK-SCREEN PREVENTION FALLBACK) -----------------
 let liveFrameInterval = null;
 function startLiveFrameStreaming(role) {
   if (liveFrameInterval) clearInterval(liveFrameInterval);
   liveFrameInterval = setInterval(() => {
-    if (!isCelebActiveCall) {
+    if (!isCelebActiveCall || inChatCurrentCallType !== 'CELEBRITY_VIDEO') {
       clearInterval(liveFrameInterval);
       liveFrameInterval = null;
       return;
@@ -373,11 +588,11 @@ function startLiveFrameStreaming(role) {
     if (localVid.videoWidth === 0) return;
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = 320;
-      canvas.height = 240;
+      canvas.width = 640;
+      canvas.height = 480;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(localVid, 0, 0, 320, 240);
-      const frame = canvas.toDataURL('image/jpeg', 0.5);
+      ctx.drawImage(localVid, 0, 0, 640, 480);
+      const frame = canvas.toDataURL('image/jpeg', 0.6);
 
       fetch('/api/celebrities/call/frame', {
         method: 'POST',
@@ -385,7 +600,7 @@ function startLiveFrameStreaming(role) {
         body: JSON.stringify({ callId: activeServerCallId || 'active', role, frame })
       }).catch(() => {});
     } catch (e) {}
-  }, 250);
+  }, 500);
 }
 
 function stopLiveFrameStreaming() {
@@ -398,34 +613,42 @@ function stopLiveFrameStreaming() {
 function applyRemoteVideoFrame(frame, fromRole) {
   if (!frame) return;
   if (fromRole === 'CELEBRITY') {
-    const frameImg = document.getElementById('normal-inchat-remote-frame');
     const remoteVid = document.getElementById('normal-inchat-remote-video');
+    const frameImg = document.getElementById('normal-inchat-remote-frame');
+    // If real-time WebRTC video track is active with decoded video frames, keep remote video visible
+    if (remoteVid && remoteVid.srcObject && remoteVid.videoWidth > 0 && !remoteVid.paused) {
+      remoteVid.classList.remove('hidden');
+      remoteVid.style.display = 'block';
+      if (frameImg) {
+        frameImg.classList.add('hidden');
+        frameImg.style.display = 'none';
+      }
+      return;
+    }
+    // WebRTC connecting or empty: seamlessly render incoming live camera frame
     if (frameImg) {
       frameImg.src = frame;
       frameImg.classList.remove('hidden');
-    }
-    if (remoteVid) {
-      if (remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
-        remoteVid.classList.remove('hidden');
-        if (frameImg) frameImg.classList.add('hidden');
-      } else {
-        remoteVid.classList.add('hidden');
-      }
+      frameImg.style.display = 'block';
     }
   } else if (fromRole === 'NORMAL_USER') {
-    const frameImg = document.getElementById('celeb-remote-frame');
     const remoteVid = document.getElementById('celeb-remote-video');
+    const frameImg = document.getElementById('celeb-remote-frame');
+    // If real-time WebRTC video track is active with decoded video frames, keep remote video visible
+    if (remoteVid && remoteVid.srcObject && remoteVid.videoWidth > 0 && !remoteVid.paused) {
+      remoteVid.classList.remove('hidden');
+      remoteVid.style.display = 'block';
+      if (frameImg) {
+        frameImg.classList.add('hidden');
+        frameImg.style.display = 'none';
+      }
+      return;
+    }
+    // WebRTC connecting or empty: seamlessly render incoming live camera frame
     if (frameImg) {
       frameImg.src = frame;
       frameImg.classList.remove('hidden');
-    }
-    if (remoteVid) {
-      if (remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
-        remoteVid.classList.remove('hidden');
-        if (frameImg) frameImg.classList.add('hidden');
-      } else {
-        remoteVid.classList.add('hidden');
-      }
+      frameImg.style.display = 'block';
     }
   }
 }
@@ -1342,7 +1565,7 @@ async function startNormalToCelebCall(celebId, callType) {
   // Start polling status for caller
   startCallerCallStatusPoll();
 
-  // Concurrently acquire local camera in background so it doesn't delay network ring
+  // Concurrently acquire local media in background so it doesn't delay network ring
   if (callType === 'CELEBRITY_VIDEO') {
     getOrCreateLocalCamera(false).then(stream => {
       const pipVid = document.getElementById('normal-inchat-local-video');
@@ -1351,9 +1574,22 @@ async function startNormalToCelebCall(celebId, callType) {
         pipVid.play().catch(() => {});
       }
       callCelebrityViaPeer(celebId, stream, callType);
+    }).catch(err => {
+      console.warn('[Video Call] Camera error, falling back to audio only:', err);
+      acquireUserAudioOnlySafely().then(stream => {
+        localMediaStream = stream;
+        callCelebrityViaPeer(celebId, stream, callType);
+      });
     });
   } else {
-    callCelebrityViaPeer(celebId, null, callType);
+    // Pure VIP Audio Call: Microphone only, NO CAMERA!
+    acquireUserAudioOnlySafely().then(stream => {
+      localMediaStream = stream;
+      callCelebrityViaPeer(celebId, stream, callType);
+    }).catch(err => {
+      console.warn('[Audio Call] Mic error:', err);
+      callCelebrityViaPeer(celebId, null, callType);
+    });
   }
 }
 
@@ -1364,13 +1600,21 @@ function callCelebrityViaPeer(celebId, stream, callType) {
   const doCall = () => {
     if (!appPeer || appPeer.destroyed) return;
     try {
-      console.log('[PeerJS Fan] Calling celebrity directly at:', CELEB_PEER_ID);
+      if (appPeer.disconnected) {
+        console.log('[PeerJS Fan] Reconnecting peer...');
+        appPeer.reconnect();
+      }
+      const uniqueCallId = activeServerCallId || ('call_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
+      activeServerCallId = uniqueCallId;
+
+      console.log('[PeerJS Fan] Calling celebrity directly at:', CELEB_PEER_ID, 'CallType:', callType, 'CallId:', uniqueCallId);
       const outboundStream = stream || localMediaStream || new MediaStream();
       const call = appPeer.call(CELEB_PEER_ID, outboundStream, {
         metadata: {
           callerName: currentUser?.fullName || 'Arjun Nair',
           callerId: currentUser?.id || 'usr_normal_1',
-          callType
+          callType,
+          callId: uniqueCallId
         }
       });
       if (!call) return;
@@ -1379,21 +1623,25 @@ function callCelebrityViaPeer(celebId, stream, callType) {
       call.on('stream', (celebRemoteStream) => {
         console.log('[PeerJS Fan] Received live stream from Dulquer Sithara!');
         onInChatCallApproved();
-        const remoteVid = document.getElementById('normal-inchat-remote-video');
-        const frameImg = document.getElementById('normal-inchat-remote-frame');
-        if (frameImg) frameImg.classList.add('hidden');
-        if (remoteVid) {
-          remoteVid.classList.remove('hidden');
-          remoteVid.srcObject = celebRemoteStream;
-          remoteVid.play().catch(e => console.log('Fan remote video play error:', e));
+
+        // Play audio directly through dedicated audio element
+        playRemoteVipAudio(celebRemoteStream);
+
+        // If video call, render video
+        if (inChatCurrentCallType === 'CELEBRITY_VIDEO') {
+          const remoteVid = document.getElementById('normal-inchat-remote-video');
+          const frameImg = document.getElementById('normal-inchat-remote-frame');
+          attachRemoteVideoStream(remoteVid, frameImg, celebRemoteStream);
         }
       });
 
       call.on('close', () => {
-        console.log('[PeerJS Fan] Call closed by celebrity');
-        if (isCelebActiveCall || callerCallState === 'CONNECTED' || callerCallState === 'RINGING') {
+        console.log('[PeerJS Fan] Call closed by celebrity. State:', callerCallState);
+        // ONLY end call if the call was already connected!
+        // While ringing, WebRTC connection is still negotiating, so DO NOT auto-cut!
+        if (callerCallState === 'CONNECTED') {
           endNormalInChatCelebCall();
-          alert('📞 Dulquer Sithara ended the call.');
+          notifyCallEnded('📞 Dulquer Sithara ended the call.');
         }
       });
 
@@ -1427,6 +1675,11 @@ function startCallerCallStatusPoll() {
         const data = await res.json();
         if (data.success && data.call) {
           const call = data.call;
+          // CRITICAL GUARD: Only accept status for the CURRENT activeServerCallId!
+          if (activeServerCallId && call.callId && call.callId !== activeServerCallId) {
+            console.log('[CALLER Poll] Ignoring mismatched status from old call:', call.callId, 'current:', activeServerCallId);
+            return;
+          }
           if (call.callId) activeServerCallId = call.callId;
           if (call.status === 'APPROVED' || call.status === 'CONNECTED') {
             if (callerCallState !== 'CONNECTED') {
@@ -1502,17 +1755,22 @@ async function onInChatCallApproved(call) {
 
   const isVideo = inChatCurrentCallType === 'CELEBRITY_VIDEO';
   if (isVideo) {
+    document.getElementById('inchat-call-audio-card')?.classList.add('hidden');
+    document.getElementById('btn-inchat-camera')?.classList.remove('hidden');
+
     const remoteVid = document.getElementById('normal-inchat-remote-video');
     const frameImg = document.getElementById('normal-inchat-remote-frame');
     if (remoteVid) {
-      remoteVid.classList.add('hidden'); // Keep hidden until video track plays
-    }
-    if (frameImg) {
-      frameImg.classList.remove('hidden'); // Show live snapshot frame container
+      remoteVid.classList.remove('hidden');
+      remoteVid.style.display = 'block';
+      if (remoteVid.srcObject) {
+        attachRemoteVideoStream(remoteVid, frameImg, remoteVid.srcObject);
+      }
     }
 
     const localWrapper = document.getElementById('inchat-local-camera-wrapper');
     if (localWrapper) {
+      localWrapper.classList.remove('hidden');
       localWrapper.className = 'absolute top-20 right-4 sm:top-24 sm:right-6 w-28 sm:w-36 h-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-white/40 bg-slate-900 shadow-2xl z-20 transition-all duration-300';
     }
     const pipLabel = document.getElementById('inchat-pip-label');
@@ -1525,14 +1783,25 @@ async function onInChatCallApproved(call) {
       pipVid.play().catch(() => {});
     }
 
-    // Start live frame relay streaming from mobile user
+    // Automatically route audio to loud speaker for Video Calls
+    setSpeakerphoneOutput(true, false);
+
+    // Always start frame relay fallback to guarantee no blank screen
     startLiveFrameStreaming('NORMAL_USER');
   } else {
+    // Pure VIP Audio Call: Microphone only, NO VIDEO!
     document.getElementById('inchat-call-audio-card')?.classList.remove('hidden');
+    document.getElementById('inchat-local-camera-wrapper')?.classList.add('hidden');
+    document.getElementById('normal-inchat-remote-video')?.classList.add('hidden');
+    document.getElementById('normal-inchat-remote-frame')?.classList.add('hidden');
+    document.getElementById('btn-inchat-camera')?.classList.add('hidden');
+
+    // Default to earpiece / normal output for Audio Calls with speaker toggle ready
+    setSpeakerphoneOutput(false, false);
   }
 
   const statusLabel = document.getElementById('inchat-call-status-label');
-  if (statusLabel) statusLabel.textContent = `VIP Call Active with Dulquer Sithara (Live Connected)`;
+  if (statusLabel) statusLabel.textContent = `VIP ${isVideo ? 'Video' : 'Audio'} Call Active with Dulquer Sithara (Live Connected)`;
 
   // Start in-call seconds timer
   inChatCallSeconds = 0;
@@ -1552,21 +1821,23 @@ async function onInChatCallApproved(call) {
     if (pipTimer) pipTimer.textContent = timeStr;
   }, 1000);
 
-  // Initialize WebRTC as caller
-  initWebRtcConnection('NORMAL_USER');
-  await createAndSendRtcOffer();
+  // Initialize manual WebRTC only as fallback if PeerJS is not connected
+  if (!activePeerCall) {
+    initWebRtcConnection('NORMAL_USER');
+    await createAndSendRtcOffer();
+  }
 }
 
 function onInChatCallDeclined() {
   callerCallState = 'DECLINED';
   endNormalInChatCelebCall();
-  alert('❌ Dulquer Sithara is currently unavailable / declined the call request.');
+  notifyCallEnded('❌ Dulquer Sithara is currently unavailable / declined the call request.');
 }
 
 function onInChatCallEnded(endedBy = 'CELEBRITY') {
   callerCallState = 'ENDED';
   endNormalInChatCelebCall();
-  alert(`📞 Call ended by ${endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'caller'}.`);
+  notifyCallEnded(`📞 Call ended by ${endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'caller'}.`);
 }
 
 function endNormalInChatCelebCall() {
@@ -1599,9 +1870,17 @@ function endNormalInChatCelebCall() {
     closeRtcPeerConnection();
     stopNormalCallVideos();
 
+    // Stop and reset dedicated remote audio element
+    const remoteAudio = document.getElementById('vip-remote-audio');
+    if (remoteAudio) {
+      remoteAudio.pause();
+      remoteAudio.srcObject = null;
+    }
+
     // Reset local camera wrapper and PiP overlay states
     const localWrapper = document.getElementById('inchat-local-camera-wrapper');
     if (localWrapper) {
+      localWrapper.classList.remove('hidden');
       localWrapper.className = 'absolute inset-0 w-full h-full transition-all duration-500 z-10 overflow-hidden';
     }
     document.getElementById('inchat-pip-label')?.classList.add('hidden');
@@ -1609,10 +1888,13 @@ function endNormalInChatCelebCall() {
     document.getElementById('inchat-cam-off-overlay')?.classList.add('hidden');
     document.getElementById('inchat-call-ringing-card')?.classList.remove('hidden');
     document.getElementById('inchat-call-audio-card')?.classList.add('hidden');
+    document.getElementById('btn-inchat-camera')?.classList.remove('hidden');
 
     // Reset button appearances
     inChatCallMuted = false;
     inChatCameraEnabled = true;
+    isVipSpeakerOn = false;
+    updateSpeakerButtonsUI(false);
     const btnMute = document.getElementById('btn-inchat-mute');
     if (btnMute) {
       btnMute.innerHTML = '<i class="fa-solid fa-microphone text-white"></i>';
@@ -1665,7 +1947,36 @@ function endNormalInChatCelebCall() {
     document.getElementById('normal-celeb-call-inchat-view')?.classList.add('hidden');
     document.getElementById('celeb-chat-messages')?.classList.remove('hidden');
     document.getElementById('celeb-chat-controls')?.classList.remove('hidden');
+    activeServerCallId = null;
   }
+}
+
+let callToastTimer = null;
+let lastDisconnectNoticeTime = 0;
+
+function showCallToast(msg) {
+  let toast = document.getElementById('global-call-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'global-call-toast';
+    toast.className = 'fixed top-16 left-1/2 -translate-x-1/2 z-[9999] px-5 py-2.5 rounded-full bg-slate-900/95 backdrop-blur-md border border-white/30 text-white font-bold text-xs shadow-2xl transition-all duration-300 pointer-events-none flex items-center gap-2';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.classList.remove('hidden', 'opacity-0');
+  toast.classList.add('opacity-100');
+  if (callToastTimer) clearTimeout(callToastTimer);
+  callToastTimer = setTimeout(() => {
+    toast.classList.add('opacity-0');
+    setTimeout(() => toast.classList.add('hidden'), 300);
+  }, 2500);
+}
+
+function notifyCallEnded(reason = '📞 Call ended / disconnected.') {
+  const now = Date.now();
+  if (now - lastDisconnectNoticeTime < 3500) return;
+  lastDisconnectNoticeTime = now;
+  showCallToast(reason);
 }
 
 let inChatToastTimer = null;
@@ -1673,7 +1984,10 @@ function showInChatToast(msg) {
   let toast = document.getElementById('inchat-call-toast');
   if (!toast) {
     const container = document.getElementById('normal-celeb-call-video-container');
-    if (!container) return;
+    if (!container) {
+      showCallToast(msg);
+      return;
+    }
     toast = document.createElement('div');
     toast.id = 'inchat-call-toast';
     toast.className = 'absolute top-16 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-black/85 backdrop-blur-md border border-white/30 text-white font-bold text-xs shadow-2xl transition-all duration-300 pointer-events-none flex items-center gap-2';
@@ -2421,12 +2735,14 @@ function toggleCelebrityAvailability() {
   }
 }
 
-function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callId = null) {
+function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callId = null, callType = 'CELEBRITY_VIDEO') {
   if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
     return;
   }
   if (callId) activeServerCallId = callId;
   lastFanCallerName = callerName;
+  if (callType) inChatCurrentCallType = callType;
+
   const callerEl = document.getElementById('incoming-caller-name');
   if (callerEl) callerEl.textContent = callerName;
   const fanLabel = document.getElementById('celeb-fan-caller-label');
@@ -2434,6 +2750,33 @@ function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callI
 
   const globalCaller = document.getElementById('global-incoming-caller-name');
   if (globalCaller) globalCaller.textContent = callerName;
+
+  // DYNAMIC BADGE: Audio Call vs Video Call
+  const isAudio = callType === 'CELEBRITY_AUDIO';
+  const badgeWrap = document.getElementById('global-incoming-call-badge-wrap');
+  const badgeText = document.getElementById('global-incoming-call-type-badge');
+  if (badgeText) {
+    badgeText.innerHTML = isAudio 
+      ? '<i class="fa-solid fa-phone text-teal-300 mr-1"></i> Incoming VIP Fan Audio Call' 
+      : '<i class="fa-solid fa-video text-emerald-300 mr-1"></i> Incoming VIP Fan Video Call';
+  }
+  if (badgeWrap) {
+    if (isAudio) {
+      badgeWrap.className = 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-teal-950/90 border border-teal-500/60 text-teal-300 text-xs font-bold mb-3 shadow';
+    } else {
+      badgeWrap.className = 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-bold mb-3 shadow';
+    }
+  }
+
+  // Dashboard widget labels
+  const dashBadge = document.getElementById('incoming-fan-call-badge-label');
+  if (dashBadge) dashBadge.textContent = isAudio ? 'Incoming VIP Fan Audio Call' : 'Incoming VIP Fan Video Call';
+  const dashType = document.getElementById('incoming-fan-call-type-label');
+  if (dashType) {
+    dashType.innerHTML = isAudio 
+      ? '<i class="fa-solid fa-phone text-emerald-400"></i> 1-on-1 VIP Audio Call' 
+      : '<i class="fa-solid fa-video text-blue-400"></i> 1-on-1 VIP Video Call';
+  }
 
   document.getElementById('celeb-online-waiting-box')?.classList.add('hidden');
   document.getElementById('incoming-fan-call-box')?.classList.remove('hidden');
@@ -2463,10 +2806,15 @@ function startCelebrityIncomingCallPoll() {
           const data = await res.json();
           if (data.success && data.call) {
             const call = data.call;
+            // CRITICAL: Ignore any status response that does not match our current active call session!
+            if (activeServerCallId && call.callId && call.callId !== activeServerCallId) {
+              return;
+            }
             if (call.callId) activeServerCallId = call.callId;
             if (call.status === 'ENDED') {
+              activeServerCallId = null;
               endCelebrityCall(true);
-              alert('📞 Fan ended / disconnected the call.');
+              notifyCallEnded('📞 Fan ended / disconnected the call.');
               return;
             }
             if (call.offerSdp && (!rtcPeerConnection || !rtcPeerConnection.remoteDescription)) {
@@ -2495,12 +2843,13 @@ function startCelebrityIncomingCallPoll() {
         const data = await res.json();
         if (data.success && data.call && data.call.status === 'RINGING') {
           const callId = data.call.callId;
+          const callType = data.call.callType || 'CELEBRITY_VIDEO';
           if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
             return;
           }
           activeServerCallId = callId;
           lastFanCallerName = `${data.call.callerName || data.call.caller || 'Arjun Nair'} (VIP Fan)`;
-          simulateIncomingFanCall(lastFanCallerName, callId);
+          simulateIncomingFanCall(lastFanCallerName, callId, callType);
         }
       }
     } catch (e) {}
@@ -2606,12 +2955,6 @@ async function approveIncomingFanCall() {
     history.pushState({ inVipCall: true }, '');
   } catch (e) {}
 
-  // Keep remote video element hidden until actual video track renders so incoming snapshot frames aren't covered
-  const celebRemoteVid = document.getElementById('celeb-remote-video');
-  const celebRemoteFrame = document.getElementById('celeb-remote-frame');
-  if (celebRemoteVid) celebRemoteVid.classList.add('hidden');
-  if (celebRemoteFrame) celebRemoteFrame.classList.remove('hidden');
-
   // Immediately notify server so call status updates to CONNECTED without delay
   fetch('/api/celebrities/call/respond', {
     method: 'POST',
@@ -2648,35 +2991,81 @@ async function approveIncomingFanCall() {
     if (pipTimer) pipTimer.textContent = timeStr;
   }, 1000);
 
-  // 1. Celebrity captures their own live camera for PIP and sending to fan
-  const celebStream = await getOrCreateLocalCamera(true);
-  const celebPipVid = document.getElementById('celeb-local-video');
-  if (celebPipVid && celebStream) {
-    celebPipVid.srcObject = celebStream;
-    celebPipVid.play().catch(() => {});
+  // Determine whether this call session is Video or Audio
+  const isVideo = (inChatCurrentCallType === 'CELEBRITY_VIDEO') || 
+    (activePeerCall?.metadata?.callType === 'CELEBRITY_VIDEO');
+  inChatCurrentCallType = isVideo ? 'CELEBRITY_VIDEO' : 'CELEBRITY_AUDIO';
+
+  let celebStream = null;
+  if (isVideo) {
+    document.getElementById('celeb-call-audio-card')?.classList.add('hidden');
+    document.getElementById('celeb-local-camera-wrapper')?.classList.remove('hidden');
+    document.getElementById('btn-celeb-camera')?.classList.remove('hidden');
+
+    const celebRemoteVid = document.getElementById('celeb-remote-video');
+    const celebRemoteFrame = document.getElementById('celeb-remote-frame');
+    if (celebRemoteVid) {
+      celebRemoteVid.classList.remove('hidden');
+      celebRemoteVid.style.display = 'block';
+    }
+    if (celebRemoteFrame) {
+      celebRemoteFrame.classList.add('hidden');
+    }
+
+    celebStream = await getOrCreateLocalCamera(true);
+    const celebPipVid = document.getElementById('celeb-local-video');
+    if (celebPipVid && celebStream) {
+      celebPipVid.srcObject = celebStream;
+      celebPipVid.play().catch(() => {});
+    }
+
+    // Auto-enable loud speaker for video calls
+    setSpeakerphoneOutput(true, false);
+  } else {
+    // Pure VIP Audio Call: Microphone only, NO CAMERA!
+    document.getElementById('celeb-call-audio-card')?.classList.remove('hidden');
+    const fanNameEl = document.getElementById('celeb-audio-fan-name');
+    if (fanNameEl) fanNameEl.textContent = `${lastFanCallerName || 'Arjun Nair'} (VIP Audio Call)`;
+    document.getElementById('celeb-local-camera-wrapper')?.classList.add('hidden');
+    document.getElementById('celeb-remote-video')?.classList.add('hidden');
+    document.getElementById('celeb-remote-frame')?.classList.add('hidden');
+    document.getElementById('btn-celeb-camera')?.classList.add('hidden');
+
+    // Default earpiece mode for audio calls with speaker toggle ready
+    setSpeakerphoneOutput(false, false);
+
+    try {
+      celebStream = await acquireUserAudioOnlySafely();
+    } catch (e) {
+      console.warn('[Celeb Audio Call] Mic error fallback:', e);
+      celebStream = new MediaStream();
+    }
+    celebLocalStream = celebStream;
   }
 
   // Answer PeerJS call directly with celebrity stream!
   if (activePeerCall) {
-    console.log('[PeerJS Celeb] Answering PeerJS call with celebrity stream');
+    console.log('[PeerJS Celeb] Answering PeerJS call with celebrity stream. isVideo:', isVideo);
     try {
       activePeerCall.answer(celebStream);
       activePeerCall.on('stream', (fanRemoteStream) => {
         console.log('[PeerJS Celeb] Received fan remote stream via PeerJS!');
-        const remoteVid = document.getElementById('celeb-remote-video');
-        const frameImg = document.getElementById('celeb-remote-frame');
-        if (frameImg) frameImg.classList.add('hidden');
-        if (remoteVid) {
-          remoteVid.classList.remove('hidden');
-          remoteVid.srcObject = fanRemoteStream;
-          remoteVid.play().catch(e => console.log('Celeb remote video play error:', e));
+
+        // 1. Play audio directly through dedicated audio element
+        playRemoteVipAudio(fanRemoteStream);
+
+        // 2. If video call, render video
+        if (isVideo) {
+          const remoteVid = document.getElementById('celeb-remote-video');
+          const frameImg = document.getElementById('celeb-remote-frame');
+          attachRemoteVideoStream(remoteVid, frameImg, fanRemoteStream);
         }
       });
       activePeerCall.on('close', () => {
         console.log('[PeerJS Celeb] Call closed by fan');
         if (isCelebActiveCall) {
           endCelebrityCall(true);
-          alert('📞 Fan ended / disconnected the call.');
+          notifyCallEnded('📞 Fan ended / disconnected the call.');
         }
       });
     } catch (e) {
@@ -2684,11 +3073,13 @@ async function approveIncomingFanCall() {
     }
   }
 
-  // 2. Start live frame relay streaming from celebrity
-  startLiveFrameStreaming('CELEBRITY');
-
-  // 3. Initialize WebRTC peer connection as CELEBRITY
-  initWebRtcConnection('CELEBRITY');
+  // Always start live frame streaming for video calls to guarantee 100% zero black screens
+  if (isVideo) {
+    startLiveFrameStreaming('CELEBRITY');
+    if (!activePeerCall) {
+      initWebRtcConnection('CELEBRITY');
+    }
+  }
 
   // 4. Broadcast approval across browser tabs
   const payload = {
@@ -2762,6 +3153,16 @@ function endCelebrityCall(silent = false) {
   closeRtcPeerConnection();
   stopCelebrityCallVideos();
 
+  // Stop and reset dedicated remote audio element
+  const remoteAudio = document.getElementById('vip-remote-audio');
+  if (remoteAudio) {
+    remoteAudio.pause();
+    remoteAudio.srcObject = null;
+  }
+  document.getElementById('btn-celeb-camera')?.classList.remove('hidden');
+  document.getElementById('celeb-local-camera-wrapper')?.classList.remove('hidden');
+  document.getElementById('celeb-call-audio-card')?.classList.add('hidden');
+
   // Hide floating PiP widget if active
   document.getElementById('floating-vip-call-pip')?.classList.add('hidden');
   document.getElementById('global-celeb-incoming-modal')?.classList.add('hidden');
@@ -2776,6 +3177,8 @@ function endCelebrityCall(silent = false) {
   // Reset button appearances
   isCelebCallMuted = false;
   isCelebCameraOff = false;
+  isVipSpeakerOn = false;
+  updateSpeakerButtonsUI(false);
   const btnCelebMute = document.getElementById('btn-celeb-call-mute');
   if (btnCelebMute) {
     btnCelebMute.innerHTML = '<i class="fa-solid fa-microphone text-white"></i>';
@@ -3601,12 +4004,13 @@ function initWebSocket() {
       } else if (payload.type === 'INCOMING_CELEB_CALL') {
         if (payload.call) {
           const callId = payload.call.callId;
+          const callType = payload.call.callType || 'CELEBRITY_VIDEO';
           if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
             return;
           }
           activeServerCallId = callId;
           lastFanCallerName = `${payload.call.callerName || payload.call.caller || 'Arjun Nair'} (VIP Fan)`;
-          simulateIncomingFanCall(lastFanCallerName, callId);
+          simulateIncomingFanCall(lastFanCallerName, callId, callType);
         }
       } else if (payload.type === 'CELEB_CALL_RESPONSE') {
         if (payload.action === 'APPROVE') {
@@ -3621,7 +4025,7 @@ function initWebSocket() {
       } else if (payload.type === 'CELEB_CALL_ENDED') {
         if (currentUser?.role === 'CELEBRITY') {
           endCelebrityCall(true);
-          alert('📞 Fan disconnected / ended the call.');
+          notifyCallEnded('📞 Fan disconnected / ended the call.');
         } else {
           onInChatCallEnded(payload.call?.endedBy || 'CELEBRITY');
         }
@@ -4496,10 +4900,15 @@ async function handleCrossTabCallEvent(data) {
         if (isCelebActiveCall || (data.callId && handledCallSessions.has(data.callId))) {
           return;
         }
+        const callType = data.callType || 'CELEBRITY_VIDEO';
         lastFanCallerName = `${data.caller || 'Arjun Nair'} (VIP Fan)`;
-        simulateIncomingFanCall(lastFanCallerName, data.callId);
+        simulateIncomingFanCall(lastFanCallerName, data.callId, callType);
       }
     } else if (data.type === 'CALL_ENDED' || data.state === 'ended') {
+      if (data.callId && activeServerCallId && data.callId !== activeServerCallId) {
+        console.log('[CrossTab] Ignoring CALL_ENDED from old call:', data.callId);
+        return;
+      }
       const activeBox = document.getElementById('celeb-active-call-box');
       const incomingBox = document.getElementById('incoming-fan-call-box');
       const wasActive = activeBox && !activeBox.classList.contains('hidden');
@@ -4509,7 +4918,7 @@ async function handleCrossTabCallEvent(data) {
       endCelebrityCall(true);
 
       if (wasActive || wasIncoming) {
-        alert(`📞 Fan ${data.caller || 'Arjun Nair'} disconnected / ended the call.`);
+        notifyCallEnded(`📞 Fan ${data.caller || 'Arjun Nair'} disconnected / ended the call.`);
       }
     }
   }
@@ -4539,7 +4948,7 @@ async function handleCrossTabCallEvent(data) {
       } else {
         closeRtcPeerConnection();
         setCallState('idle');
-        alert('❌ Dulquer Sithara is currently unavailable / declined the call request.');
+        notifyCallEnded('❌ Dulquer Sithara is currently unavailable / declined the call request.');
       }
     } else if (data.type === 'CALL_ENDED' || data.state === 'ended') {
       isCelebActiveCall = false;
@@ -4557,9 +4966,9 @@ async function handleCrossTabCallEvent(data) {
         setCallState('idle');
 
         if (wasActive) {
-          alert(`📞 Call ended by ${data.endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'partner'}.`);
+          notifyCallEnded(`📞 Call ended by ${data.endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'partner'}.`);
         } else if (wasSearching) {
-          alert('📞 Call disconnected.');
+          notifyCallEnded('📞 Call disconnected.');
         }
       }
     }
