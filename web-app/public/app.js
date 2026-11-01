@@ -32,6 +32,88 @@ let activeDistanceFilter = 50;
 let rtcPeerConnection = null;
 let rtcIceQueue = [];
 
+// ==============================================================
+// PEERJS REAL-TIME CALLING ENGINE (ZERO-LATENCY HD AUDIO & VIDEO)
+// ==============================================================
+let appPeer = null;
+let activePeerCall = null;
+const CELEB_PEER_ID = 'bondify-celeb-dulquer-sithara';
+
+function initAppPeer() {
+  if (appPeer && !appPeer.destroyed) return;
+  if (typeof Peer === 'undefined') {
+    console.warn('PeerJS library not loaded yet, will retry in 500ms');
+    setTimeout(initAppPeer, 500);
+    return;
+  }
+
+  const isCeleb = (currentUser && (currentUser.role === 'CELEBRITY' || currentUser.id === 'usr_celeb_1')) ||
+    (document.getElementById('dashboard-celebrity') && !document.getElementById('dashboard-celebrity').classList.contains('hidden'));
+
+  const myPeerId = isCeleb ? CELEB_PEER_ID : `bondify-fan-${currentUser?.id || 'usr_normal_1'}-${Date.now().toString(36)}`;
+
+  try {
+    appPeer = new Peer(myPeerId, {
+      debug: 1,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:openrelay.metered.ca:80' }
+        ]
+      }
+    });
+
+    appPeer.on('open', (id) => {
+      console.log(`[PeerJS Ready] Connected with ID: ${id} (isCeleb: ${isCeleb})`);
+    });
+
+    // When Celebrity receives an incoming call from Fan
+    appPeer.on('call', async (incomingCall) => {
+      console.log('[PeerJS] Incoming call received from:', incomingCall.peer);
+      activePeerCall = incomingCall;
+
+      const callerName = incomingCall.metadata?.callerName || lastFanCallerName || 'Arjun Nair (VIP Fan)';
+      simulateIncomingFanCall(callerName, incomingCall.peer);
+
+      // Listen for remote disconnect from caller
+      incomingCall.on('close', () => {
+        console.log('[PeerJS] Call ended by caller');
+        if (isCelebActiveCall) {
+          endCelebrityCall(true);
+          alert('📞 Fan ended / disconnected the call.');
+        }
+      });
+
+      incomingCall.on('error', (err) => {
+        console.warn('[PeerJS] Incoming call error:', err);
+      });
+    });
+
+    appPeer.on('error', (err) => {
+      console.warn('[PeerJS Error]:', err.type, err);
+      if (err.type === 'unavailable-id' && isCeleb) {
+        console.log('[PeerJS] Celebrity ID in use, attempting clean re-connect');
+        setTimeout(() => {
+          if (appPeer) {
+            try { appPeer.destroy(); } catch {}
+          }
+          appPeer = null;
+          initAppPeer();
+        }, 2000);
+      }
+    });
+  } catch (err) {
+    console.error('[PeerJS Init Error]:', err);
+  }
+}
+
+window.addEventListener('beforeunload', () => {
+  if (appPeer) {
+    try { appPeer.destroy(); } catch {}
+  }
+});
+
 function getCelebCallChannel() {
   if (!window.celebCallChannel) {
     try {
@@ -747,6 +829,7 @@ function showDashboard() {
   navContainer.innerHTML = '';
 
   initWebSocket();
+  initAppPeer();
 
   // 1. NORMAL USER
   if (currentUser.role === 'NORMAL') {
@@ -953,6 +1036,7 @@ function openCelebrityChatScreen(celebId = 'usr_celeb_1') {
     checkCelebrityHubAccess();
     return;
   }
+  initAppPeer();
   document.getElementById('celeb-hub-main-view')?.classList.add('hidden');
   document.getElementById('normal-celeb-chat-view')?.classList.remove('hidden');
   renderCelebrityChatScreen(celebId);
@@ -1259,7 +1343,65 @@ async function startNormalToCelebCall(celebId, callType) {
         pipVid.srcObject = stream;
         pipVid.play().catch(() => {});
       }
+      callCelebrityViaPeer(celebId, stream, callType);
     });
+  } else {
+    callCelebrityViaPeer(celebId, null, callType);
+  }
+}
+
+function callCelebrityViaPeer(celebId, stream, callType) {
+  if (!appPeer || appPeer.destroyed) {
+    initAppPeer();
+  }
+  const doCall = () => {
+    if (!appPeer || appPeer.destroyed) return;
+    try {
+      console.log('[PeerJS Fan] Calling celebrity directly at:', CELEB_PEER_ID);
+      const outboundStream = stream || localMediaStream || new MediaStream();
+      const call = appPeer.call(CELEB_PEER_ID, outboundStream, {
+        metadata: {
+          callerName: currentUser?.fullName || 'Arjun Nair',
+          callerId: currentUser?.id || 'usr_normal_1',
+          callType
+        }
+      });
+      if (!call) return;
+      activePeerCall = call;
+
+      call.on('stream', (celebRemoteStream) => {
+        console.log('[PeerJS Fan] Received live stream from Dulquer Sithara!');
+        onInChatCallApproved();
+        const remoteVid = document.getElementById('normal-inchat-remote-video');
+        const frameImg = document.getElementById('normal-inchat-remote-frame');
+        if (frameImg) frameImg.classList.add('hidden');
+        if (remoteVid) {
+          remoteVid.classList.remove('hidden');
+          remoteVid.srcObject = celebRemoteStream;
+          remoteVid.play().catch(e => console.log('Fan remote video play error:', e));
+        }
+      });
+
+      call.on('close', () => {
+        console.log('[PeerJS Fan] Call closed by celebrity');
+        if (isCelebActiveCall || callerCallState === 'CONNECTED' || callerCallState === 'RINGING') {
+          endNormalInChatCelebCall();
+          alert('📞 Dulquer Sithara ended the call.');
+        }
+      });
+
+      call.on('error', (err) => {
+        console.warn('[PeerJS Fan Call Error]:', err);
+      });
+    } catch (e) {
+      console.warn('[PeerJS Fan call exception]:', e);
+    }
+  };
+
+  if (appPeer && appPeer.open) {
+    doCall();
+  } else if (appPeer) {
+    appPeer.once('open', doCall);
   }
 }
 
@@ -1418,6 +1560,14 @@ function endNormalInChatCelebCall() {
     callerCallState = 'IDLE';
     stopInChatRingingTone();
     stopLiveFrameStreaming();
+
+    if (activePeerCall) {
+      try {
+        activePeerCall.close();
+      } catch (e) {}
+      activePeerCall = null;
+    }
+
     if (callerStatusPollInterval) {
       clearInterval(callerStatusPollInterval);
       callerStatusPollInterval = null;
@@ -2202,6 +2352,10 @@ function startCelebrityIncomingCallPoll() {
     
     if (!isCelebTab) return;
 
+    if (!appPeer || appPeer.destroyed) {
+      initAppPeer();
+    }
+
     // While in active call, poll status to detect if fan hung up / disconnected, apply WebRTC offer, candidates, and live video frames
     if (isCelebActiveCall) {
       try {
@@ -2376,7 +2530,40 @@ async function approveIncomingFanCall() {
   }, 1000);
 
   // 1. Celebrity captures their own live camera for PIP and sending to fan
-  await getOrCreateLocalCamera(true);
+  const celebStream = await getOrCreateLocalCamera(true);
+  const celebPipVid = document.getElementById('celeb-local-video');
+  if (celebPipVid && celebStream) {
+    celebPipVid.srcObject = celebStream;
+    celebPipVid.play().catch(() => {});
+  }
+
+  // Answer PeerJS call directly with celebrity stream!
+  if (activePeerCall) {
+    console.log('[PeerJS Celeb] Answering PeerJS call with celebrity stream');
+    try {
+      activePeerCall.answer(celebStream);
+      activePeerCall.on('stream', (fanRemoteStream) => {
+        console.log('[PeerJS Celeb] Received fan remote stream via PeerJS!');
+        const remoteVid = document.getElementById('celeb-remote-video');
+        const frameImg = document.getElementById('celeb-remote-frame');
+        if (frameImg) frameImg.classList.add('hidden');
+        if (remoteVid) {
+          remoteVid.classList.remove('hidden');
+          remoteVid.srcObject = fanRemoteStream;
+          remoteVid.play().catch(e => console.log('Celeb remote video play error:', e));
+        }
+      });
+      activePeerCall.on('close', () => {
+        console.log('[PeerJS Celeb] Call closed by fan');
+        if (isCelebActiveCall) {
+          endCelebrityCall(true);
+          alert('📞 Fan ended / disconnected the call.');
+        }
+      });
+    } catch (e) {
+      console.warn('[PeerJS Celeb answer error]:', e);
+    }
+  }
 
   // 2. Start live frame relay streaming from celebrity
   startLiveFrameStreaming('CELEBRITY');
@@ -2445,6 +2632,12 @@ function endCelebrityCall(silent = false) {
   if (celebActiveCallTimer) {
     clearInterval(celebActiveCallTimer);
     celebActiveCallTimer = null;
+  }
+  if (activePeerCall) {
+    try {
+      activePeerCall.close();
+    } catch (e) {}
+    activePeerCall = null;
   }
   closeRtcPeerConnection();
   stopCelebrityCallVideos();
@@ -3316,6 +3509,7 @@ function initWebSocket() {
     setTimeout(() => {
       if (currentUser && (!socket || socket.readyState === WebSocket.CLOSED)) {
         initWebSocket();
+  initAppPeer();
       }
     }, 2000);
   };
