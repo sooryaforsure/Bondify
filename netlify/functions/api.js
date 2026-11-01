@@ -1,4 +1,28 @@
 // Netlify Serverless Function for Friends Connect (FC) API
+const fs = require('fs');
+const os = require('os');
+const pathModule = require('path');
+
+const LIVE_CALLS_FILE = pathModule.join(os.tmpdir(), 'bondify_live_calls_store.json');
+
+function loadLiveCalls() {
+  try {
+    if (fs.existsSync(LIVE_CALLS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(LIVE_CALLS_FILE, 'utf8'));
+      if (Array.isArray(data)) return new Map(data);
+    }
+  } catch (e) {}
+  if (!global._liveCalls) global._liveCalls = new Map();
+  return global._liveCalls;
+}
+
+function saveLiveCalls(map) {
+  global._liveCalls = map;
+  try {
+    fs.writeFileSync(LIVE_CALLS_FILE, JSON.stringify(Array.from(map.entries())), 'utf8');
+  } catch (e) {}
+}
+
 const INITIAL_USERS = [
   {
     id: 'usr_normal_1',
@@ -288,70 +312,199 @@ exports.handler = async (event) => {
   }
 
   // Live Cross-device Call Signaling
-  if (path === '/celebrities/call/ring' && method === 'POST') {
-    const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  if ((path === '/celebrities/call/ring' || path === '/api/celebrities/call/ring') && method === 'POST') {
+    const liveCalls = loadLiveCalls();
+    const now = Date.now();
+    const celebTargetId = body.celebrityId || 'usr_celeb_1';
+    const callerId = body.callerId || 'usr_normal_1';
+
+    // Mark any existing active/ringing call for this celebrity or caller as ENDED
+    for (const [id, c] of liveCalls.entries()) {
+      const isExpired = now - (c.createdAt || 0) > 120000;
+      const isTombstoneExpired = c.endedAt && (now - c.endedAt > 30000);
+      const isSameParty = c.celebrityId === celebTargetId || c.callerId === callerId;
+      if (isSameParty && (c.status === 'RINGING' || c.status === 'CONNECTED' || c.status === 'APPROVED')) {
+        c.status = 'ENDED';
+        c.endedAt = now;
+      }
+      if (isExpired || isTombstoneExpired) {
+        liveCalls.delete(id);
+      }
+    }
+
+    const callId = body.callId || `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const call = {
       callId,
-      callerId: body.callerId || 'usr_normal_1',
-      callerName: body.callerName || 'Arjun Nair',
+      callerId,
+      callerName: body.callerName || body.caller || 'Arjun Nair',
       callerAvatar: body.callerAvatar,
-      celebrityId: body.celebrityId || 'usr_celeb_1',
+      celebrityId: celebTargetId,
       callType: body.callType || 'CELEBRITY_VIDEO',
       status: 'RINGING',
-      createdAt: Date.now(),
+      createdAt: now,
       offerSdp: body.offerSdp,
       iceCandidates: []
     };
-    if (!global._liveCalls) global._liveCalls = new Map();
-    global._liveCalls.set(callId, call);
+    liveCalls.set(callId, call);
+    saveLiveCalls(liveCalls);
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
   }
 
-  if (path === '/celebrities/call/status' && method === 'GET') {
-    if (!global._liveCalls) global._liveCalls = new Map();
+  if ((path === '/celebrities/call/status' || path === '/api/celebrities/call/status') && method === 'GET') {
+    const liveCalls = loadLiveCalls();
+    const now = Date.now();
     const callId = event.queryStringParameters?.callId;
     const celebrityId = event.queryStringParameters?.celebrityId;
     const callerId = event.queryStringParameters?.callerId;
+
     let found = null;
-    if (callId) {
-      found = global._liveCalls.get(callId) || null;
-    } else if (celebrityId) {
-      for (const c of global._liveCalls.values()) {
-        if (c.celebrityId === celebrityId && (c.status === 'RINGING' || c.status === 'APPROVED' || c.status === 'CONNECTED')) {
-          found = c;
-          break;
-        }
-      }
-    } else if (callerId) {
-      for (const c of global._liveCalls.values()) {
-        if (c.callerId === callerId && c.status !== 'ENDED') {
-          found = c;
-          break;
+    if (callId && liveCalls.has(callId)) {
+      found = liveCalls.get(callId);
+      // If found call is still marked RINGING, check if ANY call for this celebrity was answered/approved
+      if (found && found.status === 'RINGING') {
+        for (const c of liveCalls.values()) {
+          if ((c.celebrityId === found.celebrityId || c.celebrityId === 'usr_celeb_1') && (c.status === 'CONNECTED' || c.status === 'APPROVED')) {
+            found.status = 'CONNECTED';
+            found.approvedAt = c.approvedAt || now;
+            break;
+          }
         }
       }
     }
+
+    if (!found) {
+      // 1st priority: Find NEWEST active call (CONNECTED/APPROVED/RINGING) matching celebrity or caller
+      const activeCalls = [];
+      for (const c of liveCalls.values()) {
+        const matchCeleb = celebrityId && (c.celebrityId === celebrityId || celebrityId === 'usr_celeb_1');
+        const matchCaller = callerId && c.callerId === callerId;
+        if (matchCeleb || matchCaller) {
+          if (c.status === 'CONNECTED' || c.status === 'APPROVED' || c.status === 'RINGING') {
+            activeCalls.push(c);
+          }
+        }
+      }
+      if (activeCalls.length > 0) {
+        activeCalls.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        found = activeCalls[0];
+      }
+    }
+
+    if (!found) {
+      // 2nd priority: Recent tombstone ended/declined call
+      const recentCalls = [];
+      for (const c of liveCalls.values()) {
+        const matchCeleb = celebrityId && (c.celebrityId === celebrityId || celebrityId === 'usr_celeb_1');
+        const matchCaller = callerId && c.callerId === callerId;
+        if (matchCeleb || matchCaller) {
+          if (c.status === 'DECLINED' || c.status === 'ENDED') {
+            if (c.endedAt && (now - c.endedAt < 30000)) {
+              recentCalls.push(c);
+            }
+          }
+        }
+      }
+      if (recentCalls.length > 0) {
+        recentCalls.sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0));
+        found = recentCalls[0];
+      }
+    }
+
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, call: found }) };
   }
 
-  if (path === '/celebrities/call/respond' && method === 'POST') {
-    if (!global._liveCalls) global._liveCalls = new Map();
-    const call = global._liveCalls.get(body.callId);
-    if (call) {
-      if (body.action === 'APPROVE') {
-        call.status = 'APPROVED';
-        call.approvedAt = Date.now();
-        if (body.answerSdp) call.answerSdp = body.answerSdp;
-      } else {
-        call.status = 'DECLINED';
-        call.endedAt = Date.now();
+  if ((path === '/celebrities/call/respond' || path === '/api/celebrities/call/respond') && method === 'POST') {
+    const liveCalls = loadLiveCalls();
+    const now = Date.now();
+    const targetCallId = body.callId;
+    const celebTargetId = body.celebrityId || 'usr_celeb_1';
+    let call = targetCallId ? liveCalls.get(targetCallId) : null;
+
+    if (!call) {
+      // Find newest active/ringing call for this celebrity
+      const candidates = [];
+      for (const c of liveCalls.values()) {
+        if (c.celebrityId === celebTargetId || celebTargetId === 'usr_celeb_1') {
+          if (c.status === 'RINGING' || c.status === 'APPROVED' || c.status === 'CONNECTED') {
+            candidates.push(c);
+          }
+        }
+      }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
+    }
+
+    if (!call) {
+      for (const c of liveCalls.values()) {
+        if (c.status === 'RINGING') {
+          call = c;
+          break;
+        }
       }
     }
+
+    if (call) {
+      if (body.action === 'APPROVE') {
+        call.status = 'CONNECTED';
+        call.approvedAt = now;
+        if (body.answerSdp) call.answerSdp = body.answerSdp;
+        // Mark ALL ringing calls for this celebrity as CONNECTED so caller is never stranded
+        for (const c of liveCalls.values()) {
+          if ((c.celebrityId === call.celebrityId || c.celebrityId === 'usr_celeb_1') && c.status === 'RINGING') {
+            c.status = 'CONNECTED';
+            c.approvedAt = now;
+          }
+        }
+      } else {
+        call.status = 'DECLINED';
+        call.endedAt = now;
+        for (const c of liveCalls.values()) {
+          if ((c.celebrityId === call.celebrityId || c.celebrityId === 'usr_celeb_1') && c.status === 'RINGING') {
+            c.status = 'DECLINED';
+            c.endedAt = now;
+          }
+        }
+      }
+      saveLiveCalls(liveCalls);
+    }
+
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
   }
 
-  if (path === '/celebrities/call/signal' && method === 'POST') {
-    if (!global._liveCalls) global._liveCalls = new Map();
-    const call = global._liveCalls.get(body.callId);
+  if ((path === '/celebrities/call/frame' || path === '/api/celebrities/call/frame') && method === 'POST') {
+    const liveCalls = loadLiveCalls();
+    const callId = body.callId;
+    let call = (callId && callId !== 'active') ? liveCalls.get(callId) : null;
+    if (!call) {
+      const candidates = [];
+      for (const c of liveCalls.values()) {
+        if (c.status === 'CONNECTED' || c.status === 'RINGING') candidates.push(c);
+      }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
+    }
+    if (call && body.frame) {
+      if (body.role === 'CELEBRITY') {
+        call.lastCelebFrame = body.frame;
+      } else {
+        call.lastNormalFrame = body.frame;
+      }
+      saveLiveCalls(liveCalls);
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: !!call }) };
+  }
+
+  if ((path === '/celebrities/call/signal' || path === '/api/celebrities/call/signal') && method === 'POST') {
+    const liveCalls = loadLiveCalls();
+    let call = body.callId ? liveCalls.get(body.callId) : null;
+    if (!call) {
+      const candidates = [];
+      for (const c of liveCalls.values()) {
+        if (c.status === 'CONNECTED' || c.status === 'RINGING') candidates.push(c);
+      }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
+    }
     if (call && body.signal) {
       if (body.signal.type === 'RTC_OFFER' && body.signal.sdp) call.offerSdp = body.signal.sdp;
       if (body.signal.type === 'RTC_ANSWER' && body.signal.sdp) call.answerSdp = body.signal.sdp;
@@ -359,17 +512,27 @@ exports.handler = async (event) => {
         call.iceCandidates = call.iceCandidates || [];
         call.iceCandidates.push({ candidate: body.signal.candidate, fromRole: body.signal.fromRole });
       }
+      saveLiveCalls(liveCalls);
     }
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
   }
 
-  if (path === '/celebrities/call/end' && method === 'POST') {
-    if (!global._liveCalls) global._liveCalls = new Map();
-    const call = global._liveCalls.get(body.callId);
+  if ((path === '/celebrities/call/end' || path === '/api/celebrities/call/end') && method === 'POST') {
+    const liveCalls = loadLiveCalls();
+    let call = body.callId ? liveCalls.get(body.callId) : null;
+    if (!call) {
+      const candidates = [];
+      for (const c of liveCalls.values()) {
+        if (c.status === 'CONNECTED' || c.status === 'RINGING') candidates.push(c);
+      }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
+    }
     if (call) {
       call.status = 'ENDED';
       call.endedAt = Date.now();
       call.endedBy = body.endedBy || 'USER';
+      saveLiveCalls(liveCalls);
     }
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
   }

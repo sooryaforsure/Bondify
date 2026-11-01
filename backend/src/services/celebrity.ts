@@ -198,12 +198,16 @@ export class CelebrityService {
     clientCallId?: string
   ): any {
     const now = Date.now();
-    // Purge old calls: expired (>120s) or tombstone expired (>30s after ending)
+    // End any existing active/ringing call for this celebrity or caller immediately so only 1 session exists
     for (const [id, c] of this.pendingLiveCalls.entries()) {
       const isExpired = now - c.createdAt > 120000;
       const isTombstoneExpired = c.endedAt && (now - c.endedAt > 30000);
-      const isSamePair = (c.celebrityId === celebrityId || c.callerId === callerId) && (c.status === 'ENDED' || c.status === 'DECLINED');
-      if (isExpired || isTombstoneExpired || isSamePair) {
+      const isSameParty = c.celebrityId === celebrityId || c.callerId === callerId;
+      if (isSameParty && (c.status === 'RINGING' || c.status === 'CONNECTED' || c.status === 'APPROVED')) {
+        c.status = 'ENDED';
+        c.endedAt = now;
+      }
+      if (isExpired || isTombstoneExpired) {
         this.pendingLiveCalls.delete(id);
       }
     }
@@ -229,38 +233,65 @@ export class CelebrityService {
     const now = Date.now();
     if (query.callId) {
       const direct = this.pendingLiveCalls.get(query.callId);
-      if (direct) return direct;
+      if (direct) {
+        // If direct is still RINGING, check if ANY call for this celebrity was answered/approved
+        if (direct.status === 'RINGING') {
+          for (const c of this.pendingLiveCalls.values()) {
+            if ((c.celebrityId === direct.celebrityId || c.celebrityId === 'usr_celeb_1') && (c.status === 'CONNECTED' || c.status === 'APPROVED')) {
+              direct.status = 'CONNECTED';
+              direct.approvedAt = c.approvedAt || now;
+              break;
+            }
+          }
+        }
+        return direct;
+      }
     }
-    // 1st priority: Active/Ringing call matching celebrity or caller
+
+    // 1st priority: Find NEWEST active/ringing call matching celebrity or caller
+    const activeCalls: any[] = [];
     for (const call of this.pendingLiveCalls.values()) {
       const matchCeleb = query.celebrityId && (call.celebrityId === query.celebrityId || query.celebrityId === 'usr_celeb_1');
       const matchCaller = query.callerId && call.callerId === query.callerId;
       if ((matchCeleb || matchCaller) && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
-        return call;
+        activeCalls.push(call);
       }
     }
+    if (activeCalls.length > 0) {
+      activeCalls.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      return activeCalls[0];
+    }
+
     // 2nd priority: Recently declined/ended call (within 30s tombstone)
+    const recentCalls: any[] = [];
     for (const call of this.pendingLiveCalls.values()) {
       const matchCeleb = query.celebrityId && (call.celebrityId === query.celebrityId || query.celebrityId === 'usr_celeb_1');
       const matchCaller = query.callerId && call.callerId === query.callerId;
       if ((matchCeleb || matchCaller) && (call.status === 'DECLINED' || call.status === 'ENDED')) {
         if (call.endedAt && (now - call.endedAt < 30000)) {
-          return call;
+          recentCalls.push(call);
         }
       }
+    }
+    if (recentCalls.length > 0) {
+      recentCalls.sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0));
+      return recentCalls[0];
     }
     return null;
   }
 
   respondToLiveCall(callId?: string, action: 'APPROVE' | 'DECLINE' = 'APPROVE', answerSdp?: string, celebrityId?: string): any {
+    const now = Date.now();
     let call = callId ? this.pendingLiveCalls.get(callId) : null;
     if (!call && celebrityId) {
+      const candidates: any[] = [];
       for (const c of this.pendingLiveCalls.values()) {
         if ((c.celebrityId === celebrityId || celebrityId === 'usr_celeb_1') && (c.status === 'RINGING' || c.status === 'APPROVED' || c.status === 'CONNECTED')) {
-          call = c;
-          break;
+          candidates.push(c);
         }
       }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
     }
     if (!call) {
       for (const c of this.pendingLiveCalls.values()) {
@@ -271,23 +302,25 @@ export class CelebrityService {
       }
     }
     if (!call) return null;
+
     if (action === 'APPROVE') {
       call.status = 'CONNECTED';
-      call.approvedAt = Date.now();
+      call.approvedAt = now;
       if (answerSdp) call.answerSdp = answerSdp;
+      // Mark ALL ringing calls for this celebrity as CONNECTED so caller is never stranded
       for (const c of this.pendingLiveCalls.values()) {
-        if (c.celebrityId === call.celebrityId && c.status === 'RINGING') {
+        if ((c.celebrityId === call.celebrityId || c.celebrityId === 'usr_celeb_1') && c.status === 'RINGING') {
           c.status = 'CONNECTED';
-          c.approvedAt = Date.now();
+          c.approvedAt = now;
         }
       }
     } else {
       call.status = 'DECLINED';
-      call.endedAt = Date.now();
+      call.endedAt = now;
       for (const c of this.pendingLiveCalls.values()) {
-        if (c.celebrityId === call.celebrityId && c.status === 'RINGING') {
+        if ((c.celebrityId === call.celebrityId || c.celebrityId === 'usr_celeb_1') && c.status === 'RINGING') {
           c.status = 'DECLINED';
-          c.endedAt = Date.now();
+          c.endedAt = now;
         }
       }
     }
@@ -317,12 +350,14 @@ export class CelebrityService {
   updateLiveFrame(callId: string, role: string, frame: string): any {
     let call = callId ? this.pendingLiveCalls.get(callId) : null;
     if (!call) {
+      const candidates: any[] = [];
       for (const c of this.pendingLiveCalls.values()) {
         if (c.status === 'CONNECTED' || c.status === 'RINGING') {
-          call = c;
-          break;
+          candidates.push(c);
         }
       }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
     }
     if (!call) return null;
     if (role === 'CELEBRITY') {
@@ -336,12 +371,14 @@ export class CelebrityService {
   endLiveCall(callId: string, endedBy: string): any {
     let call = callId ? this.pendingLiveCalls.get(callId) : null;
     if (!call) {
+      const candidates: any[] = [];
       for (const c of this.pendingLiveCalls.values()) {
         if (c.status === 'CONNECTED' || c.status === 'RINGING') {
-          call = c;
-          break;
+          candidates.push(c);
         }
       }
+      candidates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      if (candidates.length > 0) call = candidates[0];
     }
     if (!call) return null;
     call.status = 'ENDED';

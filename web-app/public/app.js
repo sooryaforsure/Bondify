@@ -1191,7 +1191,11 @@ async function startNormalToCelebCall(celebId, callType) {
   if (inchatView) inchatView.classList.remove('hidden');
 
   // Set Ringing State UI
-  document.getElementById('inchat-call-ringing-card')?.classList.remove('hidden');
+  const ringingCard = document.getElementById('inchat-call-ringing-card');
+  if (ringingCard) {
+    ringingCard.classList.remove('hidden');
+    ringingCard.style.display = '';
+  }
   document.getElementById('inchat-call-audio-card')?.classList.add('hidden');
   document.getElementById('normal-inchat-remote-video')?.classList.add('hidden');
   
@@ -1277,6 +1281,7 @@ function startCallerCallStatusPoll() {
           if (call.callId) activeServerCallId = call.callId;
           if (call.status === 'APPROVED' || call.status === 'CONNECTED') {
             if (callerCallState !== 'CONNECTED') {
+              console.log('[CALLER] Call approved by celebrity! Transitioning to live view...', call);
               callerCallState = 'CONNECTED';
               onInChatCallApproved(call);
             }
@@ -1305,7 +1310,7 @@ function startCallerCallStatusPoll() {
         }
       }
     } catch (e) {}
-  }, 750);
+  }, 500);
 }
 
 function stopNormalCallVideos() {
@@ -1339,12 +1344,21 @@ async function onInChatCallApproved(call) {
   callerCallState = 'CONNECTED';
   stopInChatRingingTone();
   const ringingCard = document.getElementById('inchat-call-ringing-card');
-  if (ringingCard) ringingCard.classList.add('hidden');
+  if (ringingCard) {
+    ringingCard.classList.add('hidden');
+    ringingCard.style.display = 'none';
+  }
 
   const isVideo = inChatCurrentCallType === 'CELEBRITY_VIDEO';
   if (isVideo) {
     const remoteVid = document.getElementById('normal-inchat-remote-video');
-    if (remoteVid) remoteVid.classList.remove('hidden');
+    const frameImg = document.getElementById('normal-inchat-remote-frame');
+    if (remoteVid) {
+      remoteVid.classList.add('hidden'); // Keep hidden until video track plays
+    }
+    if (frameImg) {
+      frameImg.classList.remove('hidden'); // Show live snapshot frame container
+    }
 
     const localWrapper = document.getElementById('inchat-local-camera-wrapper');
     if (localWrapper) {
@@ -2323,6 +2337,12 @@ async function approveIncomingFanCall() {
   // Switch to calls desk to view feeds
   switchCelebrityTab('calls');
   document.getElementById('celeb-active-call-box')?.classList.remove('hidden');
+
+  // Keep remote video element hidden until actual video track renders so incoming snapshot frames aren't covered
+  const celebRemoteVid = document.getElementById('celeb-remote-video');
+  const celebRemoteFrame = document.getElementById('celeb-remote-frame');
+  if (celebRemoteVid) celebRemoteVid.classList.add('hidden');
+  if (celebRemoteFrame) celebRemoteFrame.classList.remove('hidden');
 
   // Immediately notify server so call status updates to CONNECTED without delay
   fetch('/api/celebrities/call/respond', {
