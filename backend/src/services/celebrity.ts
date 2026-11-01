@@ -194,7 +194,8 @@ export class CelebrityService {
     callerAvatar: string | undefined,
     celebrityId: string,
     callType: 'CELEBRITY_AUDIO' | 'CELEBRITY_VIDEO',
-    offerSdp?: string
+    offerSdp?: string,
+    clientCallId?: string
   ): any {
     const now = Date.now();
     // Purge old calls: expired (>120s) or tombstone expired (>30s after ending)
@@ -207,7 +208,7 @@ export class CelebrityService {
       }
     }
 
-    const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const callId = clientCallId || `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const call = {
       callId,
       callerId,
@@ -227,60 +228,83 @@ export class CelebrityService {
   getLiveCallStatus(query: { callId?: string; celebrityId?: string; callerId?: string }): any {
     const now = Date.now();
     if (query.callId) {
-      return this.pendingLiveCalls.get(query.callId) || null;
+      const direct = this.pendingLiveCalls.get(query.callId);
+      if (direct) return direct;
     }
-    if (query.celebrityId) {
-      // 1st priority: Active/Ringing call
-      for (const call of this.pendingLiveCalls.values()) {
-        if (call.celebrityId === query.celebrityId && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
-          return call;
-        }
-      }
-      // 2nd priority: Recently declined/ended call (within 30s tombstone)
-      for (const call of this.pendingLiveCalls.values()) {
-        if (call.celebrityId === query.celebrityId && (call.status === 'DECLINED' || call.status === 'ENDED')) {
-          if (call.endedAt && (now - call.endedAt < 30000)) {
-            return call;
-          }
-        }
+    // 1st priority: Active/Ringing call matching celebrity or caller
+    for (const call of this.pendingLiveCalls.values()) {
+      const matchCeleb = query.celebrityId && (call.celebrityId === query.celebrityId || query.celebrityId === 'usr_celeb_1');
+      const matchCaller = query.callerId && call.callerId === query.callerId;
+      if ((matchCeleb || matchCaller) && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
+        return call;
       }
     }
-    if (query.callerId) {
-      // 1st priority: Active/Ringing call
-      for (const call of this.pendingLiveCalls.values()) {
-        if (call.callerId === query.callerId && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
+    // 2nd priority: Recently declined/ended call (within 30s tombstone)
+    for (const call of this.pendingLiveCalls.values()) {
+      const matchCeleb = query.celebrityId && (call.celebrityId === query.celebrityId || query.celebrityId === 'usr_celeb_1');
+      const matchCaller = query.callerId && call.callerId === query.callerId;
+      if ((matchCeleb || matchCaller) && (call.status === 'DECLINED' || call.status === 'ENDED')) {
+        if (call.endedAt && (now - call.endedAt < 30000)) {
           return call;
-        }
-      }
-      // 2nd priority: Recently declined/ended call (within 30s tombstone)
-      for (const call of this.pendingLiveCalls.values()) {
-        if (call.callerId === query.callerId && (call.status === 'DECLINED' || call.status === 'ENDED')) {
-          if (call.endedAt && (now - call.endedAt < 30000)) {
-            return call;
-          }
         }
       }
     }
     return null;
   }
 
-  respondToLiveCall(callId: string, action: 'APPROVE' | 'DECLINE', answerSdp?: string): any {
-    const call = this.pendingLiveCalls.get(callId);
-    if (!call) throw new Error('Call session not found');
+  respondToLiveCall(callId?: string, action: 'APPROVE' | 'DECLINE' = 'APPROVE', answerSdp?: string, celebrityId?: string): any {
+    let call = callId ? this.pendingLiveCalls.get(callId) : null;
+    if (!call && celebrityId) {
+      for (const c of this.pendingLiveCalls.values()) {
+        if ((c.celebrityId === celebrityId || celebrityId === 'usr_celeb_1') && (c.status === 'RINGING' || c.status === 'APPROVED' || c.status === 'CONNECTED')) {
+          call = c;
+          break;
+        }
+      }
+    }
+    if (!call) {
+      for (const c of this.pendingLiveCalls.values()) {
+        if (c.status === 'RINGING') {
+          call = c;
+          break;
+        }
+      }
+    }
+    if (!call) return null;
     if (action === 'APPROVE') {
       call.status = 'CONNECTED';
       call.approvedAt = Date.now();
       if (answerSdp) call.answerSdp = answerSdp;
+      for (const c of this.pendingLiveCalls.values()) {
+        if (c.celebrityId === call.celebrityId && c.status === 'RINGING') {
+          c.status = 'CONNECTED';
+          c.approvedAt = Date.now();
+        }
+      }
     } else {
       call.status = 'DECLINED';
       call.endedAt = Date.now();
+      for (const c of this.pendingLiveCalls.values()) {
+        if (c.celebrityId === call.celebrityId && c.status === 'RINGING') {
+          c.status = 'DECLINED';
+          c.endedAt = Date.now();
+        }
+      }
     }
     return call;
   }
 
   relayCallSignal(callId: string, signal: { type: string; sdp?: string; candidate?: any; fromRole: string }): any {
-    const call = this.pendingLiveCalls.get(callId);
-    if (!call) throw new Error('Call not found');
+    let call = callId ? this.pendingLiveCalls.get(callId) : null;
+    if (!call) {
+      for (const c of this.pendingLiveCalls.values()) {
+        if (c.status === 'CONNECTED' || c.status === 'RINGING') {
+          call = c;
+          break;
+        }
+      }
+    }
+    if (!call) return null;
     if (signal.type === 'RTC_OFFER' && signal.sdp) call.offerSdp = signal.sdp;
     if (signal.type === 'RTC_ANSWER' && signal.sdp) call.answerSdp = signal.sdp;
     if (signal.type === 'RTC_ICE_CANDIDATE' && signal.candidate) {
@@ -291,7 +315,15 @@ export class CelebrityService {
   }
 
   updateLiveFrame(callId: string, role: string, frame: string): any {
-    const call = this.pendingLiveCalls.get(callId);
+    let call = callId ? this.pendingLiveCalls.get(callId) : null;
+    if (!call) {
+      for (const c of this.pendingLiveCalls.values()) {
+        if (c.status === 'CONNECTED' || c.status === 'RINGING') {
+          call = c;
+          break;
+        }
+      }
+    }
     if (!call) return null;
     if (role === 'CELEBRITY') {
       call.lastCelebFrame = frame;
@@ -302,7 +334,15 @@ export class CelebrityService {
   }
 
   endLiveCall(callId: string, endedBy: string): any {
-    const call = this.pendingLiveCalls.get(callId);
+    let call = callId ? this.pendingLiveCalls.get(callId) : null;
+    if (!call) {
+      for (const c of this.pendingLiveCalls.values()) {
+        if (c.status === 'CONNECTED' || c.status === 'RINGING') {
+          call = c;
+          break;
+        }
+      }
+    }
     if (!call) return null;
     call.status = 'ENDED';
     call.endedAt = Date.now();

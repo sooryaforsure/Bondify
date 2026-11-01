@@ -212,7 +212,12 @@ function initWebRtcConnection(role) {
       const frameImg = document.getElementById('celeb-remote-frame');
       if (remoteVid) {
         remoteVid.srcObject = stream;
+        remoteVid.onplaying = () => {
+          remoteVid.classList.remove('hidden');
+          if (frameImg) frameImg.classList.add('hidden');
+        };
         remoteVid.play().then(() => {
+          remoteVid.classList.remove('hidden');
           if (frameImg) frameImg.classList.add('hidden');
         }).catch(e => console.log('Celeb remote video play error:', e));
       }
@@ -220,9 +225,13 @@ function initWebRtcConnection(role) {
       const inChatRemoteVid = document.getElementById('normal-inchat-remote-video');
       const frameImg = document.getElementById('normal-inchat-remote-frame');
       if (inChatRemoteVid) {
-        inChatRemoteVid.classList.remove('hidden');
         inChatRemoteVid.srcObject = stream;
+        inChatRemoteVid.onplaying = () => {
+          inChatRemoteVid.classList.remove('hidden');
+          if (frameImg) frameImg.classList.add('hidden');
+        };
         inChatRemoteVid.play().then(() => {
+          inChatRemoteVid.classList.remove('hidden');
           if (frameImg) frameImg.classList.add('hidden');
         }).catch(e => console.log('In-chat remote video play error:', e));
       }
@@ -267,7 +276,7 @@ let liveFrameInterval = null;
 function startLiveFrameStreaming(role) {
   if (liveFrameInterval) clearInterval(liveFrameInterval);
   liveFrameInterval = setInterval(() => {
-    if (!isCelebActiveCall || !activeServerCallId) {
+    if (!isCelebActiveCall) {
       clearInterval(liveFrameInterval);
       liveFrameInterval = null;
       return;
@@ -285,15 +294,15 @@ function startLiveFrameStreaming(role) {
       canvas.height = 240;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(localVid, 0, 0, 320, 240);
-      const frame = canvas.toDataURL('image/jpeg', 0.55);
+      const frame = canvas.toDataURL('image/jpeg', 0.5);
 
       fetch('/api/celebrities/call/frame', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callId: activeServerCallId, role, frame })
+        body: JSON.stringify({ callId: activeServerCallId || 'active', role, frame })
       }).catch(() => {});
     } catch (e) {}
-  }, 400);
+  }, 250);
 }
 
 function stopLiveFrameStreaming() {
@@ -311,8 +320,13 @@ function applyRemoteVideoFrame(frame, fromRole) {
     if (frameImg) {
       frameImg.src = frame;
       frameImg.classList.remove('hidden');
-      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
-        frameImg.classList.add('hidden');
+    }
+    if (remoteVid) {
+      if (remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
+        remoteVid.classList.remove('hidden');
+        if (frameImg) frameImg.classList.add('hidden');
+      } else {
+        remoteVid.classList.add('hidden');
       }
     }
   } else if (fromRole === 'NORMAL_USER') {
@@ -321,8 +335,13 @@ function applyRemoteVideoFrame(frame, fromRole) {
     if (frameImg) {
       frameImg.src = frame;
       frameImg.classList.remove('hidden');
-      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
-        frameImg.classList.add('hidden');
+    }
+    if (remoteVid) {
+      if (remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
+        remoteVid.classList.remove('hidden');
+        if (frameImg) frameImg.classList.add('hidden');
+      } else {
+        remoteVid.classList.add('hidden');
       }
     }
   }
@@ -1190,9 +1209,14 @@ async function startNormalToCelebCall(celebId, callType) {
 
   startInChatRingingTone();
 
+  // Generate synchronous callId upfront so all devices share the exact same ID immediately
+  const generatedCallId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  activeServerCallId = generatedCallId;
+
   // Send Ring Request to Server & Cross-Tab IMMEDIATELY without awaiting camera
   const callerDisplayName = currentUser?.fullName || 'Arjun Nair';
   const callPayload = {
+    callId: generatedCallId,
     caller: callerDisplayName,
     callerName: callerDisplayName,
     callerId: currentUser?.id || 'usr_normal_1',
@@ -1212,7 +1236,7 @@ async function startNormalToCelebCall(celebId, callType) {
   }).then(async res => {
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.call) {
+      if (data.success && data.call && data.call.callId) {
         activeServerCallId = data.call.callId;
       }
     }
@@ -1244,14 +1268,13 @@ function startCallerCallStatusPoll() {
       return;
     }
     try {
-      const url = activeServerCallId 
-        ? `/api/celebrities/call/status?callId=${activeServerCallId}`
-        : `/api/celebrities/call/status?callerId=${currentUser?.id || 'usr_normal_1'}`;
+      const url = `/api/celebrities/call/status?callId=${activeServerCallId || ''}&celebrityId=usr_celeb_1&callerId=${currentUser?.id || 'usr_normal_1'}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.call) {
           const call = data.call;
+          if (call.callId) activeServerCallId = call.callId;
           if (call.status === 'APPROVED' || call.status === 'CONNECTED') {
             if (callerCallState !== 'CONNECTED') {
               callerCallState = 'CONNECTED';
@@ -1282,7 +1305,7 @@ function startCallerCallStatusPoll() {
         }
       }
     } catch (e) {}
-  }, 1200);
+  }, 750);
 }
 
 function stopNormalCallVideos() {
@@ -2166,13 +2189,15 @@ function startCelebrityIncomingCallPoll() {
     if (!isCelebTab) return;
 
     // While in active call, poll status to detect if fan hung up / disconnected, apply WebRTC offer, candidates, and live video frames
-    if (isCelebActiveCall && activeServerCallId) {
+    if (isCelebActiveCall) {
       try {
-        const res = await fetch(`/api/celebrities/call/status?callId=${activeServerCallId}`);
+        const query = activeServerCallId ? `callId=${activeServerCallId}` : `celebrityId=usr_celeb_1`;
+        const res = await fetch(`/api/celebrities/call/status?${query}`);
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.call) {
             const call = data.call;
+            if (call.callId) activeServerCallId = call.callId;
             if (call.status === 'ENDED') {
               endCelebrityCall(true);
               alert('📞 Fan ended / disconnected the call.');
@@ -2198,8 +2223,6 @@ function startCelebrityIncomingCallPoll() {
       return;
     }
 
-    if (isCelebActiveCall) return;
-
     try {
       const res = await fetch('/api/celebrities/call/status?celebrityId=usr_celeb_1');
       if (res.ok) {
@@ -2215,7 +2238,7 @@ function startCelebrityIncomingCallPoll() {
         }
       }
     } catch (e) {}
-  }, 1000);
+  }, 750);
 }
 
 function stopCelebrityIncomingCallPoll() {
@@ -2302,13 +2325,22 @@ async function approveIncomingFanCall() {
   document.getElementById('celeb-active-call-box')?.classList.remove('hidden');
 
   // Immediately notify server so call status updates to CONNECTED without delay
-  if (callIdToApprove) {
-    fetch('/api/celebrities/call/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callId: callIdToApprove, action: 'APPROVE' })
-    }).catch(e => console.warn('Approve server call error:', e));
-  }
+  fetch('/api/celebrities/call/respond', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      callId: callIdToApprove,
+      celebrityId: currentUser?.id || 'usr_celeb_1',
+      action: 'APPROVE'
+    })
+  }).then(async res => {
+    if (res.ok) {
+      const data = await res.json();
+      if (data.call && data.call.callId) {
+        activeServerCallId = data.call.callId;
+      }
+    }
+  }).catch(e => console.warn('Approve server call error:', e));
 
   // Start active call timer
   celebActiveCallSeconds = 0;

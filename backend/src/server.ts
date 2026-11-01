@@ -264,7 +264,8 @@ export class FrndServer {
         body.callerAvatar,
         celebTargetId,
         body.callType || 'CELEBRITY_VIDEO',
-        body.offerSdp
+        body.offerSdp,
+        body.callId
       );
 
       console.log(`[CALL RING] Incoming call from ${callerDisplayName} (${body.callerId}) to celebrity ${celebTargetId}. CallId: ${call.callId}`);
@@ -291,24 +292,30 @@ export class FrndServer {
 
     if (path === '/api/celebrities/call/respond' && method === 'POST') {
       const body = await req.json();
-      const call = this.celebrityService.respondToLiveCall(
-        body.callId,
-        body.action || 'APPROVE',
-        body.answerSdp
-      );
+      try {
+        const call = this.celebrityService.respondToLiveCall(
+          body.callId,
+          body.action || 'APPROVE',
+          body.answerSdp,
+          body.celebrityId || 'usr_celeb_1'
+        );
 
-      console.log(`[CALL RESPOND] Call ${body.callId} action: ${body.action}`);
+        console.log(`[CALL RESPOND] Call ${body.callId} action: ${body.action} => Status: ${call?.status}`);
 
-      // Instant WebSocket push to normal user device
-      if (call && call.callerId) {
-        this.matchmakingService.sendToUser(call.callerId, {
-          type: 'CELEB_CALL_RESPONSE',
-          action: body.action,
-          call
-        });
+        // Instant WebSocket push to normal user device
+        if (call && call.callerId) {
+          this.matchmakingService.sendToUser(call.callerId, {
+            type: 'CELEB_CALL_RESPONSE',
+            action: body.action,
+            call
+          });
+        }
+
+        return this.jsonResponse({ success: true, call });
+      } catch (err) {
+        console.error('[CALL RESPOND ERROR]:', err);
+        return this.jsonResponse({ success: false, error: String(err) });
       }
-
-      return this.jsonResponse({ success: true, call });
     }
 
     if (path === '/api/celebrities/call/signal' && method === 'POST') {
