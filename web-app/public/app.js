@@ -2441,41 +2441,6 @@ function endCelebrityCall(silent = false) {
   }
   activeServerCallId = null;
 }
-    document.getElementById('celeb-offline-box')?.classList.remove('hidden');
-  }
-
-  if (document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
-  }
-
-  // Inform Server API
-  if (activeServerCallId) {
-    fetch('/api/celebrities/call/end', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callId: activeServerCallId, endedBy: 'CELEBRITY' })
-    }).catch(e => console.warn('End server call error:', e));
-  }
-
-  try {
-    localStorage.removeItem('fc_incoming_celeb_call');
-  } catch {}
-
-  // Broadcast call termination to normal user
-  if (!silent) {
-    const endPayload = {
-      type: 'CALL_ENDED',
-      state: 'ended',
-      callId: activeServerCallId,
-      endedBy: 'CELEBRITY',
-      time: Date.now()
-    };
-    localStorage.setItem('fc_celeb_call_state', JSON.stringify(endPayload));
-    postCrossTabCallEvent(endPayload);
-    alert(`Call ended. Total duration: ${Math.floor(celebActiveCallSeconds / 60)}m ${celebActiveCallSeconds % 60}s. Coins billed.`);
-  }
-  activeServerCallId = null;
-}
 
 async function loadCelebrityOwnFeed() {
   try {
