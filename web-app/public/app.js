@@ -17,6 +17,7 @@ let celebRemoteStream = null;
 let celebLocalStream = null;
 let isCelebCameraOff = false;
 let isCelebActiveCall = false;
+let isVipCallMinimized = false;
 let callerCallState = 'IDLE'; // 'IDLE' | 'RINGING' | 'CONNECTED' | 'ENDED' | 'DECLINED'
 const handledCallSessions = new Set();
 let lastFanCallerName = 'Arjun Nair (VIP Gold Fan)';
@@ -1274,6 +1275,12 @@ async function startNormalToCelebCall(celebId, callType) {
   const inchatView = document.getElementById('normal-celeb-call-inchat-view');
   if (inchatView) inchatView.classList.remove('hidden');
 
+  // Automatically trigger edge-to-edge auto-fullscreen on call initiation
+  triggerAutoFullscreen('normal-celeb-call-inchat-view');
+  try {
+    history.pushState({ inVipCall: true }, '');
+  } catch (e) {}
+
   // Set Ringing State UI
   const ringingCard = document.getElementById('inchat-call-ringing-card');
   if (ringingCard) {
@@ -1485,6 +1492,8 @@ async function onInChatCallApproved(call) {
   isCelebActiveCall = true;
   callerCallState = 'CONNECTED';
   stopInChatRingingTone();
+  triggerAutoFullscreen('normal-celeb-call-inchat-view');
+
   const ringingCard = document.getElementById('inchat-call-ringing-card');
   if (ringingCard) {
     ringingCard.classList.add('hidden');
@@ -1504,7 +1513,7 @@ async function onInChatCallApproved(call) {
 
     const localWrapper = document.getElementById('inchat-local-camera-wrapper');
     if (localWrapper) {
-      localWrapper.className = 'absolute bottom-20 right-3 sm:right-4 w-28 sm:w-36 h-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-white/40 bg-slate-900 shadow-2xl z-20 transition-all duration-500';
+      localWrapper.className = 'absolute top-20 right-4 sm:top-24 sm:right-6 w-28 sm:w-36 h-36 sm:h-48 rounded-2xl overflow-hidden border-2 border-white/40 bg-slate-900 shadow-2xl z-20 transition-all duration-300';
     }
     const pipLabel = document.getElementById('inchat-pip-label');
     if (pipLabel) pipLabel.classList.remove('hidden');
@@ -1530,11 +1539,17 @@ async function onInChatCallApproved(call) {
   if (inChatCallTimerInterval) clearInterval(inChatCallTimerInterval);
   const timerEl = document.getElementById('inchat-call-timer');
   if (timerEl) timerEl.textContent = '00:00';
+  const initialPipTimer = document.getElementById('floating-pip-timer');
+  if (initialPipTimer) initialPipTimer.textContent = '00:00';
+
   inChatCallTimerInterval = setInterval(() => {
     inChatCallSeconds++;
     const m = String(Math.floor(inChatCallSeconds / 60)).padStart(2, '0');
     const s = String(inChatCallSeconds % 60).padStart(2, '0');
-    if (timerEl) timerEl.textContent = `${m}:${s}`;
+    const timeStr = `${m}:${s}`;
+    if (timerEl) timerEl.textContent = timeStr;
+    const pipTimer = document.getElementById('floating-pip-timer');
+    if (pipTimer) pipTimer.textContent = timeStr;
   }, 1000);
 
   // Initialize WebRTC as caller
@@ -1557,9 +1572,13 @@ function onInChatCallEnded(endedBy = 'CELEBRITY') {
 function endNormalInChatCelebCall() {
   try {
     isCelebActiveCall = false;
+    isVipCallMinimized = false;
     callerCallState = 'IDLE';
     stopInChatRingingTone();
     stopLiveFrameStreaming();
+
+    // Hide minimized PiP widget if visible
+    document.getElementById('floating-vip-call-pip')?.classList.add('hidden');
 
     if (activePeerCall) {
       try {
@@ -1597,12 +1616,12 @@ function endNormalInChatCelebCall() {
     const btnMute = document.getElementById('btn-inchat-mute');
     if (btnMute) {
       btnMute.innerHTML = '<i class="fa-solid fa-microphone text-white"></i>';
-      btnMute.className = 'w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-lg border border-white/20 transition shadow-xl active:scale-95 cursor-pointer touch-manipulation select-none';
+      btnMute.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
     }
     const btnCam = document.getElementById('btn-inchat-camera');
     if (btnCam) {
       btnCam.innerHTML = '<i class="fa-solid fa-video text-white"></i>';
-      btnCam.className = 'w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-lg border border-white/20 transition shadow-xl active:scale-95 cursor-pointer touch-manipulation select-none';
+      btnCam.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
     }
 
     // Safely exit fullscreen
@@ -1680,13 +1699,13 @@ function toggleInChatCallMute() {
   if (inChatCallMuted) {
     if (btn) {
       btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-white"></i>';
-      btn.className = 'w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-lg border border-rose-400/40 transition shadow-xl shadow-rose-950/60 active:scale-95 cursor-pointer touch-manipulation select-none';
+      btn.className = 'w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-xl border border-rose-400/40 transition shadow-2xl active:scale-95 cursor-pointer';
     }
     showInChatToast('🔇 Microphone Muted');
   } else {
     if (btn) {
       btn.innerHTML = '<i class="fa-solid fa-microphone text-white"></i>';
-      btn.className = 'w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-lg border border-white/20 transition shadow-xl active:scale-95 cursor-pointer touch-manipulation select-none';
+      btn.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
     }
     showInChatToast('🎤 Microphone Active');
   }
@@ -1705,48 +1724,127 @@ function toggleInChatCamera() {
     if (overlay) overlay.classList.add('hidden');
     if (btn) {
       btn.innerHTML = '<i class="fa-solid fa-video text-white"></i>';
-      btn.className = 'w-12 h-12 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-lg border border-white/20 transition shadow-xl active:scale-95 cursor-pointer touch-manipulation select-none';
+      btn.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
     }
     showInChatToast('📹 Camera Turned On');
   } else {
     if (overlay) overlay.classList.remove('hidden');
     if (btn) {
       btn.innerHTML = '<i class="fa-solid fa-video-slash text-white"></i>';
-      btn.className = 'w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-lg border border-rose-400/40 transition shadow-xl shadow-rose-950/60 active:scale-95 cursor-pointer touch-manipulation select-none';
+      btn.className = 'w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-xl border border-rose-400/40 transition shadow-2xl active:scale-95 cursor-pointer';
     }
     showInChatToast('🚫 Camera Turned Off');
   }
 }
 
-function toggleElementFullScreen(targetId) {
-  const el = document.getElementById(targetId) || document.documentElement;
-  if (!document.fullscreenElement) {
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-    if (req) {
-      req.call(el).catch(err => {
-        console.warn('Fullscreen request blocked or not permitted:', err);
-      });
+// Automatically triggers HTML5 Fullscreen for VIP Celebrity calls
+function triggerAutoFullscreen(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (req) {
+        req.call(el).catch(err => {
+          console.warn('[AutoFullscreen] Browser blocked native fullscreen without direct user gesture; fallback to 100vw x 100vh modal:', err);
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[AutoFullscreen] Exception:', e);
+  }
+}
+
+// Minimizes active VIP Celebrity Call to a floating Picture-in-Picture (PiP) badge in bottom right corner
+function minimizeVipCallToPip() {
+  if (!isCelebActiveCall) return;
+  isVipCallMinimized = true;
+
+  // Hide the full screen call container without stopping any audio/video streams!
+  document.getElementById('normal-celeb-call-inchat-view')?.classList.add('hidden');
+  document.getElementById('celeb-active-call-box')?.classList.add('hidden');
+
+  // Exit native HTML5 fullscreen if active
+  try {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exitFn) exitFn.call(document).catch(() => {});
+    }
+  } catch (e) {}
+
+  // Reveal the floating PiP badge
+  const pipWidget = document.getElementById('floating-vip-call-pip');
+  if (pipWidget) {
+    pipWidget.classList.remove('hidden');
+    const nameEl = document.getElementById('floating-pip-name');
+    const avatarEl = document.getElementById('floating-pip-avatar');
+    if (currentUser?.role === 'CELEBRITY') {
+      if (nameEl) nameEl.textContent = lastFanCallerName || 'Arjun Nair (VIP Fan)';
+      if (avatarEl) avatarEl.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+    } else {
+      if (nameEl) nameEl.textContent = 'Dulquer Sithara';
+      if (avatarEl) avatarEl.src = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100';
+    }
+  }
+  showInChatToast('⏬ Call minimized to PiP. Tap widget to restore.');
+}
+
+// Restores full-screen view from the floating PiP badge
+function restoreVipCallFromPip() {
+  if (!isCelebActiveCall) return;
+  isVipCallMinimized = false;
+
+  // Hide the floating widget
+  document.getElementById('floating-vip-call-pip')?.classList.add('hidden');
+
+  // Push history state so back button will minimize again
+  try {
+    history.pushState({ inVipCall: true }, '');
+  } catch (e) {}
+
+  // Restore the active full-screen container and re-trigger auto fullscreen
+  if (currentUser?.role === 'CELEBRITY') {
+    const celebBox = document.getElementById('celeb-active-call-box');
+    if (celebBox) {
+      celebBox.classList.remove('hidden');
+      triggerAutoFullscreen('celeb-active-call-box');
     }
   } else {
-    const ex = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
-    if (ex) {
-      ex.call(document).catch(err => console.warn('Exit fullscreen err:', err));
+    const inchatView = document.getElementById('normal-celeb-call-inchat-view');
+    if (inchatView) {
+      inchatView.classList.remove('hidden');
+      triggerAutoFullscreen('normal-celeb-call-inchat-view');
     }
   }
 }
 
-function updateFullscreenButtonState() {
-  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
-  const inchatBtn = document.getElementById('btn-inchat-fullscreen');
-  if (inchatBtn) {
-    inchatBtn.innerHTML = isFs 
-      ? '<i class="fa-solid fa-compress"></i><span>Exit Full Screen</span>' 
-      : '<i class="fa-solid fa-expand"></i><span>Full Screen</span>';
+// Ends the call directly from the minimized PiP widget
+function endMinimizedVipCall() {
+  document.getElementById('floating-vip-call-pip')?.classList.add('hidden');
+  isVipCallMinimized = false;
+  if (currentUser?.role === 'CELEBRITY') {
+    endCelebrityCall();
+  } else {
+    endNormalInChatCelebCall();
   }
 }
 
-document.addEventListener('fullscreenchange', updateFullscreenButtonState);
-document.addEventListener('webkitfullscreenchange', updateFullscreenButtonState);
+// Hardware / Browser Back button minimization handling
+window.addEventListener('popstate', (e) => {
+  if (isCelebActiveCall && !isVipCallMinimized) {
+    minimizeVipCallToPip();
+  }
+});
+
+// Fullscreen exit (e.g. Escape key) minimization handling
+function onGlobalFullscreenChange() {
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+  if (!isFs && isCelebActiveCall && !isVipCallMinimized) {
+    minimizeVipCallToPip();
+  }
+}
+document.addEventListener('fullscreenchange', onGlobalFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onGlobalFullscreenChange);
 
 // ----------------- RANDOM MATCHMAKING & CALL LOGIC -----------------
 
@@ -2454,10 +2552,16 @@ function toggleCelebrityCamera() {
 
   if (isCelebCameraOff) {
     overlay?.classList.remove('hidden');
-    if (btn) btn.innerHTML = '<i class="fa-solid fa-video-slash text-rose-500"></i><span>Cam Off</span>';
+    if (btn) {
+      btn.innerHTML = '<i class="fa-solid fa-video-slash text-white"></i>';
+      btn.className = 'w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-xl border border-rose-400/40 transition shadow-2xl active:scale-95 cursor-pointer';
+    }
   } else {
     overlay?.classList.add('hidden');
-    if (btn) btn.innerHTML = '<i class="fa-solid fa-video"></i><span>Camera</span>';
+    if (btn) {
+      btn.innerHTML = '<i class="fa-solid fa-video text-white"></i>';
+      btn.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
+    }
   }
 }
 
@@ -2468,9 +2572,13 @@ function toggleCelebrityCallMute() {
     celebLocalStream.getAudioTracks().forEach(track => { track.enabled = !isCelebCallMuted; });
   }
   if (btn) {
-    btn.innerHTML = isCelebCallMuted 
-      ? '<i class="fa-solid fa-microphone-slash text-rose-400"></i><span>Unmute</span>' 
-      : '<i class="fa-solid fa-microphone"></i><span>Mute</span>';
+    if (isCelebCallMuted) {
+      btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-white"></i>';
+      btn.className = 'w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center text-xl border border-rose-400/40 transition shadow-2xl active:scale-95 cursor-pointer';
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-microphone text-white"></i>';
+      btn.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
+    }
   }
 }
 
@@ -2491,6 +2599,12 @@ async function approveIncomingFanCall() {
   // Switch to calls desk to view feeds
   switchCelebrityTab('calls');
   document.getElementById('celeb-active-call-box')?.classList.remove('hidden');
+
+  // Trigger Auto Fullscreen on celebrity answering call
+  triggerAutoFullscreen('celeb-active-call-box');
+  try {
+    history.pushState({ inVipCall: true }, '');
+  } catch (e) {}
 
   // Keep remote video element hidden until actual video track renders so incoming snapshot frames aren't covered
   const celebRemoteVid = document.getElementById('celeb-remote-video');
@@ -2521,12 +2635,17 @@ async function approveIncomingFanCall() {
   if (celebActiveCallTimer) clearInterval(celebActiveCallTimer);
   const timerEl = document.getElementById('celeb-active-call-timer');
   if (timerEl) timerEl.textContent = '00:00';
+  const initialPipTimer = document.getElementById('floating-pip-timer');
+  if (initialPipTimer) initialPipTimer.textContent = '00:00';
 
   celebActiveCallTimer = setInterval(() => {
     celebActiveCallSeconds++;
     const m = String(Math.floor(celebActiveCallSeconds / 60)).padStart(2, '0');
     const s = String(celebActiveCallSeconds % 60).padStart(2, '0');
-    if (timerEl) timerEl.textContent = `${m}:${s}`;
+    const timeStr = `${m}:${s}`;
+    if (timerEl) timerEl.textContent = timeStr;
+    const pipTimer = document.getElementById('floating-pip-timer');
+    if (pipTimer) pipTimer.textContent = timeStr;
   }, 1000);
 
   // 1. Celebrity captures their own live camera for PIP and sending to fan
@@ -2627,6 +2746,7 @@ function declineIncomingFanCall() {
 
 function endCelebrityCall(silent = false) {
   isCelebActiveCall = false;
+  isVipCallMinimized = false;
   stopCelebrityIncomingRingtone();
   stopLiveFrameStreaming();
   if (celebActiveCallTimer) {
@@ -2642,6 +2762,8 @@ function endCelebrityCall(silent = false) {
   closeRtcPeerConnection();
   stopCelebrityCallVideos();
 
+  // Hide floating PiP widget if active
+  document.getElementById('floating-vip-call-pip')?.classList.add('hidden');
   document.getElementById('global-celeb-incoming-modal')?.classList.add('hidden');
   document.getElementById('celeb-active-call-box')?.classList.add('hidden');
   document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
@@ -2649,6 +2771,20 @@ function endCelebrityCall(silent = false) {
     document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
   } else {
     document.getElementById('celeb-offline-box')?.classList.remove('hidden');
+  }
+
+  // Reset button appearances
+  isCelebCallMuted = false;
+  isCelebCameraOff = false;
+  const btnCelebMute = document.getElementById('btn-celeb-call-mute');
+  if (btnCelebMute) {
+    btnCelebMute.innerHTML = '<i class="fa-solid fa-microphone text-white"></i>';
+    btnCelebMute.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
+  }
+  const btnCelebCam = document.getElementById('btn-celeb-camera');
+  if (btnCelebCam) {
+    btnCelebCam.innerHTML = '<i class="fa-solid fa-video text-white"></i>';
+    btnCelebCam.className = 'w-14 h-14 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center text-xl border border-white/20 transition shadow-2xl active:scale-95 cursor-pointer';
   }
 
   if (document.fullscreenElement) {
