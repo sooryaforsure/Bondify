@@ -196,9 +196,13 @@ export class CelebrityService {
     callType: 'CELEBRITY_AUDIO' | 'CELEBRITY_VIDEO',
     offerSdp?: string
   ): any {
-    // Purge any old calls for this celebrity or caller so new call is immediately fresh
+    const now = Date.now();
+    // Purge old calls: expired (>120s) or tombstone expired (>30s after ending)
     for (const [id, c] of this.pendingLiveCalls.entries()) {
-      if (c.celebrityId === celebrityId || c.callerId === callerId || Date.now() - c.createdAt > 120000) {
+      const isExpired = now - c.createdAt > 120000;
+      const isTombstoneExpired = c.endedAt && (now - c.endedAt > 30000);
+      const isSamePair = (c.celebrityId === celebrityId || c.callerId === callerId) && (c.status === 'ENDED' || c.status === 'DECLINED');
+      if (isExpired || isTombstoneExpired || isSamePair) {
         this.pendingLiveCalls.delete(id);
       }
     }
@@ -212,7 +216,7 @@ export class CelebrityService {
       celebrityId,
       callType,
       status: 'RINGING',
-      createdAt: Date.now(),
+      createdAt: now,
       offerSdp,
       iceCandidates: []
     };
@@ -221,20 +225,39 @@ export class CelebrityService {
   }
 
   getLiveCallStatus(query: { callId?: string; celebrityId?: string; callerId?: string }): any {
+    const now = Date.now();
     if (query.callId) {
       return this.pendingLiveCalls.get(query.callId) || null;
     }
     if (query.celebrityId) {
+      // 1st priority: Active/Ringing call
       for (const call of this.pendingLiveCalls.values()) {
         if (call.celebrityId === query.celebrityId && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
           return call;
         }
       }
+      // 2nd priority: Recently declined/ended call (within 30s tombstone)
+      for (const call of this.pendingLiveCalls.values()) {
+        if (call.celebrityId === query.celebrityId && (call.status === 'DECLINED' || call.status === 'ENDED')) {
+          if (call.endedAt && (now - call.endedAt < 30000)) {
+            return call;
+          }
+        }
+      }
     }
     if (query.callerId) {
+      // 1st priority: Active/Ringing call
       for (const call of this.pendingLiveCalls.values()) {
-        if (call.callerId === query.callerId && call.status !== 'ENDED') {
+        if (call.callerId === query.callerId && (call.status === 'RINGING' || call.status === 'APPROVED' || call.status === 'CONNECTED')) {
           return call;
+        }
+      }
+      // 2nd priority: Recently declined/ended call (within 30s tombstone)
+      for (const call of this.pendingLiveCalls.values()) {
+        if (call.callerId === query.callerId && (call.status === 'DECLINED' || call.status === 'ENDED')) {
+          if (call.endedAt && (now - call.endedAt < 30000)) {
+            return call;
+          }
         }
       }
     }
@@ -245,7 +268,7 @@ export class CelebrityService {
     const call = this.pendingLiveCalls.get(callId);
     if (!call) throw new Error('Call session not found');
     if (action === 'APPROVE') {
-      call.status = 'APPROVED';
+      call.status = 'CONNECTED';
       call.approvedAt = Date.now();
       if (answerSdp) call.answerSdp = answerSdp;
     } else {

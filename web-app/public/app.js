@@ -17,6 +17,8 @@ let celebRemoteStream = null;
 let celebLocalStream = null;
 let isCelebCameraOff = false;
 let isCelebActiveCall = false;
+let callerCallState = 'IDLE'; // 'IDLE' | 'RINGING' | 'CONNECTED' | 'ENDED' | 'DECLINED'
+const handledCallSessions = new Set();
 let lastFanCallerName = 'Arjun Nair (VIP Gold Fan)';
 let celebCallChannel = null;
 let currentCallPartner = null;
@@ -60,6 +62,43 @@ function postCrossTabCallEvent(payload) {
   } catch (e) {}
 }
 
+async function acquireUserMediaSafely() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('No mediaDevices support in browser');
+  }
+
+  // Tier 1: User-facing camera (optimal for mobile devices)
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: true
+    });
+  } catch (err1) {
+    console.log('[Camera] Tier 1 facingMode failed, trying desktop standard constraints:', err1?.name || err1);
+  }
+
+  // Tier 2: Standard video + audio (desktop/laptop webcam & integrated mic)
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    });
+  } catch (err2) {
+    console.log('[Camera] Tier 2 video+audio failed, trying video only:', err2?.name || err2);
+  }
+
+  // Tier 3: Video only (when microphone is missing or permission denied)
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: false
+    });
+  } catch (err3) {
+    console.log('[Camera] Tier 3 video-only failed:', err3?.name || err3);
+    throw err3;
+  }
+}
+
 async function getOrCreateLocalCamera(isCeleb = false) {
   if (isCeleb) {
     if (celebLocalStream && celebLocalStream.active) {
@@ -71,17 +110,10 @@ async function getOrCreateLocalCamera(isCeleb = false) {
       return celebLocalStream;
     }
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        celebLocalStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: true
-        });
-      } else {
-        throw new Error('No mediaDevices');
-      }
+      celebLocalStream = await acquireUserMediaSafely();
     } catch (err) {
-      console.warn('[Camera] Celeb getUserMedia fallback:', err);
-      const celebAvatar = currentUser?.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
+      console.warn('[Camera] Celeb getUserMedia fallback to canvas:', err);
+      const celebAvatar = currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
       celebLocalStream = createLiveVideoStream(celebAvatar, 'Dulquer Sithara (Host Camera)', 'Celebrity Camera Feed');
     }
     const localVid = document.getElementById('celeb-local-video');
@@ -105,17 +137,10 @@ async function getOrCreateLocalCamera(isCeleb = false) {
       return localMediaStream;
     }
     try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        localMediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: true
-        });
-      } else {
-        throw new Error('No mediaDevices');
-      }
+      localMediaStream = await acquireUserMediaSafely();
     } catch (err) {
-      console.warn('[Camera] User getUserMedia fallback:', err);
-      const myAvatar = currentUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
+      console.warn('[Camera] User getUserMedia fallback to canvas:', err);
+      const myAvatar = currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
       const myName = currentUser?.fullName || 'Arjun Nair';
       localMediaStream = createLiveVideoStream(myAvatar, `${myName} (Camera)`, 'User Camera Feed');
     }
@@ -249,7 +274,11 @@ function startLiveFrameStreaming(role) {
     }
     const vidId = role === 'CELEBRITY' ? 'celeb-local-video' : 'normal-inchat-local-video';
     const localVid = document.getElementById(vidId);
-    if (!localVid || localVid.videoWidth === 0 || localVid.paused) return;
+    if (!localVid) return;
+    if (localVid.paused && localVid.srcObject) {
+      localVid.play().catch(() => {});
+    }
+    if (localVid.videoWidth === 0) return;
     try {
       const canvas = document.createElement('canvas');
       canvas.width = 320;
@@ -264,7 +293,7 @@ function startLiveFrameStreaming(role) {
         body: JSON.stringify({ callId: activeServerCallId, role, frame })
       }).catch(() => {});
     } catch (e) {}
-  }, 450);
+  }, 400);
 }
 
 function stopLiveFrameStreaming() {
@@ -282,7 +311,7 @@ function applyRemoteVideoFrame(frame, fromRole) {
     if (frameImg) {
       frameImg.src = frame;
       frameImg.classList.remove('hidden');
-      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused) {
+      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
         frameImg.classList.add('hidden');
       }
     }
@@ -292,7 +321,7 @@ function applyRemoteVideoFrame(frame, fromRole) {
     if (frameImg) {
       frameImg.src = frame;
       frameImg.classList.remove('hidden');
-      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused) {
+      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused && remoteVid.videoWidth > 0) {
         frameImg.classList.add('hidden');
       }
     }
@@ -1133,6 +1162,7 @@ async function startNormalToCelebCall(celebId, callType) {
 
   inChatCurrentCallType = callType;
   isCelebActiveCall = true;
+  callerCallState = 'RINGING';
 
   // Stay INSIDE the celebrity chat screen, do NOT switch to random connect tab
   openCelebrityChatScreen(celebId);
@@ -1210,6 +1240,7 @@ function startCallerCallStatusPoll() {
   callerStatusPollInterval = setInterval(async () => {
     if (!isCelebActiveCall) {
       clearInterval(callerStatusPollInterval);
+      callerStatusPollInterval = null;
       return;
     }
     try {
@@ -1221,12 +1252,19 @@ function startCallerCallStatusPoll() {
         const data = await res.json();
         if (data.success && data.call) {
           const call = data.call;
-          if (call.status === 'APPROVED') {
-            onInChatCallApproved(call);
+          if (call.status === 'APPROVED' || call.status === 'CONNECTED') {
+            if (callerCallState !== 'CONNECTED') {
+              callerCallState = 'CONNECTED';
+              onInChatCallApproved(call);
+            }
           } else if (call.status === 'DECLINED') {
+            callerCallState = 'DECLINED';
             onInChatCallDeclined();
+            return;
           } else if (call.status === 'ENDED') {
-            onInChatCallEnded();
+            callerCallState = 'ENDED';
+            onInChatCallEnded(call.endedBy);
+            return;
           }
           if (call.answerSdp && rtcPeerConnection && !rtcPeerConnection.remoteDescription) {
             handleRtcAnswer(call.answerSdp);
@@ -1274,6 +1312,8 @@ function stopNormalCallVideos() {
 }
 
 async function onInChatCallApproved(call) {
+  isCelebActiveCall = true;
+  callerCallState = 'CONNECTED';
   stopInChatRingingTone();
   const ringingCard = document.getElementById('inchat-call-ringing-card');
   if (ringingCard) ringingCard.classList.add('hidden');
@@ -1324,18 +1364,21 @@ async function onInChatCallApproved(call) {
 }
 
 function onInChatCallDeclined() {
+  callerCallState = 'DECLINED';
   endNormalInChatCelebCall();
-  alert('❌ Dulquer Sithara declined the call request.');
+  alert('❌ Dulquer Sithara is currently unavailable / declined the call request.');
 }
 
-function onInChatCallEnded() {
+function onInChatCallEnded(endedBy = 'CELEBRITY') {
+  callerCallState = 'ENDED';
   endNormalInChatCelebCall();
-  alert('📞 Dulquer Sithara ended the call.');
+  alert(`📞 Call ended by ${endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'caller'}.`);
 }
 
 function endNormalInChatCelebCall() {
   try {
     isCelebActiveCall = false;
+    callerCallState = 'IDLE';
     stopInChatRingingTone();
     stopLiveFrameStreaming();
     if (callerStatusPollInterval) {
@@ -2094,6 +2137,9 @@ function toggleCelebrityAvailability() {
 }
 
 function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callId = null) {
+  if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
+    return;
+  }
   if (callId) activeServerCallId = callId;
   lastFanCallerName = callerName;
   const callerEl = document.getElementById('incoming-caller-name');
@@ -2159,12 +2205,13 @@ function startCelebrityIncomingCallPoll() {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.call && data.call.status === 'RINGING') {
-          activeServerCallId = data.call.callId;
-          lastFanCallerName = `${data.call.callerName || data.call.caller || 'Arjun Nair'} (VIP Fan)`;
-          const globalBox = document.getElementById('global-celeb-incoming-modal');
-          if (!globalBox || globalBox.classList.contains('hidden')) {
-            simulateIncomingFanCall(lastFanCallerName, data.call.callId);
+          const callId = data.call.callId;
+          if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
+            return;
           }
+          activeServerCallId = callId;
+          lastFanCallerName = `${data.call.callerName || data.call.caller || 'Arjun Nair'} (VIP Fan)`;
+          simulateIncomingFanCall(lastFanCallerName, callId);
         }
       }
     } catch (e) {}
@@ -2241,6 +2288,11 @@ async function approveIncomingFanCall() {
   playGateBeep(true);
   isCelebActiveCall = true;
 
+  const callIdToApprove = activeServerCallId;
+  if (callIdToApprove) {
+    handledCallSessions.add(callIdToApprove);
+  }
+
   document.getElementById('global-celeb-incoming-modal')?.classList.add('hidden');
   document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
   document.getElementById('celeb-online-waiting-box')?.classList.add('hidden');
@@ -2248,6 +2300,15 @@ async function approveIncomingFanCall() {
   // Switch to calls desk to view feeds
   switchCelebrityTab('calls');
   document.getElementById('celeb-active-call-box')?.classList.remove('hidden');
+
+  // Immediately notify server so call status updates to CONNECTED without delay
+  if (callIdToApprove) {
+    fetch('/api/celebrities/call/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callId: callIdToApprove, action: 'APPROVE' })
+    }).catch(e => console.warn('Approve server call error:', e));
+  }
 
   // Start active call timer
   celebActiveCallSeconds = 0;
@@ -2271,32 +2332,29 @@ async function approveIncomingFanCall() {
   // 3. Initialize WebRTC peer connection as CELEBRITY
   initWebRtcConnection('CELEBRITY');
 
-  // 3. Post approval to Server API for multi-device & internet live calls
-  if (activeServerCallId) {
-    fetch('/api/celebrities/call/respond', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callId: activeServerCallId, action: 'APPROVE' })
-    }).catch(e => console.warn('Approve server call error:', e));
-  }
-
   // 4. Broadcast approval across browser tabs
   const payload = {
     type: 'CALL_APPROVED',
     state: 'connected',
-    callId: activeServerCallId,
+    callId: callIdToApprove,
     celebId: currentUser?.id || 'usr_celeb_1',
     caller: lastFanCallerName || 'Arjun Nair',
     time: Date.now()
   };
-  localStorage.setItem('fc_celeb_call_state', JSON.stringify(payload));
+  try {
+    localStorage.setItem('fc_celeb_call_state', JSON.stringify(payload));
+  } catch {}
   postCrossTabCallEvent(payload);
-  alert('✅ Call Approved! 1-on-1 VIP Video Call Connected with fan.');
 }
 
 function declineIncomingFanCall() {
   stopCelebrityIncomingRingtone();
   playGateBeep(false);
+
+  const callIdToDecline = activeServerCallId;
+  if (callIdToDecline) {
+    handledCallSessions.add(callIdToDecline);
+  }
 
   document.getElementById('global-celeb-incoming-modal')?.classList.add('hidden');
   document.getElementById('incoming-fan-call-box')?.classList.add('hidden');
@@ -2307,11 +2365,11 @@ function declineIncomingFanCall() {
   }
 
   // Inform Server API
-  if (activeServerCallId) {
+  if (callIdToDecline) {
     fetch('/api/celebrities/call/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callId: activeServerCallId, action: 'DECLINE' })
+      body: JSON.stringify({ callId: callIdToDecline, action: 'DECLINE' })
     }).catch(e => console.warn('Decline server call error:', e));
   }
 
@@ -2320,11 +2378,12 @@ function declineIncomingFanCall() {
   } catch {}
 
   // Broadcast decline across browser tabs
-  const payload = { type: 'CALL_DECLINED', state: 'declined', callId: activeServerCallId, time: Date.now() };
-  localStorage.setItem('fc_celeb_call_state', JSON.stringify(payload));
+  const payload = { type: 'CALL_DECLINED', state: 'declined', callId: callIdToDecline, time: Date.now() };
+  try {
+    localStorage.setItem('fc_celeb_call_state', JSON.stringify(payload));
+  } catch {}
   postCrossTabCallEvent(payload);
   activeServerCallId = null;
-  alert('Fan call request declined.');
 }
 
 function endCelebrityCall(silent = false) {
@@ -2344,6 +2403,44 @@ function endCelebrityCall(silent = false) {
   if (celebAvailable) {
     document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
   } else {
+    document.getElementById('celeb-offline-box')?.classList.remove('hidden');
+  }
+
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+
+  // Inform Server API
+  const callIdToEnd = activeServerCallId;
+  if (callIdToEnd) {
+    handledCallSessions.add(callIdToEnd);
+    fetch('/api/celebrities/call/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callId: callIdToEnd, endedBy: 'CELEBRITY' })
+    }).catch(e => console.warn('End server call error:', e));
+  }
+
+  try {
+    localStorage.removeItem('fc_incoming_celeb_call');
+  } catch {}
+
+  // Broadcast call termination to normal user
+  if (!silent) {
+    const endPayload = {
+      type: 'CALL_ENDED',
+      state: 'ended',
+      callId: callIdToEnd,
+      endedBy: 'CELEBRITY',
+      time: Date.now()
+    };
+    try {
+      localStorage.setItem('fc_celeb_call_state', JSON.stringify(endPayload));
+    } catch {}
+    postCrossTabCallEvent(endPayload);
+  }
+  activeServerCallId = null;
+}
     document.getElementById('celeb-offline-box')?.classList.remove('hidden');
   }
 
@@ -3157,14 +3254,22 @@ function initWebSocket() {
         setCallState('idle');
       } else if (payload.type === 'INCOMING_CELEB_CALL') {
         if (payload.call) {
-          activeServerCallId = payload.call.callId;
+          const callId = payload.call.callId;
+          if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
+            return;
+          }
+          activeServerCallId = callId;
           lastFanCallerName = `${payload.call.callerName || payload.call.caller || 'Arjun Nair'} (VIP Fan)`;
-          simulateIncomingFanCall(lastFanCallerName, payload.call.callId);
+          simulateIncomingFanCall(lastFanCallerName, callId);
         }
       } else if (payload.type === 'CELEB_CALL_RESPONSE') {
         if (payload.action === 'APPROVE') {
-          onInChatCallApproved(payload.call);
+          if (callerCallState !== 'CONNECTED') {
+            callerCallState = 'CONNECTED';
+            onInChatCallApproved(payload.call);
+          }
         } else {
+          callerCallState = 'DECLINED';
           onInChatCallDeclined();
         }
       } else if (payload.type === 'CELEB_CALL_ENDED') {
@@ -3172,7 +3277,7 @@ function initWebSocket() {
           endCelebrityCall(true);
           alert('📞 Fan disconnected / ended the call.');
         } else {
-          onInChatCallEnded();
+          onInChatCallEnded(payload.call?.endedBy || 'CELEBRITY');
         }
       } else if (payload.type === 'CELEB_WEBRTC_SIGNAL') {
         if (payload.signal?.type === 'RTC_OFFER' && currentUser?.role === 'CELEBRITY') {
@@ -4041,8 +4146,11 @@ async function handleCrossTabCallEvent(data) {
   if (isCelebTab) {
     if (data.type === 'INCOMING_CALL' || data.state === 'incoming') {
       if (celebAvailable) {
+        if (isCelebActiveCall || (data.callId && handledCallSessions.has(data.callId))) {
+          return;
+        }
         lastFanCallerName = `${data.caller || 'Arjun Nair'} (VIP Fan)`;
-        simulateIncomingFanCall(lastFanCallerName);
+        simulateIncomingFanCall(lastFanCallerName, data.callId);
       }
     } else if (data.type === 'CALL_ENDED' || data.state === 'ended') {
       const activeBox = document.getElementById('celeb-active-call-box');
@@ -4063,31 +4171,35 @@ async function handleCrossTabCallEvent(data) {
   if (isNormalTab) {
     if (data.type === 'CALL_APPROVED' || data.state === 'connected') {
       isCelebActiveCall = true;
-      const inchatView = document.getElementById('normal-celeb-call-inchat-view');
-      if (inchatView && !inchatView.classList.contains('hidden')) {
-        await onInChatCallApproved(data);
-      } else {
-        setCallState('connected', true);
-        await getOrCreateLocalCamera(false);
-        initWebRtcConnection('NORMAL_USER');
-        await createAndSendRtcOffer();
+      if (callerCallState !== 'CONNECTED') {
+        callerCallState = 'CONNECTED';
+        const inchatView = document.getElementById('normal-celeb-call-inchat-view');
+        if (inchatView && !inchatView.classList.contains('hidden')) {
+          await onInChatCallApproved(data);
+        } else {
+          setCallState('connected', true);
+          await getOrCreateLocalCamera(false);
+          initWebRtcConnection('NORMAL_USER');
+          await createAndSendRtcOffer();
+        }
       }
-      alert('🎉 Dulquer Sithara APPROVED your call! Live Video Call Connected.');
     } else if (data.type === 'CALL_DECLINED' || data.state === 'declined') {
       isCelebActiveCall = false;
+      callerCallState = 'DECLINED';
       const inchatView = document.getElementById('normal-celeb-call-inchat-view');
       if (inchatView && !inchatView.classList.contains('hidden')) {
         onInChatCallDeclined();
       } else {
         closeRtcPeerConnection();
         setCallState('idle');
-        alert('❌ Dulquer Sithara declined the call request.');
+        alert('❌ Dulquer Sithara is currently unavailable / declined the call request.');
       }
     } else if (data.type === 'CALL_ENDED' || data.state === 'ended') {
       isCelebActiveCall = false;
+      callerCallState = 'ENDED';
       const inchatView = document.getElementById('normal-celeb-call-inchat-view');
       if (inchatView && !inchatView.classList.contains('hidden')) {
-        onInChatCallEnded();
+        onInChatCallEnded(data.endedBy || 'CELEBRITY');
       } else {
         const activeCall = document.getElementById('call-state-connected');
         const searchingState = document.getElementById('call-state-searching');
@@ -4098,7 +4210,7 @@ async function handleCrossTabCallEvent(data) {
         setCallState('idle');
 
         if (wasActive) {
-          alert('📞 Dulquer Sithara ended the video call.');
+          alert(`📞 Call ended by ${data.endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'partner'}.`);
         } else if (wasSearching) {
           alert('📞 Call disconnected.');
         }
