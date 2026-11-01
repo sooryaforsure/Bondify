@@ -148,7 +148,22 @@ function initWebRtcConnection(role) {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:openrelay.metered.ca:80' },
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
     ]
   };
 
@@ -169,15 +184,22 @@ function initWebRtcConnection(role) {
 
     if (role === 'CELEBRITY') {
       const remoteVid = document.getElementById('celeb-remote-video');
+      const frameImg = document.getElementById('celeb-remote-frame');
       if (remoteVid) {
         remoteVid.srcObject = stream;
-        remoteVid.play().catch(e => console.log('Celeb remote video play error:', e));
+        remoteVid.play().then(() => {
+          if (frameImg) frameImg.classList.add('hidden');
+        }).catch(e => console.log('Celeb remote video play error:', e));
       }
     } else {
       const inChatRemoteVid = document.getElementById('normal-inchat-remote-video');
+      const frameImg = document.getElementById('normal-inchat-remote-frame');
       if (inChatRemoteVid) {
+        inChatRemoteVid.classList.remove('hidden');
         inChatRemoteVid.srcObject = stream;
-        inChatRemoteVid.play().catch(e => console.log('In-chat remote video play error:', e));
+        inChatRemoteVid.play().then(() => {
+          if (frameImg) frameImg.classList.add('hidden');
+        }).catch(e => console.log('In-chat remote video play error:', e));
       }
       const remoteVid = document.getElementById('remote-video');
       const fallback = document.getElementById('remote-video-fallback');
@@ -212,6 +234,68 @@ function sendWebRtcSignal(signal) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callId: activeServerCallId, signal })
     }).catch(e => console.warn('WebRTC signal POST error:', e));
+  }
+}
+
+// ----------------- LIVE VIDEO FRAME RELAY ENGINE (100% BLANK-SCREEN PREVENTION) -----------------
+let liveFrameInterval = null;
+function startLiveFrameStreaming(role) {
+  if (liveFrameInterval) clearInterval(liveFrameInterval);
+  liveFrameInterval = setInterval(() => {
+    if (!isCelebActiveCall || !activeServerCallId) {
+      clearInterval(liveFrameInterval);
+      liveFrameInterval = null;
+      return;
+    }
+    const vidId = role === 'CELEBRITY' ? 'celeb-local-video' : 'normal-inchat-local-video';
+    const localVid = document.getElementById(vidId);
+    if (!localVid || localVid.videoWidth === 0 || localVid.paused) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 240;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(localVid, 0, 0, 320, 240);
+      const frame = canvas.toDataURL('image/jpeg', 0.55);
+
+      fetch('/api/celebrities/call/frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: activeServerCallId, role, frame })
+      }).catch(() => {});
+    } catch (e) {}
+  }, 450);
+}
+
+function stopLiveFrameStreaming() {
+  if (liveFrameInterval) {
+    clearInterval(liveFrameInterval);
+    liveFrameInterval = null;
+  }
+}
+
+function applyRemoteVideoFrame(frame, fromRole) {
+  if (!frame) return;
+  if (fromRole === 'CELEBRITY') {
+    const frameImg = document.getElementById('normal-inchat-remote-frame');
+    const remoteVid = document.getElementById('normal-inchat-remote-video');
+    if (frameImg) {
+      frameImg.src = frame;
+      frameImg.classList.remove('hidden');
+      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused) {
+        frameImg.classList.add('hidden');
+      }
+    }
+  } else if (fromRole === 'NORMAL_USER') {
+    const frameImg = document.getElementById('celeb-remote-frame');
+    const remoteVid = document.getElementById('celeb-remote-video');
+    if (frameImg) {
+      frameImg.src = frame;
+      frameImg.classList.remove('hidden');
+      if (remoteVid && remoteVid.readyState >= 3 && !remoteVid.paused) {
+        frameImg.classList.add('hidden');
+      }
+    }
   }
 }
 
@@ -423,7 +507,8 @@ function createLiveVideoStream(avatarUrl, displayName, roleText) {
   }
 
   render();
-  const stream = canvas.captureStream(30);
+  const captureFn = canvas.captureStream || canvas.webkitCaptureStream;
+  const stream = captureFn ? captureFn.call(canvas, 30) : new MediaStream();
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (AudioCtx) {
@@ -1146,6 +1231,16 @@ function startCallerCallStatusPoll() {
           if (call.answerSdp && rtcPeerConnection && !rtcPeerConnection.remoteDescription) {
             handleRtcAnswer(call.answerSdp);
           }
+          if (call.iceCandidates && call.iceCandidates.length > 0) {
+            call.iceCandidates.forEach(item => {
+              if (item.fromRole === 'CELEBRITY') {
+                handleRtcCandidate(item.candidate, 'CELEBRITY');
+              }
+            });
+          }
+          if (call.lastCelebFrame) {
+            applyRemoteVideoFrame(call.lastCelebFrame, 'CELEBRITY');
+          }
         }
       }
     } catch (e) {}
@@ -1157,6 +1252,12 @@ function stopNormalCallVideos() {
   if (inChatRemoteVid) inChatRemoteVid.srcObject = null;
   const inChatLocalVid = document.getElementById('normal-inchat-local-video');
   if (inChatLocalVid) inChatLocalVid.srcObject = null;
+
+  const frameImg = document.getElementById('normal-inchat-remote-frame');
+  if (frameImg) {
+    frameImg.src = '';
+    frameImg.classList.add('hidden');
+  }
 
   const remoteVid = document.getElementById('remote-video');
   if (remoteVid) remoteVid.srcObject = null;
@@ -1195,6 +1296,9 @@ async function onInChatCallApproved(call) {
       pipVid.srcObject = stream;
       pipVid.play().catch(() => {});
     }
+
+    // Start live frame relay streaming from mobile user
+    startLiveFrameStreaming('NORMAL_USER');
   } else {
     document.getElementById('inchat-call-audio-card')?.classList.remove('hidden');
   }
@@ -1233,6 +1337,7 @@ function endNormalInChatCelebCall() {
   try {
     isCelebActiveCall = false;
     stopInChatRingingTone();
+    stopLiveFrameStreaming();
     if (callerStatusPollInterval) {
       clearInterval(callerStatusPollInterval);
       callerStatusPollInterval = null;
@@ -2014,15 +2119,33 @@ function startCelebrityIncomingCallPoll() {
     
     if (!isCelebTab) return;
 
-    // While in active call, poll status to detect if fan hung up / disconnected
+    // While in active call, poll status to detect if fan hung up / disconnected, apply WebRTC offer, candidates, and live video frames
     if (isCelebActiveCall && activeServerCallId) {
       try {
         const res = await fetch(`/api/celebrities/call/status?callId=${activeServerCallId}`);
         if (res.ok) {
           const data = await res.json();
-          if (data.success && data.call && data.call.status === 'ENDED') {
-            endCelebrityCall(true);
-            alert('📞 Fan ended / disconnected the call.');
+          if (data.success && data.call) {
+            const call = data.call;
+            if (call.status === 'ENDED') {
+              endCelebrityCall(true);
+              alert('📞 Fan ended / disconnected the call.');
+              return;
+            }
+            if (call.offerSdp && (!rtcPeerConnection || !rtcPeerConnection.remoteDescription)) {
+              console.log('[Celeb Poll] Applying offerSdp from status poll');
+              handleRtcOffer(call.offerSdp);
+            }
+            if (call.iceCandidates && call.iceCandidates.length > 0) {
+              call.iceCandidates.forEach(item => {
+                if (item.fromRole === 'NORMAL_USER') {
+                  handleRtcCandidate(item.candidate, 'NORMAL_USER');
+                }
+              });
+            }
+            if (call.lastNormalFrame) {
+              applyRemoteVideoFrame(call.lastNormalFrame, 'NORMAL_USER');
+            }
           }
         }
       } catch (e) {}
@@ -2062,6 +2185,11 @@ async function startCelebrityCallVideos() {
 function stopCelebrityCallVideos() {
   const celebRemoteVideo = document.getElementById('celeb-remote-video');
   if (celebRemoteVideo) celebRemoteVideo.srcObject = null;
+  const frameImg = document.getElementById('celeb-remote-frame');
+  if (frameImg) {
+    frameImg.src = '';
+    frameImg.classList.add('hidden');
+  }
   if (celebRemoteStream) {
     if (celebRemoteStream._stopCanvas) celebRemoteStream._stopCanvas();
     celebRemoteStream.getTracks().forEach(t => t.stop());
@@ -2137,7 +2265,10 @@ async function approveIncomingFanCall() {
   // 1. Celebrity captures their own live camera for PIP and sending to fan
   await getOrCreateLocalCamera(true);
 
-  // 2. Initialize WebRTC peer connection as CELEBRITY
+  // 2. Start live frame relay streaming from celebrity
+  startLiveFrameStreaming('CELEBRITY');
+
+  // 3. Initialize WebRTC peer connection as CELEBRITY
   initWebRtcConnection('CELEBRITY');
 
   // 3. Post approval to Server API for multi-device & internet live calls
@@ -2199,6 +2330,7 @@ function declineIncomingFanCall() {
 function endCelebrityCall(silent = false) {
   isCelebActiveCall = false;
   stopCelebrityIncomingRingtone();
+  stopLiveFrameStreaming();
   if (celebActiveCallTimer) {
     clearInterval(celebActiveCallTimer);
     celebActiveCallTimer = null;
@@ -3050,6 +3182,8 @@ function initWebSocket() {
         } else if (payload.signal?.type === 'RTC_ICE_CANDIDATE') {
           handleRtcCandidate(payload.signal.candidate, payload.signal.fromRole);
         }
+      } else if (payload.type === 'CELEB_VIDEO_FRAME') {
+        applyRemoteVideoFrame(payload.frame, payload.fromRole);
       }
     } catch (err) {
       console.error('WS Error:', err);

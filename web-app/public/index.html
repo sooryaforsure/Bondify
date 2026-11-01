@@ -469,7 +469,8 @@
                   </div>
 
                   <!-- 1. Remote Celebrity Video (Always in DOM, shows Dulquer when connected) -->
-                  <video id="normal-inchat-remote-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-cover bg-black z-0"></video>
+                  <video id="normal-inchat-remote-video" autoplay playsinline webkit-playsinline class="hidden absolute inset-0 w-full h-full object-cover bg-black z-0"></video>
+                  <img id="normal-inchat-remote-frame" class="hidden absolute inset-0 w-full h-full object-cover bg-slate-950 z-0" alt="Celebrity Video">
 
                   <!-- 2. Local User Camera Container (Full background while ringing; transforms to PiP when connected) -->
                   <div id="inchat-local-camera-wrapper" class="absolute inset-0 w-full h-full transition-all duration-500 z-10 overflow-hidden">
@@ -760,7 +761,8 @@
                   <!-- Live Video Viewport for Celebrity -->
                   <div class="w-full h-72 rounded-xl bg-black overflow-hidden mb-4 relative flex items-center justify-center border border-white/20 shadow-xl">
                     <!-- Fan's Live Video Feed -->
-                    <video id="celeb-remote-video" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <video id="celeb-remote-video" autoplay playsinline webkit-playsinline class="w-full h-full object-cover"></video>
+                    <img id="celeb-remote-frame" class="hidden absolute inset-0 w-full h-full object-cover bg-slate-950 z-0" alt="Fan Video">
 
                     <!-- Top Floating Live HUD -->
                     <div class="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-[10px] text-white flex items-center gap-2 border border-white/20 shadow">
@@ -1609,6 +1611,6 @@
   </div>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=17"></script>
+  <script src="/app.js?v=18"></script>
 </body>
 </html>

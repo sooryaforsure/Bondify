@@ -267,6 +267,17 @@ export class CelebrityService {
     return call;
   }
 
+  updateLiveFrame(callId: string, role: string, frame: string): any {
+    const call = this.pendingLiveCalls.get(callId);
+    if (!call) return null;
+    if (role === 'CELEBRITY') {
+      call.lastCelebFrame = frame;
+    } else {
+      call.lastNormalFrame = frame;
+    }
+    return call;
+  }
+
   endLiveCall(callId: string, endedBy: string): any {
     const call = this.pendingLiveCalls.get(callId);
     if (!call) return null;

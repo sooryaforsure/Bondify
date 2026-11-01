@@ -328,6 +328,24 @@ export class FrndServer {
       return this.jsonResponse({ success: true, call });
     }
 
+    if (path === '/api/celebrities/call/frame' && method === 'POST') {
+      const body = await req.json();
+      const call = this.celebrityService.updateLiveFrame(body.callId, body.role, body.frame);
+
+      // Fast frame relay to opposite user via WebSocket
+      const targetUserId = body.role === 'CELEBRITY' ? call?.callerId : call?.celebrityId;
+      if (targetUserId) {
+        this.matchmakingService.sendToUser(targetUserId, {
+          type: 'CELEB_VIDEO_FRAME',
+          fromRole: body.role,
+          frame: body.frame,
+          callId: body.callId
+        });
+      }
+
+      return this.jsonResponse({ success: true });
+    }
+
     if (path === '/api/celebrities/call/end' && method === 'POST') {
       const body = await req.json();
       console.log(`[CALL END] Call ${body.callId} ended by ${body.endedBy}`);
