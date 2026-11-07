@@ -300,146 +300,39 @@
         <!-- Tab 3: Celebrity Hub -->
         <div id="normal-tab-celebrity" class="normal-section hidden">
 
-          <!-- 1. LOCKED VIEW FOR NON-PREMIUM USERS -->
-          <div id="normal-celeb-hub-locked" class="hidden fc-glass-card max-w-xl mx-auto p-8 text-center border border-white/20 shadow-2xl relative overflow-hidden my-4">
-            <div class="w-20 h-20 rounded-3xl bg-gradient-to-b from-white/20 to-white/5 border border-white/40 flex items-center justify-center mx-auto mb-5 shadow-2xl">
-              <i class="fa-solid fa-crown text-3xl text-amber-300 drop-shadow"></i>
-            </div>
+          <!-- CELEBRITY HUB CONTAINER (Open & Free for All Users to Explore) -->
+          <div id="normal-celeb-hub-unlocked">
             
-            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold mb-3">
-              <i class="fa-solid fa-lock"></i>
-              <span>Exclusive VIP Access Only</span>
-            </div>
-
-            <h2 class="text-2xl font-black text-white tracking-tight mb-2">VIP Celebrity Hub Locked</h2>
-            <p class="text-sm text-slate-300 max-w-md mx-auto mb-6 leading-relaxed">
-              സെലിബ്രിറ്റികളുടെ എക്സ്ക്ലൂസീവ് ഫോട്ടോകൾ, വീഡിയോകൾ, ലൈവ് പോസ്റ്റുകൾ എന്നിവ കാണുന്നതിനും അവരുമായി കണക്റ്റ് ചെയ്യുന്നതിനും <span class="text-white font-bold">Celebrity Hub VIP Pass</span> സബ്‌സ്‌ക്രൈബ് ചെയ്യുക.
-            </p>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-md mx-auto mb-6 text-left">
-              <div class="p-3 rounded-xl bg-white/5 border border-white/10">
-                <i class="fa-solid fa-photo-film text-sky-400 mb-1.5 text-base"></i>
-                <h4 class="text-xs font-bold text-white">Exclusive Media</h4>
-                <p class="text-[10px] text-slate-400">Photos & 4K video clips</p>
-              </div>
-              <div class="p-3 rounded-xl bg-white/5 border border-white/10">
-                <i class="fa-solid fa-comments text-emerald-400 mb-1.5 text-base"></i>
-                <h4 class="text-xs font-bold text-white">1-on-1 Chat</h4>
-                <p class="text-[10px] text-slate-400">Direct artist messenger</p>
-              </div>
-              <div class="p-3 rounded-xl bg-white/5 border border-white/10">
-                <i class="fa-solid fa-video text-pink-400 mb-1.5 text-base"></i>
-                <h4 class="text-xs font-bold text-white">Live VIP Calling</h4>
-                <p class="text-[10px] text-slate-400">Real camera video calls</p>
-              </div>
-            </div>
-
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button onclick="unlockCelebrityHubPremium()" class="fc-chrome-btn w-full sm:w-auto px-8 py-3.5 rounded-full font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-2xl">
-                <i class="fa-solid fa-crown text-amber-500"></i>
-                <span>Unlock Celebrity Hub VIP (₹199 / Month)</span>
-              </button>
-            </div>
-            <p class="text-[11px] text-slate-400 mt-3 font-mono">Instant Activation • 200 Coins Value • Cancel anytime</p>
-          </div>
-
-          <!-- 2. UNLOCKED VIEW FOR PREMIUM USERS -->
-          <div id="normal-celeb-hub-unlocked" class="hidden">
-            
-            <!-- SUB-VIEW A: CELEBRITY HUB FEED & POSTS -->
+            <!-- SUB-VIEW A: INSTAGRAM-STYLE STORIES & FEED -->
             <div id="celeb-hub-main-view">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h2 class="text-xl font-black text-white flex items-center gap-2">
-                    <span>Celebrity Hub & Fan Feed</span>
-                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">VIP UNLOCKED</span>
-                  </h2>
-                  <p class="text-xs text-slate-400 mt-0.5">സെലിബ്രിറ്റികളുടെ പ്രൊഫൈലിലോ പോസ്റ്റിലോ ക്ലിക്ക് ചെയ്ത് 1-on-1 ചാറ്റും VIP കോളുകളും ആരംഭിക്കുക!</p>
+              
+              <!-- Top Stories Carousel Strip -->
+              <div class="mb-6 fc-glass-card p-4 rounded-2xl border border-white/10 shadow-xl overflow-hidden">
+                <div class="flex items-center justify-between mb-3 px-1">
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                    <i class="fa-solid fa-sparkles text-amber-400"></i> Featured Creators
+                  </span>
+                  <span class="text-[11px] text-slate-400 font-medium">Swipe to call & connect</span>
+                </div>
+                <!-- Horizontally Scrollable Creator Avatar Story Circles -->
+                <div id="celebrity-stories-strip" class="flex items-center gap-4 overflow-x-auto pb-1 px-1 scrollbar-none select-none">
+                  <!-- Populated dynamically by renderCelebrityStories() -->
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Left Sidebar: Celebrity Profile Card -->
-                <div class="lg:col-span-1 space-y-4">
-                  <div class="fc-glass-card p-6 text-center border border-white/20 shadow-xl relative">
-                    <div class="relative inline-block mb-3 cursor-pointer" onclick="openCelebrityChatScreen('usr_celeb_1')">
-                      <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-24 h-24 rounded-full mx-auto object-cover border-2 border-white/40 shadow-xl hover:scale-105 transition">
-                      <span class="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-black flex items-center justify-center text-[10px] text-white" title="Online Active">
-                        <i class="fa-solid fa-check"></i>
-                      </span>
-                    </div>
-
-                    <h3 class="text-base font-bold text-white flex items-center justify-center gap-1.5 cursor-pointer hover:text-blue-300 transition" onclick="openCelebrityChatScreen('usr_celeb_1')">
-                      <span>Dulquer Sithara</span>
-                      <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
-                    </h3>
-                    <p class="text-xs text-slate-300 mb-1">Playback Singer & Celebrity Artist</p>
-                    <p class="text-[11px] text-slate-400 mb-4 font-mono">350K Followers • Kochi, Kerala</p>
-
-                    <!-- Open 1-on-1 Chat button -->
-                    <button onclick="openCelebrityChatScreen('usr_celeb_1')" class="fc-chrome-btn w-full py-3 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 transition mb-2">
-                      <i class="fa-solid fa-comments text-sky-600"></i>
-                      <span>Open 1-on-1 VIP Chat & Calls</span>
-                    </button>
-                    <p class="text-[10px] text-slate-400">Direct private chat & video call with Dulquer Sithara</p>
-                  </div>
+              <!-- Main Center Feed (Instagram Style) -->
+              <div class="max-w-xl mx-auto" id="celebrity-feed-wrapper">
+                <div class="space-y-6" id="celebrity-feed">
+                  <!-- Populated dynamically by renderCelebrityFeed() -->
                 </div>
-
-                <!-- Right Area: Celebrity Posts Feed -->
-                <div class="lg:col-span-2 space-y-5" id="celebrity-feed"></div>
               </div>
             </div>
 
-            <!-- SUB-VIEW B: DEDICATED 1-ON-1 CELEBRITY CHAT & CALLING SCREEN -->
-            <div id="normal-celeb-chat-view" class="hidden fc-glass-card p-0 rounded-2xl border border-white/20 shadow-2xl overflow-hidden">
-              
-              <!-- Top Chat Header -->
-              <div class="p-4 bg-black/60 backdrop-blur-md border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
-                <div class="flex items-center gap-3">
-                  <button onclick="closeCelebrityChatScreen()" class="px-3.5 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-1.5 transition">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    <span>Back to Feed</span>
-                  </button>
-                  <div class="relative">
-                    <img id="chat-celeb-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150" class="w-10 h-10 rounded-full object-cover border border-white/30 shadow">
-                    <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border border-black"></span>
-                  </div>
-                  <div>
-                    <h3 id="chat-celeb-name" class="text-sm font-bold text-white flex items-center gap-1">
-                      <span>Dulquer Sithara</span>
-                      <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
-                    </h3>
-                    <p class="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                      <span>Active Online • VIP Direct Channel</span>
-                    </p>
-                  </div>
-                </div>
+          </div>
+        </div>
 
-                <!-- Direct VIP Audio & Video Call Action Buttons (Standard Symmetrical Layout) -->
-                <div class="flex items-center gap-2">
-                  <button onclick="handleCelebrityCallClick('usr_celeb_1', 'CELEBRITY_AUDIO')" class="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-white/20 hover:border-emerald-400/50 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer backdrop-blur-md" title="Start VIP Audio Call">
-                    <i class="fa-solid fa-phone text-emerald-400 text-xs"></i>
-                    <span>VIP Audio</span>
-                  </button>
-                  <button onclick="handleCelebrityCallClick('usr_celeb_1', 'CELEBRITY_VIDEO')" class="px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-white/20 hover:border-sky-400/50 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer backdrop-blur-md" title="Start VIP Video Call">
-                    <i class="fa-solid fa-video text-sky-400 text-xs"></i>
-                    <span>VIP Video</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Celebrity Room Banner inside Chat -->
-              <div class="px-6 py-3 bg-white/[0.02] border-b border-white/10 flex items-center justify-between gap-3 text-xs flex-wrap">
-                <div class="flex items-center gap-2 text-slate-300">
-                  <i class="fa-solid fa-shield-halved text-amber-400"></i>
-                  <span>End-to-End VIP Encrypted 1-on-1 Celebrity Room</span>
-                </div>
-                <div id="celeb-pass-status-badge"></div>
-              </div>
-
-              <!-- DEDICATED IN-CHAT CELEBRITY CALL VIEW (True Fullscreen Instagram / FaceTime Style) -->
-              <div id="normal-celeb-call-inchat-view" class="hidden fixed inset-0 w-screen h-screen z-50 bg-black flex flex-col justify-between overflow-hidden select-none">
+        <!-- DEDICATED FULLSCREEN CELEBRITY CALL VIEW (FaceTime / Instagram Style) -->
+        <div id="normal-celeb-call-inchat-view" class="hidden fixed inset-0 w-screen h-screen z-50 bg-black flex flex-col justify-between overflow-hidden select-none">
                 
                 <!-- Video Viewport & Ringing Card Container -->
                 <div id="normal-celeb-call-video-container" class="absolute inset-0 w-full h-full bg-black overflow-hidden flex items-center justify-center select-none">
@@ -547,15 +440,6 @@
               </div>
 
               <!-- Message History Scroll Viewport -->
-              <div id="celeb-chat-messages" class="p-6 space-y-4 max-h-[420px] min-h-[320px] overflow-y-auto"></div>
-
-              <!-- Bottom Chat Controls: Paywall if not subscribed, Input box if subscribed -->
-              <div id="celeb-chat-controls" class="p-4 bg-black/60 border-t border-white/10"></div>
-            </div>
-
-          </div>
-
-        </div>
 
         <!-- Tab 4: Customer Care Helpdesk -->
         <div id="normal-tab-support" class="normal-section hidden">
@@ -1743,6 +1627,77 @@
   </div>
 
   <!-- ============================================================== -->
+  <!-- CELEBRITY VIP CALLING CARD MODAL (Floating Card with Blurred Backdrop) -->
+  <!-- ============================================================== -->
+  <div id="modal-celeb-call-card" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+    <div class="fc-glass-card max-w-sm sm:max-w-md w-full p-6 sm:p-7 rounded-3xl border border-white/20 shadow-2xl relative text-center">
+      <!-- Close Button -->
+      <button onclick="closeCelebrityCallCard()" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95 cursor-pointer" title="Close">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+
+      <!-- Creator Avatar with Dynamic Online Ring -->
+      <div class="flex flex-col items-center mb-2">
+        <div class="relative mb-3">
+          <div id="card-celeb-ring" class="w-24 h-24 sm:w-28 sm:h-28 p-[3px] rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-xl transition-all duration-300">
+            <img id="card-celeb-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200" class="w-full h-full rounded-full object-cover border-2 border-slate-950">
+          </div>
+          <!-- Online/Offline Badge -->
+          <div id="card-celeb-badge" class="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-slate-950 flex items-center justify-center shadow">
+            <span class="w-2 h-2 rounded-full bg-white"></span>
+          </div>
+        </div>
+
+        <!-- Name & Verified Badge -->
+        <h3 class="text-xl font-black text-white flex items-center justify-center gap-1.5 drop-shadow">
+          <span id="card-celeb-name">Dulquer Sithara</span>
+          <i class="fa-solid fa-circle-check text-sky-400 text-sm"></i>
+        </h3>
+        <!-- Category / Role / Rate -->
+        <p id="card-celeb-role" class="text-xs text-slate-300 mt-1">Playback Singer & Music Artist</p>
+
+        <!-- Live Status Pill (Online / Offline) -->
+        <div class="mt-2.5 mb-2 flex justify-center">
+          <span id="card-celeb-status-indicator" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span>Online • Accepting Calls</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- VIP Fan Pass Status & Activation Area -->
+      <div id="card-fan-pass-area" class="mb-5 p-3.5 rounded-2xl bg-white/[0.04] border border-white/10 text-left">
+        <!-- Rendered dynamically by updateCardFanPassUI() -->
+      </div>
+
+      <!-- Dual Call Action Buttons (Audio & Video) -->
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <!-- VIP Audio Call -->
+        <button id="btn-card-audio-call" onclick="handleCelebrityCallClick(currentActiveChatCelebId, 'CELEBRITY_AUDIO')" class="group py-3.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/40 border border-emerald-400/30 flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer">
+          <span id="btn-card-audio-icon-wrap" class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-base group-hover:scale-110 transition-transform">
+            <i class="fa-solid fa-phone"></i>
+          </span>
+          <span class="text-xs">VIP Audio Call</span>
+        </button>
+
+        <!-- VIP Video Call -->
+        <button id="btn-card-video-call" onclick="handleCelebrityCallClick(currentActiveChatCelebId, 'CELEBRITY_VIDEO')" class="group py-3.5 px-3 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-sky-950/40 border border-sky-400/30 flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer">
+          <span id="btn-card-video-icon-wrap" class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-base group-hover:scale-110 transition-transform">
+            <i class="fa-solid fa-video"></i>
+          </span>
+          <span class="text-xs">VIP Video Call</span>
+        </button>
+      </div>
+
+      <!-- Security / Privacy Trust Pill -->
+      <div class="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+        <i class="fa-solid fa-shield-halved text-amber-400"></i>
+        <span>End-to-End Encrypted 1-on-1 VIP Session</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
   <!-- POST-CALL FAN SATISFACTION & AUDIO/VIDEO BUG REVIEW MODAL       -->
   <!-- ============================================================== -->
   <div id="modal-call-review" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
@@ -1803,6 +1758,6 @@
   <audio id="vip-remote-audio" autoplay playsinline></audio>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=42"></script>
+  <script src="/app.js?v=43"></script>
 </body>
 </html>
