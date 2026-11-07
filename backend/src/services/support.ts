@@ -1,4 +1,5 @@
 import { SupportTicket, SupportChatMessage, UserRole } from '../types/index.ts';
+import { isDbAvailable, query, execute } from '../lib/db.ts';
 
 export class SupportService {
   private tickets: Map<string, SupportTicket> = new Map();
@@ -109,6 +110,34 @@ export class SupportService {
     this.userActiveTicket.set('usr_org_1', orgTicketId);
   }
 
+  async syncSeedToDb(): Promise<void> {
+    if (!isDbAvailable()) return;
+    try {
+      for (const t of this.tickets.values()) {
+        await execute(
+          `INSERT INTO support_tickets (
+            id, user_id, user_name, user_role, user_phone, status, assigned_agent_id, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT (id) DO NOTHING`,
+          [t.id, t.userId, t.userName, t.userRole, t.userPhone, t.status, t.assignedAgentId || null, t.createdAt]
+        );
+
+        for (const m of t.messages) {
+          await execute(
+            `INSERT INTO support_messages (
+              id, ticket_id, sender_id, sender_role, content, timestamp
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (id) DO NOTHING`,
+            [m.id, m.ticketId, m.senderId, m.senderRole, m.content, m.timestamp]
+          );
+        }
+      }
+      console.log('[Support] Default tickets & messages synchronized to PostgreSQL');
+    } catch (err) {
+      console.warn('[Support] Failed to sync support tickets to DB:', err);
+    }
+  }
+
   getTicket(ticketId: string): SupportTicket | undefined {
     return this.tickets.get(ticketId);
   }
@@ -141,6 +170,16 @@ export class SupportService {
 
     this.tickets.set(ticketId, newTicket);
     this.userActiveTicket.set(userId, ticketId);
+
+    if (isDbAvailable()) {
+      execute(
+        `INSERT INTO support_tickets (
+          id, user_id, user_name, user_role, user_phone, status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [newTicket.id, newTicket.userId, newTicket.userName, newTicket.userRole, newTicket.userPhone, newTicket.status, newTicket.createdAt]
+      ).catch(err => console.warn('[Support] Failed to insert ticket to DB:', err));
+    }
+
     return newTicket;
   }
 
@@ -168,6 +207,22 @@ export class SupportService {
       ticket.assignedAgentId = senderId;
     }
 
+    if (isDbAvailable()) {
+      execute(
+        `INSERT INTO support_messages (
+          id, ticket_id, sender_id, sender_role, content, timestamp
+        ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [msg.id, msg.ticketId, msg.senderId, msg.senderRole, msg.content, msg.timestamp]
+      ).catch(err => console.warn('[Support] Failed to insert message to DB:', err));
+
+      if (senderRole === 'SUPPORT') {
+        execute(
+          `UPDATE support_tickets SET status = 'IN_PROGRESS', assigned_agent_id = $1 WHERE id = $2`,
+          [senderId, ticketId]
+        ).catch(err => console.warn('[Support] Failed to update ticket status in DB:', err));
+      }
+    }
+
     return msg;
   }
 
@@ -182,6 +237,12 @@ export class SupportService {
     if (!ticket) throw new Error('Ticket not found');
     ticket.status = 'RESOLVED';
     this.userActiveTicket.delete(ticket.userId);
+
+    if (isDbAvailable()) {
+      execute(`UPDATE support_tickets SET status = 'RESOLVED' WHERE id = $1`, [ticketId])
+        .catch(err => console.warn('[Support] Failed to mark ticket resolved in DB:', err));
+    }
+
     return ticket;
   }
 }

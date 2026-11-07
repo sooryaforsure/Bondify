@@ -474,7 +474,14 @@
                   </div>
 
                   <!-- 1. Remote Celebrity Video (Centered 9:16 Mobile View on Laptop/Desktop) -->
-                  <video id="normal-inchat-remote-video" autoplay playsinline webkit-playsinline class="h-full aspect-[9/16] max-w-full object-cover bg-black z-10 shadow-2xl mx-auto"></video>
+                  <video id="normal-inchat-remote-video" autoplay muted playsinline webkit-playsinline class="h-full aspect-[9/16] max-w-full object-cover bg-black z-10 shadow-2xl mx-auto"></video>
+                  <!-- Tap-to-Unmute Helper for Strict Mobile Autoplay Policies -->
+                  <div id="inchat-unmute-overlay" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-40">
+                    <button onclick="unmuteVipAudioNow()" class="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-2xl border border-white/30 flex items-center gap-2 animate-pulse cursor-pointer">
+                      <i class="fa-solid fa-volume-high"></i>
+                      <span>Tap to Hear Celebrity Voice</span>
+                    </button>
+                  </div>
                   <img id="normal-inchat-remote-frame" class="hidden h-full aspect-[9/16] max-w-full object-cover bg-slate-950 z-0 pointer-events-none shadow-2xl mx-auto" alt="Celebrity Video">
 
                   <!-- 2. Local User Camera Container (Full background while ringing; transforms to PiP in Top Right corner when connected) -->
@@ -1270,6 +1277,74 @@
           </div>
         </div>
 
+        <!-- VIP Call Quality & Bug Feedback Center (SUPER ADMIN ONLY) -->
+        <div class="fc-glass-card rounded-2xl overflow-hidden border border-blue-500/30 shadow-2xl">
+          <div class="px-6 py-4 bg-slate-900/70 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+            <div class="flex items-center gap-3">
+              <span class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-base border border-amber-500/40 shadow">
+                <i class="fa-solid fa-star-half-stroke"></i>
+              </span>
+              <div>
+                <h3 class="font-extrabold text-xs text-white flex items-center gap-2">
+                  <span>VIP Audio & Video Call Quality Monitor</span>
+                  <span id="admin-call-reviews-count" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">0 Reviews</span>
+                </h3>
+                <p class="text-[11px] text-slate-400">Post-call user ratings, audio/video bug reports & technical diagnostics</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="loadAdminCallReviews()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-amber-400 hover:text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition shadow cursor-pointer">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                <span>Refresh Reviews</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Quality Stats Strip -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-950/60 border-b border-slate-800/80">
+            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Average Rating</div>
+              <div id="admin-reviews-avg-rating" class="text-lg font-black text-amber-400 flex items-center gap-1">5.0 <span class="text-xs text-amber-400">★</span></div>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Total Submissions</div>
+              <div id="admin-reviews-total-count" class="text-lg font-black text-white">0</div>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Bug / Issue Reports</div>
+              <div id="admin-reviews-issues-count" class="text-lg font-black text-rose-400">0</div>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+              <div class="text-[10px] uppercase font-bold text-slate-400">5-Star Perfection Rate</div>
+              <div id="admin-reviews-perfection-rate" class="text-lg font-black text-emerald-400">100%</div>
+            </div>
+          </div>
+
+          <!-- Reviews Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950/90 text-slate-400 uppercase tracking-wider border-b border-slate-800 text-[11px]">
+                <tr>
+                  <th class="px-5 py-3">Fan / Caller</th>
+                  <th class="px-5 py-3">Celebrity</th>
+                  <th class="px-5 py-3">Call Type</th>
+                  <th class="px-5 py-3">Rating</th>
+                  <th class="px-5 py-3">Experience / Bug Tags</th>
+                  <th class="px-5 py-3">User Feedback Notes</th>
+                  <th class="px-5 py-3 text-right">Date & Time</th>
+                </tr>
+              </thead>
+              <tbody id="admin-reviews-table-body" class="divide-y divide-slate-800 text-slate-200">
+                <tr>
+                  <td colspan="7" class="px-5 py-8 text-center text-slate-400">
+                    <span class="text-xs">No call reviews submitted yet. User reviews after VIP calls will appear here in real-time.</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
 
     </main>
@@ -1667,10 +1742,67 @@
     </button>
   </div>
 
+  <!-- ============================================================== -->
+  <!-- POST-CALL FAN SATISFACTION & AUDIO/VIDEO BUG REVIEW MODAL       -->
+  <!-- ============================================================== -->
+  <div id="modal-call-review" class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+    <div class="fc-glass-card max-w-sm w-full p-6 shadow-2xl relative border border-blue-500/40 rounded-3xl text-center">
+      <div class="w-16 h-16 rounded-full mx-auto mb-3 relative p-0.5 bg-gradient-to-tr from-amber-400 to-blue-500 shadow-xl">
+        <img id="review-modal-celeb-avatar" src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160" alt="Creator" class="w-full h-full rounded-full object-cover">
+        <span class="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-[10px] font-black border-2 border-slate-900">
+          ★
+        </span>
+      </div>
+
+      <h3 class="text-base font-extrabold text-white mb-0.5">Rate Your Call Experience</h3>
+      <p class="text-xs text-slate-300 mb-3">How was your 1-on-1 VIP call with <span id="review-modal-celeb-name" class="font-bold text-blue-400">Dulquer Sithara</span>?</p>
+
+      <!-- 5 Interactive Star Rating Selector -->
+      <div class="flex items-center justify-center gap-2 mb-1.5 py-1">
+        <button type="button" onclick="setCallReviewRating(1)" class="star-rating-btn text-3xl text-amber-400 hover:scale-125 transition-transform" data-star="1">★</button>
+        <button type="button" onclick="setCallReviewRating(2)" class="star-rating-btn text-3xl text-amber-400 hover:scale-125 transition-transform" data-star="2">★</button>
+        <button type="button" onclick="setCallReviewRating(3)" class="star-rating-btn text-3xl text-amber-400 hover:scale-125 transition-transform" data-star="3">★</button>
+        <button type="button" onclick="setCallReviewRating(4)" class="star-rating-btn text-3xl text-amber-400 hover:scale-125 transition-transform" data-star="4">★</button>
+        <button type="button" onclick="setCallReviewRating(5)" class="star-rating-btn text-3xl text-amber-400 hover:scale-125 transition-transform" data-star="5">★</button>
+      </div>
+
+      <p id="review-modal-rating-label" class="text-xs font-bold text-amber-400 mb-3">5.0 • Exceptional Experience!</p>
+
+      <!-- Interactive Call Quality & Bug Tags -->
+      <div class="mb-3 text-left">
+        <label class="block text-[11px] font-semibold text-slate-300 mb-1.5 text-center">Tap tags that match your call quality:</label>
+        <div id="call-review-tags-container" class="flex flex-wrap items-center justify-center gap-1.5 text-[11px]">
+          <button type="button" onclick="toggleReviewTag(this, 'Crystal Clear Audio')" class="review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-blue-500/50 transition cursor-pointer">Crystal Clear Audio</button>
+          <button type="button" onclick="toggleReviewTag(this, 'Crisp HD Video')" class="review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-blue-500/50 transition cursor-pointer">Crisp HD Video</button>
+          <button type="button" onclick="toggleReviewTag(this, 'Mic / Voice Issue')" class="review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-rose-500/50 transition cursor-pointer">Mic / Voice Issue</button>
+          <button type="button" onclick="toggleReviewTag(this, 'Video Lag / Freeze')" class="review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-rose-500/50 transition cursor-pointer">Video Lag / Freeze</button>
+          <button type="button" onclick="toggleReviewTag(this, 'Echo or Noise')" class="review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-rose-500/50 transition cursor-pointer">Echo or Noise</button>
+          <button type="button" onclick="toggleReviewTag(this, 'Great Conversation')" class="review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-blue-500/50 transition cursor-pointer">Great Conversation</button>
+        </div>
+      </div>
+
+      <!-- Feedback / Bug Notes Textarea -->
+      <div class="mb-4">
+        <textarea id="call-review-feedback" rows="2" placeholder="Any audio/video glitches or suggestions? (Sent directly to Super Admin)" class="w-full bg-[#1e293b] border border-slate-700/80 rounded-xl p-2.5 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
+      </div>
+
+      <!-- Submit and Skip Actions -->
+      <div class="space-y-2">
+        <button onclick="submitCallReviewRating()" id="btn-submit-review" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/50 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>Submit Review</span>
+        </button>
+        <button onclick="closeCallReviewModalCleanly()" class="w-full py-2 rounded-xl text-slate-400 hover:text-slate-200 text-xs font-semibold transition cursor-pointer">
+          Skip for now
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Dedicated Unmuted Audio Element for Crystal-Clear Two-Way Audio Calling -->
   <audio id="vip-remote-audio" autoplay playsinline></audio>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=31"></script>
+  <script src="/app.js?v=42"></script>
 </body>
 </html>

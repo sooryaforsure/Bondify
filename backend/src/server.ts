@@ -5,6 +5,7 @@ import { CelebrityService } from './services/celebrity.ts';
 import { SupportService } from './services/support.ts';
 import { AdminService } from './services/admin.ts';
 import { SignalingPayload } from './types/index.ts';
+import { initDatabase, isDbAvailable, query, queryOne, execute } from './lib/db.ts';
 
 export class FrndServer {
   public authService: AuthService;
@@ -29,6 +30,28 @@ export class FrndServer {
   }
 
   async start(port: number = 3000): Promise<Deno.HttpServer> {
+    // 0. Initialize PostgreSQL Database (if DATABASE_URL is configured)
+    try {
+      let schemaSql = '';
+      try {
+        schemaSql = await Deno.readTextFile('backend/schema.sql');
+      } catch {
+        try {
+          schemaSql = await Deno.readTextFile('schema.sql');
+        } catch {}
+      }
+
+      const dbReady = await initDatabase(schemaSql);
+      if (dbReady) {
+        await this.authService.syncSeedToDb();
+        await this.celebrityService.syncSeedToDb();
+        await this.eventService.syncSeedToDb();
+        await this.supportService.syncSeedToDb();
+      }
+    } catch (err) {
+      console.warn('[Server] DB startup check finished:', err);
+    }
+
     const handler = async (req: Request): Promise<Response> => {
       const url = new URL(req.url);
 
@@ -145,10 +168,17 @@ export class FrndServer {
       return this.jsonResponse({ success: true, user: updated, message: 'Premium Pass activated successfully!' });
     }
 
-    if (path === '/api/auth/profile' && method === 'PUT') {
-      const user = await this.authenticate(req);
+    if ((path === '/api/auth/profile' || path === '/api/users/profile') && (method === 'PUT' || method === 'POST')) {
       const updates = await req.json();
-      const updated = this.authService.updateProfile(user.id, updates);
+      let targetUserId = updates.userId;
+      if (!targetUserId) {
+        try {
+          const user = await this.authenticate(req);
+          targetUserId = user.id;
+        } catch {}
+      }
+      targetUserId = targetUserId || 'usr_normal_1';
+      const updated = this.authService.updateProfile(targetUserId, updates);
       return this.jsonResponse({ success: true, user: updated });
     }
 
@@ -209,7 +239,7 @@ export class FrndServer {
 
     // --- CELEBRITY & VIP CALL ROUTES ---
     if (path === '/api/celebrities/feed' && method === 'GET') {
-      const feed = this.celebrityService.getCelebrityFeed();
+      const feed = await this.celebrityService.getCelebrityFeed();
       return this.jsonResponse({ success: true, feed });
     }
 
@@ -238,8 +268,73 @@ export class FrndServer {
 
     if (path.startsWith('/api/celebrities/like/') && method === 'POST') {
       const postId = path.replace('/api/celebrities/like/', '');
-      const likes = this.celebrityService.likePost(postId);
-      return this.jsonResponse({ success: true, likes });
+      let userId = 'usr_normal_1';
+      try {
+        const body = await req.json();
+        if (body.userId) userId = body.userId;
+      } catch {}
+      const res = this.celebrityService.likePost(postId, userId);
+      return this.jsonResponse({ success: true, likes: res.likes, isLiked: res.isLiked });
+    }
+
+    if (path.startsWith('/api/celebrities/comment/') && method === 'POST') {
+      const postId = path.replace('/api/celebrities/comment/', '');
+      const body = await req.json();
+      const comment = this.celebrityService.addComment(
+        postId,
+        body.userId || 'usr_normal_1',
+        body.userName || 'VIP Fan',
+        body.userAvatar,
+        body.content || ''
+      );
+      return this.jsonResponse({ success: true, comment });
+    }
+
+    if (path === '/api/celebrities/availability' && method === 'GET') {
+      const celebId = url.searchParams.get('celebrityId') || undefined;
+      const availability = this.celebrityService.getCelebrityAvailability(celebId);
+      return this.jsonResponse({ success: true, availability });
+    }
+
+    if (path === '/api/celebrities/availability' && method === 'POST') {
+      const body = await req.json();
+      const celebId = body.celebrityId || 'usr_celeb_1';
+      const isAvailable = Boolean(body.isAvailable);
+      this.celebrityService.setCelebrityAvailability(celebId, isAvailable);
+      
+      // Real-time broadcast availability change to all active users via matchmaking socket
+      this.matchmakingService.broadcast({
+        type: 'CELEB_AVAILABILITY_CHANGED',
+        celebrityId: celebId,
+        isAvailable
+      });
+      return this.jsonResponse({ success: true, celebrityId: celebId, isAvailable });
+    }
+
+    if (path === '/api/celebrities/analytics' && method === 'GET') {
+      const celebId = url.searchParams.get('celebrityId') || 'usr_celeb_1';
+      const analytics = await this.celebrityService.getCelebrityAnalytics(celebId);
+      return this.jsonResponse({ success: true, analytics });
+    }
+
+    if (path === '/api/celebrities/review' && method === 'POST') {
+      let callerUser: any = null;
+      try {
+        callerUser = await this.authenticate(req);
+      } catch {}
+      const body = await req.json();
+      const result = await this.celebrityService.submitCallReview(
+        body.callId,
+        body.rating || 5,
+        body.celebrityId || 'usr_celeb_1',
+        callerUser?.id || body.callerId || 'usr_normal_1',
+        callerUser?.fullName || body.callerName || 'Arjun Nair',
+        body.celebrityName || 'Dulquer Sithara',
+        body.callType || 'CELEBRITY_VIDEO',
+        body.issueTags || [],
+        body.feedback || ''
+      );
+      return this.jsonResponse(result);
     }
 
     if (path === '/api/celebrities/authorize-call' && method === 'POST') {
@@ -355,15 +450,108 @@ export class FrndServer {
 
     if (path === '/api/celebrities/call/end' && method === 'POST') {
       const body = await req.json();
-      console.log(`[CALL END] Call ${body.callId} ended by ${body.endedBy}`);
-      const call = this.celebrityService.endLiveCall(body.callId, body.endedBy || 'USER');
+      const celebTargetId = body.celebrityId || 'usr_celeb_1';
+      console.log(`[CALL END] Call ${body.callId} ended by ${body.endedBy} (Target Celeb: ${celebTargetId})`);
+      const call = this.celebrityService.endLiveCall(body.callId, body.endedBy || 'USER', celebTargetId, body.callerId);
 
-      if (call) {
-        this.matchmakingService.sendToUser(call.celebrityId, { type: 'CELEB_CALL_ENDED', call });
-        this.matchmakingService.sendToUser(call.callerId, { type: 'CELEB_CALL_ENDED', call });
-      }
+      const endSignal = {
+        type: 'CELEB_CALL_ENDED',
+        call: call || { callId: body.callId, celebrityId: celebTargetId, status: 'ENDED', endedBy: body.endedBy || 'USER' },
+        callId: body.callId,
+        celebrityId: celebTargetId,
+        endedBy: body.endedBy || 'USER'
+      };
+
+      // Broadcast to all active sockets so every open celebrity or user tab terminates the ringing instantly!
+      this.matchmakingService.broadcast(endSignal);
 
       return this.jsonResponse({ success: true, call });
+    }
+
+    // --- CALL HISTORY & CHAT MESSAGING PERSISTENCE ROUTES ---
+    if (path === '/api/calls/history' && method === 'GET') {
+      const userId = url.searchParams.get('userId') || 'usr_normal_1';
+      const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+      const history = await this.celebrityService.getCallHistory(userId, limit);
+      return this.jsonResponse({ success: true, history });
+    }
+
+    if (path === '/api/chat/messages' && method === 'GET') {
+      const senderId = url.searchParams.get('senderId');
+      const receiverId = url.searchParams.get('receiverId');
+      if (isDbAvailable() && senderId && receiverId) {
+        try {
+          const rows = await query<any>(
+            `SELECT * FROM chat_messages 
+             WHERE (sender_id = $1 AND receiver_id = $2) 
+                OR (sender_id = $2 AND receiver_id = $1)
+             ORDER BY created_at ASC 
+             LIMIT 100`,
+            [senderId, receiverId]
+          );
+          return this.jsonResponse({ success: true, messages: rows });
+        } catch (err) {
+          console.warn('[Chat] Query error:', err);
+        }
+      }
+      return this.jsonResponse({ success: true, messages: [] });
+    }
+
+    if (path === '/api/chat/messages' && method === 'POST') {
+      const body = await req.json();
+      const msgId = `msg_${crypto.randomUUID()}`;
+      if (isDbAvailable() && body.senderId && body.receiverId && body.content) {
+        try {
+          await execute(
+            `INSERT INTO chat_messages (id, sender_id, receiver_id, content, is_read, created_at)
+             VALUES ($1, $2, $3, $4, false, NOW())`,
+            [msgId, body.senderId, body.receiverId, body.content]
+          );
+        } catch (err) {
+          console.warn('[Chat] Insert error:', err);
+        }
+      }
+      return this.jsonResponse({ success: true, messageId: msgId });
+    }
+
+    if (path === '/api/vip-pass/check' && method === 'GET') {
+      const userId = url.searchParams.get('userId');
+      const celebrityId = url.searchParams.get('celebrityId') || 'usr_celeb_1';
+      if (isDbAvailable() && userId) {
+        try {
+          const pass = await queryOne<any>(
+            `SELECT * FROM vip_fan_passes WHERE user_id = $1 AND celebrity_id = $2 AND is_active = true`,
+            [userId, celebrityId]
+          );
+          return this.jsonResponse({ success: true, hasPass: Boolean(pass) });
+        } catch (err) {
+          console.warn('[VIP Pass] Check error:', err);
+        }
+      }
+      return this.jsonResponse({ success: true, hasPass: true });
+    }
+
+    if (path === '/api/vip-pass/subscribe' && method === 'POST') {
+      const body = await req.json();
+      const userId = body.userId || 'usr_normal_1';
+      const celebId = body.celebrityId || 'usr_celeb_1';
+      const amount = Number(body.amount || 499);
+      
+      this.celebrityService.subscribeVipFanPass(userId, celebId, amount);
+
+      if (isDbAvailable()) {
+        try {
+          await execute(
+            `INSERT INTO vip_fan_passes (id, user_id, celebrity_id, is_active, purchased_at, expires_at)
+             VALUES ($1, $2, $3, true, NOW(), NOW() + INTERVAL '30 days')
+             ON CONFLICT (user_id, celebrity_id) DO UPDATE SET is_active = true, expires_at = NOW() + INTERVAL '30 days'`,
+            [`pass_${crypto.randomUUID()}`, userId, celebId]
+          );
+        } catch (err) {
+          console.warn('[VIP Pass] Subscribe error:', err);
+        }
+      }
+      return this.jsonResponse({ success: true, message: 'VIP Fan Pass subscribed successfully!' });
     }
 
     // --- SUPPORT DESK ROUTES ---
@@ -413,6 +601,15 @@ export class FrndServer {
       const metrics = this.adminService.getPlatformMetrics();
       const users = this.authService.getAllUsers();
       return this.jsonResponse({ success: true, metrics, users });
+    }
+
+    if (path === '/api/admin/call-reviews' && method === 'GET') {
+      const user = await this.authenticate(req);
+      if (user.role !== 'SUPER_ADMIN') {
+        throw new Error('Super admin access required');
+      }
+      const reviewsData = await this.celebrityService.getCallQualityReviews();
+      return this.jsonResponse(reviewsData);
     }
 
     if (path === '/api/admin/users' && method === 'GET') {

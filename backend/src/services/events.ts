@@ -1,4 +1,5 @@
 import { EventItem, TicketTier, TicketBooking } from '../types/index.ts';
+import { isDbAvailable, query, execute } from '../lib/db.ts';
 
 export class EventService {
   private events: Map<string, EventItem> = new Map();
@@ -101,6 +102,70 @@ export class EventService {
     });
   }
 
+  async syncSeedToDb(): Promise<void> {
+    if (!isDbAvailable()) return;
+    try {
+      for (const e of this.events.values()) {
+        await execute(
+          `INSERT INTO events (
+            id, organizer_id, organizer_name, title, description, category,
+            banner_url, venue_name, address, city, latitude, longitude,
+            start_time, end_time, ticket_tiers, is_approved, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          ON CONFLICT (id) DO NOTHING`,
+          [
+            e.id,
+            e.organizerId,
+            e.organizerName,
+            e.title,
+            e.description,
+            e.category,
+            e.bannerUrl,
+            e.venueName,
+            e.address,
+            e.city,
+            e.latitude,
+            e.longitude,
+            e.startTime,
+            e.endTime,
+            JSON.stringify(e.ticketTiers),
+            e.isApproved,
+            e.createdAt
+          ]
+        );
+      }
+
+      for (const b of this.bookings.values()) {
+        await execute(
+          `INSERT INTO ticket_bookings (
+            id, event_id, event_title, user_id, user_name, user_phone,
+            tier_id, tier_name, quantity, total_amount, qr_code_hash,
+            is_used, booked_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT (id) DO NOTHING`,
+          [
+            b.id,
+            b.eventId,
+            b.eventTitle,
+            b.userId,
+            b.userName,
+            b.userPhone,
+            b.tierId,
+            b.tierName,
+            b.quantity,
+            b.totalAmount,
+            b.qrCodeHash,
+            b.isUsed,
+            b.bookedAt
+          ]
+        );
+      }
+      console.log('[Events] Default events & bookings synchronized to PostgreSQL');
+    } catch (err) {
+      console.warn('[Events] Failed to sync events to DB:', err);
+    }
+  }
+
   createEvent(
     organizerId: string,
     organizerName: string,
@@ -142,11 +207,41 @@ export class EventService {
         totalQuantity: t.totalQuantity,
         soldQuantity: 0
       })),
-      isApproved: true, // Auto-approved in dev, or toggled by Super Admin
+      isApproved: true,
       createdAt: new Date().toISOString()
     };
 
     this.events.set(eventId, newEvent);
+
+    if (isDbAvailable()) {
+      execute(
+        `INSERT INTO events (
+          id, organizer_id, organizer_name, title, description, category,
+          banner_url, venue_name, address, city, latitude, longitude,
+          start_time, end_time, ticket_tiers, is_approved, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+        [
+          newEvent.id,
+          newEvent.organizerId,
+          newEvent.organizerName,
+          newEvent.title,
+          newEvent.description,
+          newEvent.category,
+          newEvent.bannerUrl,
+          newEvent.venueName,
+          newEvent.address,
+          newEvent.city,
+          newEvent.latitude,
+          newEvent.longitude,
+          newEvent.startTime,
+          newEvent.endTime,
+          JSON.stringify(newEvent.ticketTiers),
+          newEvent.isApproved,
+          newEvent.createdAt
+        ]
+      ).catch(err => console.warn('[Events] Failed to insert event into DB:', err));
+    }
+
     return newEvent;
   }
 
@@ -154,7 +249,6 @@ export class EventService {
     const list = Array.from(this.events.values()).filter(e => e.isApproved);
 
     if (userLat !== undefined && userLon !== undefined) {
-      // Calculate Haversine distance in kilometers and sort by proximity
       const enriched = list.map(event => {
         const distance = this.calculateDistanceKm(userLat, userLon, event.latitude, event.longitude);
         return {
@@ -217,6 +311,38 @@ export class EventService {
     };
 
     this.bookings.set(bookingId, booking);
+
+    if (isDbAvailable()) {
+      execute(
+        `INSERT INTO ticket_bookings (
+          id, event_id, event_title, user_id, user_name, user_phone,
+          tier_id, tier_name, quantity, total_amount, qr_code_hash,
+          is_used, booked_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          booking.id,
+          booking.eventId,
+          booking.eventTitle,
+          booking.userId,
+          booking.userName,
+          booking.userPhone,
+          booking.tierId,
+          booking.tierName,
+          booking.quantity,
+          booking.totalAmount,
+          booking.qrCodeHash,
+          booking.isUsed,
+          booking.bookedAt
+        ]
+      ).catch(err => console.warn('[Events] Failed to insert booking to DB:', err));
+
+      // Update event ticket tiers in DB
+      execute(
+        `UPDATE events SET ticket_tiers = $1 WHERE id = $2`,
+        [JSON.stringify(event.ticketTiers), event.id]
+      ).catch(err => console.warn('[Events] Failed to update event ticket tiers in DB:', err));
+    }
+
     return booking;
   }
 
@@ -237,17 +363,18 @@ export class EventService {
           return { success: false, booking, message: 'Ticket has ALREADY been used for check-in!' };
         }
         booking.isUsed = true;
+        if (isDbAvailable()) {
+          execute(`UPDATE ticket_bookings SET is_used = true WHERE id = $1`, [booking.id])
+            .catch(err => console.warn('[Events] Failed to mark ticket used in DB:', err));
+        }
         return { success: true, booking, message: 'Ticket validated successfully! Welcome to the event.' };
       }
     }
     return { success: false, message: 'Invalid ticket QR code hash.' };
   }
 
-  /**
-   * Haversine formula to compute great-circle distance between two GPS coordinates in kilometers
-   */
   private calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Earth radius in km
+    const R = 6371;
     const dLat = this.deg2rad(lat2 - lat1);
     const dLon = this.deg2rad(lon2 - lon1);
     const a =

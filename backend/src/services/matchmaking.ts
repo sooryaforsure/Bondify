@@ -37,6 +37,17 @@ export class MatchmakingService {
     }
   }
 
+  broadcast(message: any): void {
+    const payload = JSON.stringify(message);
+    for (const conn of this.activeConnections.values()) {
+      if (conn.socket && conn.socket.readyState === WebSocket.OPEN) {
+        try {
+          conn.socket.send(payload);
+        } catch {}
+      }
+    }
+  }
+
   unregisterClient(socketId: string) {
     const conn = this.activeConnections.get(socketId);
     if (!conn) return;
@@ -85,6 +96,12 @@ export class MatchmakingService {
       case 'CALL_ANSWER':
       case 'ICE_CANDIDATE':
         this.relayWebRtcSignal(conn, payload);
+        break;
+
+      case 'CELEB_CALL_ENDED':
+      case 'CELEB_AVAILABILITY_CHANGED':
+      case 'INCOMING_CELEB_CALL':
+        this.broadcast(payload);
         break;
 
       default:

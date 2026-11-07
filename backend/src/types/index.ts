@@ -82,6 +82,9 @@ export type SignalingMessageType =
   | 'SUPPORT_REQUEST'
   | 'SUPPORT_ACCEPTED'
   | 'SUPPORT_MESSAGE'
+  | 'CELEB_CALL_ENDED'
+  | 'CELEB_AVAILABILITY_CHANGED'
+  | 'INCOMING_CELEB_CALL'
   | 'ERROR';
 
 export interface SignalingPayload {
@@ -144,6 +147,16 @@ export interface TicketBooking {
 
 // ----------------- Celebrity Media Feed Types -----------------
 
+export interface PostComment {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface CelebrityPost {
   id: string;
   celebrityId: string;
@@ -154,6 +167,8 @@ export interface CelebrityPost {
   thumbnailUrl?: string;
   caption: string;
   likesCount: number;
+  likedByUserIds?: string[];
+  comments?: PostComment[];
   createdAt: string;
 }
 
@@ -178,4 +193,40 @@ export interface SupportChatMessage {
   senderRole: UserRole;
   content: string;
   timestamp: string;
+}
+
+// ----------------- Persistent DB History & Messaging Types -----------------
+
+export interface CallHistoryRecord {
+  id: string;
+  callType: string;
+  callerId: string;
+  receiverId?: string;
+  callerName?: string;
+  receiverName?: string;
+  status: string;
+  durationSeconds: number;
+  ratePerMinute: number;
+  totalBilled: number;
+  hasVideo: boolean;
+  startedAt: string;
+  endedAt?: string;
+}
+
+export interface ChatMessageRecord {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface VipFanPassRecord {
+  id: string;
+  userId: string;
+  celebrityId: string;
+  isActive: boolean;
+  purchasedAt: string;
+  expiresAt?: string;
 }

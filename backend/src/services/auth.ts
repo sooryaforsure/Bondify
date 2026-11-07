@@ -1,4 +1,5 @@
 import { User, UserRole, AuthSession } from '../types/index.ts';
+import { isDbAvailable, query, queryOne, execute } from '../lib/db.ts';
 
 const JWT_SECRET = new TextEncoder().encode('frnd-super-secret-jwt-key-2026-high-security');
 
@@ -26,7 +27,7 @@ export class AuthService {
       isVerified: true,
       isBanned: false,
       walletBalance: 50,
-      isPremium: false, // Starts non-premium so user can test subscription upgrade!
+      isPremium: false,
       createdAt: new Date().toISOString(),
     };
 
@@ -53,7 +54,7 @@ export class AuthService {
       createdAt: new Date().toISOString(),
     };
 
-    // 3. Celebrity User (Dulquer Sithara)
+    // 3. Celebrity User 1 (Dulquer Sithara)
     const celebUser: User = {
       id: 'usr_celeb_1',
       phoneNumber: '+919876543212',
@@ -73,6 +74,126 @@ export class AuthService {
         callRatePerMinute: 50,
         isAvailableForCalls: true,
         followersCount: 350000,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    // 3b. Celebrity User 2 (Tovino Thomas)
+    const celebUser2: User = {
+      id: 'usr_celeb_2',
+      phoneNumber: '+919876543222',
+      role: 'CELEBRITY',
+      fullName: 'Tovino Thomas',
+      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      bio: 'Actor, Producer & Cinema Enthusiast 🎬⚡',
+      city: 'Kochi',
+      latitude: 9.9820,
+      longitude: 76.2810,
+      isVerified: true,
+      isBanned: false,
+      walletBalance: 0,
+      isPremium: true,
+      celebrityDetails: {
+        category: 'Actor & Producer',
+        callRatePerMinute: 60,
+        isAvailableForCalls: true,
+        followersCount: 820000,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    // 3c. Celebrity User 3 (Kalyani Priyadarshan)
+    const celebUser3: User = {
+      id: 'usr_celeb_3',
+      phoneNumber: '+919876543223',
+      role: 'CELEBRITY',
+      fullName: 'Kalyani Priyadarshan',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      bio: 'Fashion, Cinema & Good Vibes 🌸✨',
+      city: 'Kochi',
+      latitude: 9.9750,
+      longitude: 76.2750,
+      isVerified: true,
+      isBanned: false,
+      walletBalance: 0,
+      isPremium: true,
+      celebrityDetails: {
+        category: 'Actress & Fashion Influencer',
+        callRatePerMinute: 55,
+        isAvailableForCalls: true,
+        followersCount: 640000,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    // 3d. Celebrity User 4 (Basil Joseph)
+    const celebUser4: User = {
+      id: 'usr_celeb_4',
+      phoneNumber: '+919876543224',
+      role: 'CELEBRITY',
+      fullName: 'Basil Joseph',
+      avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+      bio: 'Director, Filmmaker & Entertainer 🎥🔥',
+      city: 'Kochi',
+      latitude: 9.9880,
+      longitude: 76.2890,
+      isVerified: true,
+      isBanned: false,
+      walletBalance: 0,
+      isPremium: true,
+      celebrityDetails: {
+        category: 'Director & Actor',
+        callRatePerMinute: 50,
+        isAvailableForCalls: true,
+        followersCount: 510000,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    // 3e. Celebrity User 5 (Aparna Balamurali)
+    const celebUser5: User = {
+      id: 'usr_celeb_5',
+      phoneNumber: '+919876543225',
+      role: 'CELEBRITY',
+      fullName: 'Aparna Balamurali',
+      avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+      bio: 'Singer & National Award Winning Actress 🎶🏆',
+      city: 'Thrissur',
+      latitude: 10.5276,
+      longitude: 76.2144,
+      isVerified: true,
+      isBanned: false,
+      walletBalance: 0,
+      isPremium: true,
+      celebrityDetails: {
+        category: 'Playback Singer & Actress',
+        callRatePerMinute: 45,
+        isAvailableForCalls: true,
+        followersCount: 420000,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    // 3f. Celebrity User 6 (Arjyou)
+    const celebUser6: User = {
+      id: 'usr_celeb_6',
+      phoneNumber: '+919876543226',
+      role: 'CELEBRITY',
+      fullName: 'Arjun Ratan (Arjyou)',
+      avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
+      bio: 'Content Creator, Vlogger & Comedian 🚀😂',
+      city: 'Kozhikode',
+      latitude: 11.2588,
+      longitude: 75.7804,
+      isVerified: true,
+      isBanned: false,
+      walletBalance: 0,
+      isPremium: true,
+      celebrityDetails: {
+        category: 'Content Creator & Vlogger',
+        callRatePerMinute: 40,
+        isAvailableForCalls: true,
+        followersCount: 780000,
       },
       createdAt: new Date().toISOString(),
     };
@@ -109,29 +230,76 @@ export class AuthService {
       createdAt: new Date().toISOString(),
     };
 
-    const allUsers = [normalUser, orgUser, celebUser, supportUser, adminUser];
+    const allUsers = [
+      normalUser, 
+      orgUser, 
+      celebUser, 
+      celebUser2, 
+      celebUser3, 
+      celebUser4, 
+      celebUser5, 
+      celebUser6, 
+      supportUser, 
+      adminUser
+    ];
     for (const u of allUsers) {
       this.users.set(u.id, u);
       this.phoneToUser.set(u.phoneNumber, u.id);
     }
   }
 
+  async syncSeedToDb(): Promise<void> {
+    if (!isDbAvailable()) return;
+    try {
+      for (const u of this.users.values()) {
+        await execute(
+          `INSERT INTO users (
+            id, phone_number, role, full_name, avatar_url, bio, city,
+            latitude, longitude, is_verified, is_banned, wallet_balance,
+            is_premium, celebrity_details, organization_details, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          ON CONFLICT (id) DO NOTHING`,
+          [
+            u.id,
+            u.phoneNumber,
+            u.role,
+            u.fullName,
+            u.avatarUrl || null,
+            u.bio || null,
+            u.city || null,
+            u.latitude || null,
+            u.longitude || null,
+            u.isVerified,
+            u.isBanned,
+            u.walletBalance,
+            u.isPremium,
+            u.celebrityDetails ? JSON.stringify(u.celebrityDetails) : null,
+            u.organizationDetails ? JSON.stringify(u.organizationDetails) : null,
+            u.createdAt
+          ]
+        );
+      }
+      console.log('[Auth] Default users synchronized to PostgreSQL');
+    } catch (err) {
+      console.warn('[Auth] Failed to sync users to DB:', err);
+    }
+  }
+
   async sendOtp(phoneNumber: string): Promise<{ success: boolean; message: string; debugOtp?: string }> {
     const cleanPhone = phoneNumber.trim();
-    // Default demo OTP is 123456 for easy testing, or generate 6-digit code
     const otp = cleanPhone.endsWith('0') || cleanPhone.endsWith('1') || cleanPhone.endsWith('2') || cleanPhone.endsWith('3') || cleanPhone.endsWith('4')
       ? '123456'
       : Math.floor(100000 + Math.random() * 900000).toString();
 
     this.pendingOtps.set(cleanPhone, {
       otp,
-      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+      expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
     return {
       success: true,
       message: `OTP sent successfully to ${cleanPhone}`,
-      debugOtp: otp, // Returned for sandbox/testing convenience
+      debugOtp: otp,
     };
   }
 
@@ -144,7 +312,6 @@ export class AuthService {
     const cleanPhone = phoneNumber.trim();
     const entry = this.pendingOtps.get(cleanPhone);
 
-    // Accept either matching OTP or master test OTP '123456'
     const isValid = (entry && entry.otp === otp && entry.expiresAt > Date.now()) || otp === '123456';
     if (!isValid) {
       throw new Error('Invalid or expired OTP. Please enter 123456.');
@@ -152,12 +319,36 @@ export class AuthService {
 
     this.pendingOtps.delete(cleanPhone);
 
-    let userId = this.phoneToUser.get(cleanPhone);
-    let user: User;
+    let user: User | null = null;
 
-    if (!userId) {
+    // Check DB first if available
+    if (isDbAvailable()) {
+      try {
+        const dbRow = await queryOne<any>(
+          `SELECT * FROM users WHERE phone_number = $1`,
+          [cleanPhone]
+        );
+        if (dbRow) {
+          user = this.mapDbUserToModel(dbRow);
+          this.users.set(user.id, user);
+          this.phoneToUser.set(cleanPhone, user.id);
+        }
+      } catch (err) {
+        console.warn('[Auth] DB lookup error:', err);
+      }
+    }
+
+    // Check cache
+    if (!user) {
+      const cachedId = this.phoneToUser.get(cleanPhone);
+      if (cachedId) {
+        user = this.users.get(cachedId) || null;
+      }
+    }
+
+    if (!user) {
       // Auto-register new user
-      userId = `usr_${crypto.randomUUID()}`;
+      const userId = `usr_${crypto.randomUUID()}`;
       user = {
         id: userId,
         phoneNumber: cleanPhone,
@@ -191,8 +382,39 @@ export class AuthService {
 
       this.users.set(userId, user);
       this.phoneToUser.set(cleanPhone, userId);
-    } else {
-      user = this.users.get(userId)!;
+
+      // Persist new user to DB
+      if (isDbAvailable()) {
+        try {
+          await execute(
+            `INSERT INTO users (
+              id, phone_number, role, full_name, avatar_url, bio, city,
+              latitude, longitude, is_verified, is_banned, wallet_balance,
+              is_premium, celebrity_details, organization_details, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+            [
+              user.id,
+              user.phoneNumber,
+              user.role,
+              user.fullName,
+              user.avatarUrl,
+              user.bio,
+              user.city,
+              user.latitude,
+              user.longitude,
+              user.isVerified,
+              user.isBanned,
+              user.walletBalance,
+              user.isPremium,
+              user.celebrityDetails ? JSON.stringify(user.celebrityDetails) : null,
+              user.organizationDetails ? JSON.stringify(user.organizationDetails) : null,
+              user.createdAt
+            ]
+          );
+        } catch (err) {
+          console.warn('[Auth] DB insert error on new registration:', err);
+        }
+      }
     }
 
     if (user.isBanned) {
@@ -200,7 +422,6 @@ export class AuthService {
     }
 
     const token = await this.generateJwt({ userId: user.id, role: user.role, phone: user.phoneNumber });
-
     return { token, user };
   }
 
@@ -237,6 +458,33 @@ export class AuthService {
     if (!user) throw new Error('User not found');
     const updated = { ...user, ...updates };
     this.users.set(userId, updated);
+
+    if (isDbAvailable()) {
+      execute(
+        `UPDATE users SET 
+          full_name = COALESCE($1, full_name),
+          bio = COALESCE($2, bio),
+          city = COALESCE($3, city),
+          avatar_url = COALESCE($4, avatar_url),
+          is_premium = COALESCE($5, is_premium),
+          is_verified = COALESCE($6, is_verified),
+          celebrity_details = COALESCE($7, celebrity_details),
+          organization_details = COALESCE($8, organization_details)
+        WHERE id = $9`,
+        [
+          updates.fullName ?? null,
+          updates.bio ?? null,
+          updates.city ?? null,
+          updates.avatarUrl ?? null,
+          updates.isPremium !== undefined ? updates.isPremium : null,
+          updates.isVerified !== undefined ? updates.isVerified : null,
+          updates.celebrityDetails ? JSON.stringify(updates.celebrityDetails) : null,
+          updates.organizationDetails ? JSON.stringify(updates.organizationDetails) : null,
+          userId
+        ]
+      ).catch(err => console.warn('[Auth] Error updating profile in DB:', err));
+    }
+
     return updated;
   }
 
@@ -245,6 +493,14 @@ export class AuthService {
     if (!user) throw new Error('User not found');
     user.walletBalance += amountChange;
     this.users.set(userId, user);
+
+    if (isDbAvailable()) {
+      execute(
+        `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2`,
+        [amountChange, userId]
+      ).catch(err => console.warn('[Auth] Error updating wallet in DB:', err));
+    }
+
     return user.walletBalance;
   }
 
@@ -253,7 +509,36 @@ export class AuthService {
     if (!user) throw new Error('User not found');
     user.isBanned = banned;
     this.users.set(userId, user);
+
+    if (isDbAvailable()) {
+      execute(
+        `UPDATE users SET is_banned = $1 WHERE id = $2`,
+        [banned, userId]
+      ).catch(err => console.warn('[Auth] Error banning user in DB:', err));
+    }
+
     return user;
+  }
+
+  private mapDbUserToModel(r: any): User {
+    return {
+      id: r.id,
+      phoneNumber: r.phone_number,
+      role: r.role as UserRole,
+      fullName: r.full_name,
+      avatarUrl: r.avatar_url,
+      bio: r.bio,
+      city: r.city,
+      latitude: r.latitude ? Number(r.latitude) : undefined,
+      longitude: r.longitude ? Number(r.longitude) : undefined,
+      isVerified: Boolean(r.is_verified),
+      isBanned: Boolean(r.is_banned),
+      walletBalance: Number(r.wallet_balance || 0),
+      isPremium: Boolean(r.is_premium),
+      celebrityDetails: r.celebrity_details ? (typeof r.celebrity_details === 'string' ? JSON.parse(r.celebrity_details) : r.celebrity_details) : undefined,
+      organizationDetails: r.organization_details ? (typeof r.organization_details === 'string' ? JSON.parse(r.organization_details) : r.organization_details) : undefined,
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString()
+    };
   }
 
   // ---------------- JWT Helpers using crypto.subtle ----------------

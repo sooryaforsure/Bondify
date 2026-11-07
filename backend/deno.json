@@ -2,6 +2,9 @@
   "name": "frnd-backend",
   "version": "1.0.0",
   "exports": "./src/server.ts",
+  "imports": {
+    "postgres": "https://deno.land/x/postgres@v0.17.0/mod.ts"
+  },
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-env src/server.ts",
     "dev": "deno run --watch --allow-net --allow-read --allow-env src/server.ts",

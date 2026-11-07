@@ -4,6 +4,8 @@ const os = require('os');
 const pathModule = require('path');
 
 const LIVE_CALLS_FILE = pathModule.join(os.tmpdir(), 'bondify_live_calls_store.json');
+const POSTS_STORE_FILE = pathModule.join(os.tmpdir(), 'bondify_posts_store.json');
+const REVIEWS_STORE_FILE = pathModule.join(os.tmpdir(), 'bondify_reviews_store.json');
 
 function loadLiveCalls() {
   try {
@@ -20,6 +22,69 @@ function saveLiveCalls(map) {
   global._liveCalls = map;
   try {
     fs.writeFileSync(LIVE_CALLS_FILE, JSON.stringify(Array.from(map.entries())), 'utf8');
+  } catch (e) {}
+}
+
+const INITIAL_CELEB_POSTS = [
+  {
+    id: 'post_1',
+    celebrityId: 'usr_celeb_1',
+    celebrityName: 'Dulquer Sithara',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    mediaType: 'IMAGE',
+    mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800',
+    caption: 'Rehearsals underway for our Grand Kochi Live Arena Concert! Can\'t wait to sing with you all! Drop your favorite song requests in 1-on-1 chat ❤️🎶',
+    likesCount: 1420,
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
+  },
+  {
+    id: 'post_2',
+    celebrityId: 'usr_celeb_1',
+    celebrityName: 'Dulquer Sithara',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    mediaType: 'IMAGE',
+    mediaUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800',
+    caption: 'Studio session complete for our upcoming track! VIP Fan Pass holders get exclusive early preview access and 1-on-1 video calls. Much love to all my fans! ✨',
+    likesCount: 2890,
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
+  }
+];
+
+function loadCelebrityPosts() {
+  try {
+    if (fs.existsSync(POSTS_STORE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(POSTS_STORE_FILE, 'utf8'));
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch (e) {}
+  if (!global._celebrityPosts || !global._celebrityPosts.length) {
+    global._celebrityPosts = [...INITIAL_CELEB_POSTS];
+  }
+  return global._celebrityPosts;
+}
+
+function saveCelebrityPosts(posts) {
+  global._celebrityPosts = posts;
+  try {
+    fs.writeFileSync(POSTS_STORE_FILE, JSON.stringify(posts), 'utf8');
+  } catch (e) {}
+}
+
+function loadCallReviews() {
+  try {
+    if (fs.existsSync(REVIEWS_STORE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(REVIEWS_STORE_FILE, 'utf8'));
+      if (Array.isArray(data)) return data;
+    }
+  } catch (e) {}
+  if (!global._callReviews) global._callReviews = [];
+  return global._callReviews;
+}
+
+function saveCallReviews(reviews) {
+  global._callReviews = reviews;
+  try {
+    fs.writeFileSync(REVIEWS_STORE_FILE, JSON.stringify(reviews), 'utf8');
   } catch (e) {}
 }
 
@@ -129,31 +194,6 @@ let events = [
       { id: 'tier_gold', name: 'Gold Fan Standing', priceInInr: 799, totalQuantity: 2500, availableQuantity: 1120 },
       { id: 'tier_vip_meet', name: 'VIP Meet & Greet Pass', priceInInr: 2999, totalQuantity: 100, availableQuantity: 14 }
     ]
-  }
-];
-
-let celebrityPosts = [
-  {
-    id: 'post_1',
-    celebrityId: 'usr_celeb_1',
-    celebrityName: 'Dulquer Sithara',
-    celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    mediaType: 'IMAGE',
-    mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800',
-    caption: 'Rehearsals underway for our Grand Kochi Live Arena Concert! Can\'t wait to sing with you all! Drop your favorite song requests in 1-on-1 chat ❤️🎶',
-    likesCount: 1420,
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
-  },
-  {
-    id: 'post_2',
-    celebrityId: 'usr_celeb_1',
-    celebrityName: 'Dulquer Sithara',
-    celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-    mediaType: 'IMAGE',
-    mediaUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800',
-    caption: 'Studio session complete for our upcoming track! VIP Fan Pass holders get exclusive early preview access and 1-on-1 video calls. Much love to all my fans! ✨',
-    likesCount: 2890,
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
   }
 ];
 
@@ -291,11 +331,13 @@ exports.handler = async (event) => {
   }
 
   // 8. Celebrity Feed & Posts
-  if (path === '/celebrities/feed' && method === 'GET') {
-    return { statusCode: 200, headers, body: JSON.stringify({ success: true, feed: celebrityPosts }) };
+  if ((path === '/celebrities/feed' || path === '/api/celebrities/feed') && method === 'GET') {
+    const posts = loadCelebrityPosts();
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, feed: posts }) };
   }
 
-  if (path === '/celebrities/posts' && method === 'POST') {
+  if ((path === '/celebrities/posts' || path === '/api/celebrities/posts') && method === 'POST') {
+    const posts = loadCelebrityPosts();
     const newPost = {
       id: 'post_' + Date.now(),
       celebrityId: body.celebrityId || 'usr_celeb_1',
@@ -307,8 +349,57 @@ exports.handler = async (event) => {
       likesCount: 0,
       createdAt: new Date().toISOString()
     };
-    celebrityPosts.unshift(newPost);
+    posts.unshift(newPost);
+    saveCelebrityPosts(posts);
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, post: newPost }) };
+  }
+
+  // Celebrity Analytics
+  if ((path === '/celebrities/analytics' || path === '/api/celebrities/analytics') && method === 'GET') {
+    const reviews = loadCallReviews();
+    let sum = 0;
+    for (const r of reviews) sum += (r.rating || 5);
+    const avg = reviews.length > 0 ? Number((sum / reviews.length).toFixed(1)) : 4.9;
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        analytics: {
+          fanEarnings: 12500,
+          fanCallsCount: 42,
+          fanSatisfaction: avg,
+          totalLikes: 1420
+        }
+      })
+    };
+  }
+
+  // Post-Call Fan Satisfaction & Quality Bug Review
+  if ((path === '/celebrities/review' || path === '/api/celebrities/review') && method === 'POST') {
+    const reviews = loadCallReviews();
+    const validRating = Math.max(1, Math.min(5, Math.round(body.rating || 5)));
+    const reviewId = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const reviewRecord = {
+      id: reviewId,
+      callId: body.callId || null,
+      callerId: body.callerId || 'usr_normal_1',
+      callerName: body.callerName || 'Arjun Nair',
+      celebrityId: body.celebrityId || 'usr_celeb_1',
+      celebrityName: body.celebrityName || 'Dulquer Sithara',
+      rating: validRating,
+      callType: body.callType || 'CELEBRITY_VIDEO',
+      issueTags: Array.isArray(body.issueTags) ? body.issueTags : [],
+      feedback: body.feedback || '',
+      createdAt: new Date().toISOString()
+    };
+    reviews.unshift(reviewRecord);
+    saveCallReviews(reviews);
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ success: true, message: 'Call review recorded successfully', reviewId, averageRating: validRating })
+    };
   }
 
   // Live Cross-device Call Signaling
@@ -538,7 +629,7 @@ exports.handler = async (event) => {
   }
 
   // 9. Admin metrics & moderation
-  if (path === '/admin/metrics' && method === 'GET') {
+  if ((path === '/admin/metrics' || path === '/api/admin/metrics') && method === 'GET') {
     return {
       statusCode: 200,
       headers,
@@ -552,6 +643,41 @@ exports.handler = async (event) => {
           totalBookings: 785,
           totalRevenueInRupees: 512315
         }
+      })
+    };
+  }
+
+  // Super Admin VIP Call Quality Reviews & Bugs
+  if ((path === '/admin/call-reviews' || path === '/api/admin/call-reviews') && method === 'GET') {
+    const reviews = loadCallReviews();
+    const totalReviews = reviews.length;
+    let sumRating = 0;
+    let fiveStarCount = 0;
+    let reportedIssuesCount = 0;
+
+    for (const r of reviews) {
+      sumRating += Number(r.rating || 5);
+      if (Number(r.rating) >= 5) fiveStarCount++;
+      if (Array.isArray(r.issueTags) && r.issueTags.some(t => /bug|issue|cut|noise|glitch|lag|freeze|mute|mic/i.test(t))) {
+        reportedIssuesCount++;
+      }
+    }
+
+    const avgRating = totalReviews > 0 ? Number((sumRating / totalReviews).toFixed(1)) : 5.0;
+    const fiveStarPercentage = totalReviews > 0 ? Math.round((fiveStarCount / totalReviews) * 100) : 100;
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        summary: {
+          totalReviews,
+          averageRating: avgRating,
+          reportedIssuesCount,
+          fiveStarPercentage
+        },
+        reviews
       })
     };
   }

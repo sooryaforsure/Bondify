@@ -173,9 +173,9 @@ async function acquireUserMediaSafely() {
     throw new Error('No mediaDevices support in browser');
   }
 
-  // Tier 1: User-Facing HD Camera (ideal 720p/1080p, no rigid min constraints for mobile compatibility)
+  // Tier 1: User-Facing HD Camera with full audio processing
   try {
-    return await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
         width: { ideal: 1280 },
@@ -187,44 +187,58 @@ async function acquireUserMediaSafely() {
         autoGainControl: true
       }
     });
+    if (stream && stream.getAudioTracks().length > 0) return stream;
   } catch (err1) {
-    console.log('[Camera] Tier 1 facingMode failed, trying desktop standard constraints:', err1?.name || err1);
+    console.log('[Media] Tier 1 facingMode failed, trying flexible constraints:', err1?.name || err1);
   }
 
   // Tier 2: Flexible standard video + audio
   try {
-    return await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: {
         echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
+        noiseSuppression: true
       }
     });
+    if (stream && stream.getAudioTracks().length > 0) return stream;
   } catch (err2) {
-    console.log('[Camera] Tier 2 flexible video+audio failed, trying basic video+audio:', err2?.name || err2);
+    console.log('[Media] Tier 2 flexible video+audio failed, trying separate video & audio:', err2?.name || err2);
   }
 
-  // Tier 3: Basic video + audio
+  // Tier 3: Standalone Video & Microphone Acquisition (Guarantees Laptop Mics are NEVER Dropped!)
+  let videoStream = null;
+  let audioStream = null;
+
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
-    });
-  } catch (err3) {
-    console.log('[Camera] Tier 3 basic failed, trying video only:', err3?.name || err3);
+    videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  } catch (errVid) {
+    console.warn('[Media] Standalone camera error:', errVid?.name || errVid);
   }
 
-  // Tier 4: Video only (when microphone is missing or permission denied)
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: false
-    });
-  } catch (err4) {
-    console.log('[Camera] Tier 4 video-only failed:', err4?.name || err4);
-    throw err4;
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true }
+    }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }));
+  } catch (errAud) {
+    console.warn('[Media] Standalone microphone error:', errAud?.name || errAud);
   }
+
+  if (videoStream || audioStream) {
+    const combined = new MediaStream();
+    if (videoStream) {
+      videoStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    }
+    if (audioStream) {
+      audioStream.getAudioTracks().forEach(t => {
+        t.enabled = true;
+        combined.addTrack(t);
+      });
+    }
+    return combined;
+  }
+
+  throw new Error('No camera or microphone devices accessible');
 }
 
 async function acquireUserAudioOnlySafely() {
@@ -353,13 +367,23 @@ function attachRemoteVideoStream(videoEl, frameImg, stream) {
     videoEl.addEventListener(evt, onFrameReady, { passive: true });
   });
 
-  // 3. Play video with robust fallback
-  videoEl.muted = false;
+  // 3. Play video with robust fallback: keep video muted so mobile browsers never block video or sound
+  videoEl.muted = true;
   videoEl.play().then(onFrameReady).catch(err => {
-    console.warn('[Video] Play unmuted blocked, falling back to muted video + audio element:', err);
-    videoEl.muted = true;
+    console.warn('[Video] Play retry:', err);
     videoEl.play().then(onFrameReady).catch(() => {});
   });
+}
+
+function preUnlockAudioElements() {
+  try {
+    const audioEl = document.getElementById('vip-remote-audio');
+    if (audioEl) {
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
+      audioEl.play().then(() => audioEl.pause()).catch(() => {});
+    }
+  } catch (e) {}
 }
 
 function playRemoteVipAudio(stream) {
@@ -374,17 +398,39 @@ function playRemoteVipAudio(stream) {
   }
   audioEl.srcObject = stream;
   audioEl.muted = false;
-  audioEl.volume = isVipSpeakerOn ? 1.0 : 0.35;
-  audioEl.play().catch(err => {
-    console.warn('[VIP Audio Playback] Autoplay waiting for user gesture:', err);
+  audioEl.volume = 1.0; // Crystal clear high volume for VIP calls
+
+  try {
+    stream.getAudioTracks().forEach(t => { t.enabled = true; });
+  } catch (e) {}
+
+  audioEl.play().then(() => {
+    document.getElementById('inchat-unmute-overlay')?.classList.add('hidden');
+  }).catch(err => {
+    console.warn('[VIP Audio Playback] Autoplay waiting for user gesture on mobile:', err);
+    // Show polite tap-to-unmute pill if mobile browser held sound
+    document.getElementById('inchat-unmute-overlay')?.classList.remove('hidden');
     const unlockAudio = () => {
-      audioEl.play().catch(() => {});
+      audioEl.play().then(() => {
+        document.getElementById('inchat-unmute-overlay')?.classList.add('hidden');
+      }).catch(() => {});
       document.removeEventListener('click', unlockAudio);
       document.removeEventListener('touchstart', unlockAudio);
     };
     document.addEventListener('click', unlockAudio, { once: true });
     document.addEventListener('touchstart', unlockAudio, { once: true });
   });
+}
+
+function unmuteVipAudioNow() {
+  const audioEl = document.getElementById('vip-remote-audio');
+  if (audioEl) {
+    audioEl.muted = false;
+    audioEl.volume = 1.0;
+    audioEl.play().catch(() => {});
+  }
+  document.getElementById('inchat-unmute-overlay')?.classList.add('hidden');
+  showCallToast('🔊 Celebrity audio unmuted at full volume!');
 }
 
 async function getOrCreateLocalCamera(isCeleb = false) {
@@ -408,6 +454,16 @@ async function getOrCreateLocalCamera(isCeleb = false) {
       console.warn('[Camera] Celeb getUserMedia fallback to canvas:', err);
       const celebAvatar = currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150';
       celebLocalStream = createLiveVideoStream(celebAvatar, 'Dulquer Sithara (Host Camera)', 'Celebrity Camera Feed');
+    }
+    // Guarantee active microphone on celebrity stream
+    if (celebLocalStream && celebLocalStream.getAudioTracks().length === 0) {
+      try {
+        const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mic.getAudioTracks().forEach(t => { t.enabled = true; celebLocalStream.addTrack(t); });
+      } catch (e) {}
+    }
+    if (celebLocalStream) {
+      celebLocalStream.getAudioTracks().forEach(t => { t.enabled = true; });
     }
     const localVid = document.getElementById('celeb-local-video');
     if (localVid) {
@@ -1046,20 +1102,23 @@ function showDashboard() {
   // Role-specific Header area elements
   const normalPremiumArea = document.getElementById('normal-user-premium-area');
   const celebEarningsArea = document.getElementById('celebrity-earnings-area');
-  normalPremiumArea.classList.add('hidden');
-  celebEarningsArea.classList.add('hidden');
+  if (normalPremiumArea) normalPremiumArea.classList.add('hidden');
+  if (celebEarningsArea) celebEarningsArea.classList.add('hidden');
 
   const navContainer = document.getElementById('authorized-nav-tabs');
   navContainer.innerHTML = '';
 
   initWebSocket();
   initAppPeer();
+  fetchCelebrityAvailability();
 
   // 1. NORMAL USER
   if (currentUser.role === 'NORMAL') {
     document.getElementById('dashboard-normal').classList.remove('hidden');
-    normalPremiumArea.classList.remove('hidden');
-    updateNormalPremiumUI();
+    if (normalPremiumArea) {
+      normalPremiumArea.classList.remove('hidden');
+      updateNormalPremiumUI();
+    }
 
     // Normal Tabs
     navContainer.innerHTML = `
@@ -1081,6 +1140,10 @@ function showDashboard() {
     loadCelebrityHub();
     loadSupportTickets();
     switchNormalTab('connect');
+
+    if (!window.celebAvailPollInterval) {
+      window.celebAvailPollInterval = setInterval(fetchCelebrityAvailability, 3000);
+    }
   }
 
   // 2. CELEBRITY
@@ -1102,6 +1165,7 @@ function showDashboard() {
 
     startCelebrityIncomingCallPoll();
     switchCelebrityTab('calls');
+    loadCelebrityAnalytics(currentUser.id);
   }
 
   // 3. ORGANIZATION
@@ -1152,6 +1216,7 @@ function showDashboard() {
     `;
 
     loadAdminMetrics();
+    loadAdminCallReviews();
   }
 }
 
@@ -1170,7 +1235,10 @@ function switchNormalTab(tabId) {
   document.getElementById(`normal-tab-${tabId}`)?.classList.remove('hidden');
 
   if (tabId === 'events') loadNearbyEvents();
-  if (tabId === 'celebrity') checkCelebrityHubAccess();
+  if (tabId === 'celebrity') {
+    fetchCelebrityAvailability();
+    checkCelebrityHubAccess();
+  }
 }
 
 function updateNormalPremiumUI() {
@@ -1219,27 +1287,225 @@ async function unlockPremiumSubscription() {
 
 // ----------------- CELEBRITY HUB VIP ACCESS & 1-ON-1 CHAT ENGINE -----------------
 
-function checkCelebrityHubAccess() {
-  const isPremium = currentUser?.isPremium || localStorage.getItem('fc_celeb_hub_premium') === 'true';
-  const lockedBox = document.getElementById('normal-celeb-hub-locked');
-  const unlockedBox = document.getElementById('normal-celeb-hub-unlocked');
+const CELEB_PROFILES = {
+  'usr_celeb_1': { id: 'usr_celeb_1', name: 'Dulquer Sithara', role: 'Playback Singer & Music Artist', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', price: 499 },
+  'usr_celeb_2': { id: 'usr_celeb_2', name: 'Tovino Thomas', role: 'Actor & Cinema Producer', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', price: 599 },
+  'usr_celeb_3': { id: 'usr_celeb_3', name: 'Kalyani Priyadarshan', role: 'Actress & Fashion Influencer', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', price: 499 },
+  'usr_celeb_4': { id: 'usr_celeb_4', name: 'Basil Joseph', role: 'Director & Actor', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', price: 499 },
+  'usr_celeb_5': { id: 'usr_celeb_5', name: 'Aparna Balamurali', role: 'Playback Singer & Actress', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150', price: 399 },
+  'usr_celeb_6': { id: 'usr_celeb_6', name: 'Arjun Ratan (Arjyou)', role: 'Content Creator & Vlogger', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150', price: 299 },
+};
 
-  if (!isPremium) {
-    lockedBox?.classList.remove('hidden');
-    unlockedBox?.classList.add('hidden');
-  } else {
-    lockedBox?.classList.add('hidden');
-    unlockedBox?.classList.remove('hidden');
-    // Ensure main view is shown by default
-    document.getElementById('celeb-hub-main-view')?.classList.remove('hidden');
-    document.getElementById('normal-celeb-chat-view')?.classList.add('hidden');
-    loadCelebrityHub();
+let currentActiveChatCelebId = 'usr_celeb_1';
+
+// Dynamic Celebrity Online/Offline Availability System
+let celebrityAvailabilityMap = {
+  'usr_celeb_1': true,
+  'usr_celeb_2': true,
+  'usr_celeb_3': true,
+  'usr_celeb_4': true,
+  'usr_celeb_5': true,
+  'usr_celeb_6': true
+};
+
+async function fetchCelebrityAvailability() {
+  try {
+    const res = await fetch('/api/celebrities/availability');
+    const data = await res.json();
+    if (data.success && data.availability) {
+      celebrityAvailabilityMap = { ...celebrityAvailabilityMap, ...data.availability };
+      updateCelebrityOnlineOfflineDOM();
+    }
+  } catch (err) {
+    console.warn('Failed to fetch celebrity availability:', err);
   }
 }
 
-async function unlockCelebrityHubPremium() {
-  await unlockPremiumSubscription();
-  checkCelebrityHubAccess();
+function updateCelebrityOnlineOfflineDOM() {
+  renderCelebrityStories();
+  if (currentActiveChatCelebId) {
+    updateChatHeaderAvailability(currentActiveChatCelebId);
+    updateCardCallButtons(currentActiveChatCelebId);
+  }
+}
+
+function isCelebrityOnline(celebId) {
+  return celebrityAvailabilityMap[celebId] !== false;
+}
+
+function updateChatHeaderAvailability(celebId) {
+  const isOnline = isCelebrityOnline(celebId);
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Creator' };
+  const statusEl = document.getElementById('chat-celeb-status-indicator');
+  const btnAudio = document.getElementById('btn-chat-audio-call');
+  const btnVideo = document.getElementById('btn-chat-video-call');
+
+  if (statusEl) {
+    if (isOnline) {
+      statusEl.className = 'text-[10px] text-emerald-400 flex items-center gap-1 font-mono';
+      statusEl.innerHTML = `
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+        <span>Active Online • VIP Direct</span>
+      `;
+    } else {
+      statusEl.className = 'text-[10px] text-slate-400 flex items-center gap-1 font-mono';
+      statusEl.innerHTML = `
+        <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+        <span class="text-slate-400 font-bold">Offline • Not Accepting Calls</span>
+      `;
+    }
+  }
+
+  if (btnAudio && btnVideo) {
+    if (isOnline) {
+      btnAudio.className = 'w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/10 hover:bg-emerald-500/20 border border-white/15 text-emerald-400 hover:text-emerald-300 flex items-center justify-center transition active:scale-95 shadow cursor-pointer';
+      btnAudio.innerHTML = '<i class="fa-solid fa-phone text-xs sm:text-sm"></i>';
+      btnAudio.title = 'Start VIP Audio Call';
+
+      btnVideo.className = 'w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/10 hover:bg-sky-500/20 border border-white/15 text-sky-400 hover:text-sky-300 flex items-center justify-center transition active:scale-95 shadow cursor-pointer';
+      btnVideo.innerHTML = '<i class="fa-solid fa-video text-xs sm:text-sm"></i>';
+      btnVideo.title = 'Start VIP Video Call';
+    } else {
+      btnAudio.className = 'w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-500 opacity-60 flex items-center justify-center transition cursor-not-allowed shadow active:scale-95';
+      btnAudio.innerHTML = '<i class="fa-solid fa-phone-slash text-xs sm:text-sm text-slate-500"></i>';
+      btnAudio.title = `${celeb.name} is currently Offline`;
+
+      btnVideo.className = 'w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-900/90 border border-slate-700/80 text-slate-500 opacity-60 flex items-center justify-center transition cursor-not-allowed shadow active:scale-95';
+      btnVideo.innerHTML = '<i class="fa-solid fa-video-slash text-xs sm:text-sm text-slate-500"></i>';
+      btnVideo.title = `${celeb.name} is currently Offline`;
+    }
+  }
+}
+
+// ----------------- USER PROFILE MODAL & EDIT FUNCTIONS -----------------
+function openUserProfileModal() {
+  if (!currentUser) return;
+  const modal = document.getElementById('modal-user-profile');
+  if (!modal) return;
+
+  const previewEl = document.getElementById('profile-edit-avatar-preview');
+  if (previewEl) previewEl.src = currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
+
+  const avatarUrlInput = document.getElementById('profile-edit-avatar-url');
+  if (avatarUrlInput) avatarUrlInput.value = currentUser.avatarUrl || '';
+
+  const nameInput = document.getElementById('profile-edit-fullname');
+  if (nameInput) nameInput.value = currentUser.fullName || currentUser.name || '';
+
+  const bioInput = document.getElementById('profile-edit-bio');
+  if (bioInput) bioInput.value = currentUser.bio || '';
+
+  const cityInput = document.getElementById('profile-edit-city');
+  if (cityInput) cityInput.value = currentUser.city || 'Kochi';
+
+  const phoneInput = document.getElementById('profile-edit-phone');
+  if (phoneInput) phoneInput.value = currentUser.phoneNumber || '';
+
+  const roleText = document.getElementById('profile-edit-role-text');
+  if (roleText) roleText.textContent = currentUser.role || 'NORMAL';
+
+  openModal('modal-user-profile');
+}
+
+function updateProfileAvatarPreview(url) {
+  if (url && url.trim()) {
+    const previewEl = document.getElementById('profile-edit-avatar-preview');
+    if (previewEl) previewEl.src = url.trim();
+  }
+}
+
+const SAMPLE_AVATARS = [
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200',
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200',
+  'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200',
+  'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'
+];
+let sampleAvatarIdx = 0;
+function cycleProfileAvatar() {
+  sampleAvatarIdx = (sampleAvatarIdx + 1) % SAMPLE_AVATARS.length;
+  const newUrl = SAMPLE_AVATARS[sampleAvatarIdx];
+  const previewEl = document.getElementById('profile-edit-avatar-preview');
+  if (previewEl) previewEl.src = newUrl;
+  const avatarUrlInput = document.getElementById('profile-edit-avatar-url');
+  if (avatarUrlInput) avatarUrlInput.value = newUrl;
+}
+
+async function saveUserProfile(e) {
+  if (e) e.preventDefault();
+  const fullName = document.getElementById('profile-edit-fullname').value.trim();
+  const bio = document.getElementById('profile-edit-bio').value.trim();
+  const city = document.getElementById('profile-edit-city').value.trim();
+  const avatarUrl = document.getElementById('profile-edit-avatar-url').value.trim() || document.getElementById('profile-edit-avatar-preview').src;
+
+  const btnSave = document.getElementById('btn-save-profile');
+  const originalHtml = btnSave ? btnSave.innerHTML : 'Save Profile';
+  if (btnSave) {
+    btnSave.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...';
+    btnSave.disabled = true;
+  }
+
+  try {
+    const res = await fetch('/api/users/profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({ fullName, bio, city, avatarUrl })
+    });
+    const data = await res.json();
+    if (data.success && data.user) {
+      currentUser = { ...currentUser, ...data.user };
+    } else {
+      currentUser.fullName = fullName;
+      currentUser.name = fullName;
+      currentUser.bio = bio;
+      currentUser.city = city;
+      currentUser.avatarUrl = avatarUrl;
+    }
+
+    localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
+
+    // Update top header profile avatar & name immediately
+    const headerName = document.getElementById('user-name-display');
+    if (headerName) headerName.textContent = currentUser.fullName || currentUser.name;
+    const headerAvatar = document.getElementById('user-avatar-display');
+    if (headerAvatar) headerAvatar.src = currentUser.avatarUrl || avatarUrl;
+
+    closeModal('modal-user-profile');
+    showCallToast('✅ Profile updated successfully!');
+  } catch (err) {
+    console.error('Save profile error:', err);
+    currentUser.fullName = fullName;
+    currentUser.name = fullName;
+    currentUser.bio = bio;
+    currentUser.city = city;
+    currentUser.avatarUrl = avatarUrl;
+    localStorage.setItem('fc_session', JSON.stringify({ user: currentUser, token: currentToken }));
+    const headerName = document.getElementById('user-name-display');
+    if (headerName) headerName.textContent = currentUser.fullName || currentUser.name;
+    const headerAvatar = document.getElementById('user-avatar-display');
+    if (headerAvatar) headerAvatar.src = currentUser.avatarUrl || avatarUrl;
+
+    closeModal('modal-user-profile');
+    showCallToast('✅ Profile updated locally');
+  } finally {
+    if (btnSave) {
+      btnSave.innerHTML = originalHtml;
+      btnSave.disabled = false;
+    }
+  }
+}
+
+function checkCelebrityHubAccess() {
+  // Hub is freely accessible for all users to explore stories and feed
+  const unlockedBox = document.getElementById('normal-celeb-hub-unlocked');
+  unlockedBox?.classList.remove('hidden');
+  document.getElementById('celeb-hub-main-view')?.classList.remove('hidden');
+  document.getElementById('normal-celeb-chat-view')?.classList.add('hidden');
+  loadCelebrityHub();
 }
 
 function hasCelebrityFanPass(celebId = 'usr_celeb_1') {
@@ -1247,40 +1513,195 @@ function hasCelebrityFanPass(celebId = 'usr_celeb_1') {
 }
 
 function subscribeCelebrityFanPass(celebId = 'usr_celeb_1') {
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Creator', price: 499 };
+  
+  // 1. Instant Optimistic Local Activation (Zero Lag!)
   localStorage.setItem('fc_fan_pass_' + celebId, 'true');
   playGateBeep(true);
-  alert('🎉 Congratulations! Dulquer Sithara VIP Fan Pass (₹499 / Month) has been activated! You can now send 1-on-1 chat messages and make VIP Video & Audio calls.');
-  renderCelebrityChatScreen(celebId);
+  
+  // 2. Smooth non-blocking toast feedback
+  showCallToast(`🎉 ${celeb.name} VIP Fan Pass Activated!`);
+  
+  // 3. Immediately re-render VIP Card UI
+  updateCardFanPassUI(celebId);
+  updateCardCallButtons(celebId);
+
+  // 4. Background persist to Neon PostgreSQL
+  fetch('/api/vip-pass/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: currentUser?.id || 'usr_normal_1',
+      celebrityId: celebId,
+      amount: celeb.price
+    })
+  }).catch(e => console.warn('Background VIP pass subscription sync error:', e));
+}
+
+function openModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) modal.classList.remove('hidden');
+}
+
+function openCelebrityCallCard(celebId = 'usr_celeb_1') {
+  currentActiveChatCelebId = celebId;
+  const celeb = CELEB_PROFILES[celebId] || { id: celebId, name: 'Dulquer Sithara', role: 'Artist', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200', price: 499 };
+
+  // Update details in call card modal
+  const avatarEl = document.getElementById('card-celeb-avatar');
+  if (avatarEl) avatarEl.src = celeb.avatar;
+  const nameEl = document.getElementById('card-celeb-name');
+  if (nameEl) nameEl.textContent = celeb.name;
+  const roleEl = document.getElementById('card-celeb-role');
+  if (roleEl) roleEl.textContent = celeb.role;
+
+  initAppPeer();
+  updateCardFanPassUI(celebId);
+  updateCardCallButtons(celebId);
+  fetchCelebrityAvailability();
+  
+  openModal('modal-celeb-call-card');
+  const cardModal = document.getElementById('modal-celeb-call-card');
+  if (cardModal) cardModal.classList.remove('hidden');
+}
+
+function closeCelebrityCallCard() {
+  closeModal('modal-celeb-call-card');
 }
 
 function openCelebrityChatScreen(celebId = 'usr_celeb_1') {
-  const isPremium = currentUser?.isPremium || localStorage.getItem('fc_celeb_hub_premium') === 'true';
-  if (!isPremium) {
-    alert('⚠️ Celebrity Hub പ്രീമിയം യൂസേഴ്സിന് മാത്രമുള്ളതാണ്! Please unlock Celebrity Hub VIP Pass first.');
-    checkCelebrityHubAccess();
-    return;
-  }
-  initAppPeer();
-  document.getElementById('celeb-hub-main-view')?.classList.add('hidden');
-  document.getElementById('normal-celeb-chat-view')?.classList.remove('hidden');
-  renderCelebrityChatScreen(celebId);
+  openCelebrityCallCard(celebId);
 }
 
 function closeCelebrityChatScreen() {
-  document.getElementById('normal-celeb-chat-view')?.classList.add('hidden');
-  document.getElementById('celeb-hub-main-view')?.classList.remove('hidden');
+  closeCelebrityCallCard();
+}
+
+function updateCardFanPassUI(celebId = 'usr_celeb_1') {
+  const isSubscribed = hasCelebrityFanPass(celebId);
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Creator', price: 499 };
+  const passEl = document.getElementById('card-fan-pass-area');
+  if (!passEl) return;
+
+  if (isSubscribed) {
+    passEl.innerHTML = `
+      <div class="flex items-center justify-between gap-3 p-1">
+        <div class="flex items-center gap-2.5">
+          <span class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500/20 to-emerald-500/20 text-amber-400 flex items-center justify-center text-sm border border-amber-500/30">
+            <i class="fa-solid fa-crown text-amber-400"></i>
+          </span>
+          <div>
+            <h4 class="text-xs font-black text-white flex items-center gap-1.5">
+              <span>VIP Fan Pass Active</span>
+              <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+            </h4>
+            <p class="text-[10px] text-emerald-300">Unlimited 1-on-1 VIP Calling Unlocked</p>
+          </div>
+        </div>
+        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Active</span>
+      </div>
+    `;
+  } else {
+    passEl.innerHTML = `
+      <div class="text-center p-1">
+        <div class="flex items-center justify-center gap-1.5 text-amber-400 font-extrabold text-xs mb-1">
+          <i class="fa-solid fa-crown text-amber-400"></i>
+          <span>${celeb.name} VIP Fan Pass</span>
+        </div>
+        <p class="text-[11px] text-slate-300 mb-3 leading-relaxed">
+          Subscribe to unlock direct 1-on-1 private VIP Audio & Video calls with ${celeb.name}.
+        </p>
+        <button onclick="subscribeCelebrityFanPass('${celebId}')" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 active:scale-95 transition cursor-pointer">
+          <i class="fa-solid fa-crown text-slate-950"></i>
+          <span>Activate VIP Fan Pass (₹${celeb.price} / Month)</span>
+        </button>
+      </div>
+    `;
+  }
+}
+
+function updateCardCallButtons(celebId = 'usr_celeb_1') {
+  const isOnline = isCelebrityOnline(celebId);
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Creator' };
+
+  // Ring styling
+  const ringEl = document.getElementById('card-celeb-ring');
+  if (ringEl) {
+    if (isOnline) {
+      ringEl.className = 'w-24 h-24 sm:w-28 sm:h-28 p-[3px] rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-xl transition-all duration-300';
+    } else {
+      ringEl.className = 'w-24 h-24 sm:w-28 sm:h-28 p-[3px] rounded-full bg-slate-800 border-2 border-slate-700 shadow-xl grayscale transition-all duration-300';
+    }
+  }
+
+  // Badge styling
+  const badgeEl = document.getElementById('card-celeb-badge');
+  if (badgeEl) {
+    if (isOnline) {
+      badgeEl.className = 'absolute bottom-1 right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-slate-950 flex items-center justify-center shadow';
+      badgeEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-white"></span>';
+    } else {
+      badgeEl.className = 'absolute bottom-1 right-1 w-6 h-6 rounded-full bg-slate-600 border-2 border-slate-950 flex items-center justify-center shadow';
+      badgeEl.innerHTML = '<i class="fa-solid fa-moon text-[9px] text-slate-300"></i>';
+    }
+  }
+
+  // Status indicator
+  const statusEl = document.getElementById('card-celeb-status-indicator');
+  if (statusEl) {
+    if (isOnline) {
+      statusEl.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400';
+      statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span><span>Online • Accepting Calls</span>';
+    } else {
+      statusEl.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800/80 border border-slate-700 text-slate-400';
+      statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-500"></span><span class="text-slate-400 font-bold">Offline • Not Accepting Calls</span>';
+    }
+  }
+
+  // Audio and Video call action buttons
+  const btnAudio = document.getElementById('btn-card-audio-call');
+  const btnVideo = document.getElementById('btn-card-video-call');
+  const audioWrap = document.getElementById('btn-card-audio-icon-wrap');
+  const videoWrap = document.getElementById('btn-card-video-icon-wrap');
+
+  if (btnAudio && btnVideo) {
+    if (isOnline) {
+      btnAudio.className = 'group py-3.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/40 border border-emerald-400/30 flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer';
+      if (audioWrap) audioWrap.innerHTML = '<i class="fa-solid fa-phone"></i>';
+      btnAudio.title = 'Start VIP Audio Call';
+
+      btnVideo.className = 'group py-3.5 px-3 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-sky-950/40 border border-sky-400/30 flex flex-col items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer';
+      if (videoWrap) videoWrap.innerHTML = '<i class="fa-solid fa-video"></i>';
+      btnVideo.title = 'Start VIP Video Call';
+    } else {
+      btnAudio.className = 'group py-3.5 px-3 rounded-2xl bg-slate-900 border border-slate-700/80 text-slate-500 opacity-60 flex flex-col items-center justify-center gap-1.5 transition cursor-not-allowed shadow';
+      if (audioWrap) audioWrap.innerHTML = '<i class="fa-solid fa-phone-slash text-slate-500"></i>';
+      btnAudio.title = `${celeb.name} is currently Offline`;
+
+      btnVideo.className = 'group py-3.5 px-3 rounded-2xl bg-slate-900 border border-slate-700/80 text-slate-500 opacity-60 flex flex-col items-center justify-center gap-1.5 transition cursor-not-allowed shadow';
+      if (videoWrap) videoWrap.innerHTML = '<i class="fa-solid fa-video-slash text-slate-500"></i>';
+      btnVideo.title = `${celeb.name} is currently Offline`;
+    }
+  }
 }
 
 function handleCelebrityCallClick(celebId = 'usr_celeb_1', callType = 'CELEBRITY_VIDEO') {
-  if (!hasCelebrityFanPass(celebId)) {
-    alert('⚠️ ദുൽക്കർ സിത്താരയുമായി നേരിട്ട് സംസാരിക്കാൻ "Dulquer Sithara VIP Fan Pass" സബ്‌സ്‌ക്രൈബ് ചെയ്യുക!\nPlease subscribe to Dulquer Sithara VIP Fan Pass (₹499 / Month) to unlock VIP Calling & Chat.');
-    document.getElementById('celeb-chat-controls')?.scrollIntoView({ behavior: 'smooth' });
+  preUnlockAudioElements();
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Creator', price: 499 };
+  if (!isCelebrityOnline(celebId)) {
+    showCallToast(`🔴 ${celeb.name} is currently OFFLINE and not accepting calls.`);
     return;
   }
+  if (!hasCelebrityFanPass(celebId)) {
+    showCallToast(`⚠️ ${celeb.name} VIP Fan Pass Required`);
+    return;
+  }
+  closeCelebrityCallCard();
   startNormalToCelebCall(celebId, callType);
 }
 
 function renderCelebrityChatScreen(celebId = 'usr_celeb_1') {
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Dulquer Sithara', role: 'Artist', price: 499 };
   const isSubscribed = hasCelebrityFanPass(celebId);
   const badgeEl = document.getElementById('celeb-pass-status-badge');
   const controlsEl = document.getElementById('celeb-chat-controls');
@@ -1288,52 +1709,67 @@ function renderCelebrityChatScreen(celebId = 'usr_celeb_1') {
   if (badgeEl) {
     if (isSubscribed) {
       badgeEl.className = 'px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5';
-      badgeEl.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i><span>Dulquer Sithara VIP Pass Active</span>';
+      badgeEl.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span>VIP Fan Pass Active</span>`;
     } else {
       badgeEl.className = 'px-3 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5';
-      badgeEl.innerHTML = '<i class="fa-solid fa-lock text-amber-400"></i><span>Specific Fan Pass Required</span>';
+      badgeEl.innerHTML = `<i class="fa-solid fa-lock text-amber-400"></i><span>VIP Fan Pass Required</span>`;
     }
   }
 
-  // 1. Controls (Input box vs Paywall)
+  // 1. Controls: High-Contrast Amber VIP Activation Card vs Instagram DM Pill Input
   if (!isSubscribed) {
     controlsEl.innerHTML = `
-      <div class="p-4 rounded-xl bg-white/[0.03] border border-white/20 text-center">
-        <div class="flex items-center justify-center gap-2 text-amber-300 font-bold text-xs mb-1">
-          <i class="fa-solid fa-lock"></i>
-          <span>Dulquer Sithara VIP Fan Pass Required</span>
+      <div class="p-4 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-950/40 via-slate-900/90 to-slate-950 border border-amber-500/40 text-center shadow-xl">
+        <div class="flex items-center justify-center gap-2 text-amber-400 font-extrabold text-xs mb-1">
+          <i class="fa-solid fa-crown text-amber-400"></i>
+          <span>${celeb.name} VIP Fan Pass</span>
         </div>
-        <p class="text-xs text-slate-300 mb-3 max-w-md mx-auto leading-relaxed">
-          ദുൽക്കർ സിത്താരയുമായി നേരിട്ട് 1-on-1 ചാറ്റ് ചെയ്യാനും VIP ഓഡിയോ/വീഡിയോ കോളുകൾ ചെയ്യാനും ഈ സെലിബ്രിറ്റിയുടെ പ്രത്യേക VIP ഫാൻ പാസ്സ് സബ്‌സ്‌ക്രൈബ് ചെയ്യുക.
+        <p class="text-[11px] text-slate-300 mb-3 max-w-sm mx-auto leading-relaxed">
+          Subscribe to unlock direct 1-on-1 private messaging, media posts, and exclusive audio/video calls with ${celeb.name}.
         </p>
-        <button onclick="subscribeCelebrityFanPass('${celebId}')" class="fc-chrome-btn px-6 py-2.5 rounded-full font-bold text-xs uppercase tracking-wider text-black shadow-xl">
-          <i class="fa-solid fa-crown text-amber-500 mr-1.5"></i>
-          <span>Subscribe Dulquer Sithara Fan Pass (₹499 / Month)</span>
+        <button onclick="subscribeCelebrityFanPass('${celebId}')" class="w-full sm:w-auto px-6 py-3 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 mx-auto active:scale-95 transition cursor-pointer">
+          <i class="fa-solid fa-crown text-slate-950"></i>
+          <span>Activate ${celeb.name} Fan Pass (₹${celeb.price} / Month)</span>
         </button>
       </div>
     `;
   } else {
+    // True Instagram DM Input with Quick Reactions & Keyboard Elevation
     controlsEl.innerHTML = `
       <div class="flex items-center gap-2">
-        <input id="celeb-chat-input" type="text" placeholder="Type a message to Dulquer Sithara..." 
-          onkeydown="if(event.key==='Enter') sendCelebChatMessage('${celebId}')"
-          class="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-white/20 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-white transition" />
-        <button onclick="sendCelebChatMessage('${celebId}')" class="fc-chrome-btn px-5 py-2.5 rounded-xl font-bold text-xs text-black shadow flex items-center gap-1.5">
-          <i class="fa-solid fa-paper-plane"></i>
-          <span>Send</span>
+        <div class="flex items-center gap-1 hidden sm:flex shrink-0">
+          <button onclick="sendQuickReaction('${celebId}', '❤️')" class="w-8 h-8 rounded-full hover:bg-white/10 text-base transition flex items-center justify-center" title="Send Heart">❤️</button>
+          <button onclick="sendQuickReaction('${celebId}', '🔥')" class="w-8 h-8 rounded-full hover:bg-white/10 text-base transition flex items-center justify-center" title="Send Fire">🔥</button>
+          <button onclick="sendQuickReaction('${celebId}', '👏')" class="w-8 h-8 rounded-full hover:bg-white/10 text-base transition flex items-center justify-center" title="Send Claps">👏</button>
+        </div>
+        <div class="flex-1 relative flex items-center">
+          <input id="celeb-chat-input" type="text" placeholder="Message ${celeb.name.split(' ')[0]}..." 
+            onkeydown="if(event.key==='Enter') sendCelebChatMessage('${celebId}')"
+            class="w-full pl-4 pr-10 py-2.5 sm:py-3 rounded-full bg-slate-900 border border-white/20 text-white text-xs placeholder:text-slate-400 focus:outline-none focus:border-white focus:ring-1 focus:ring-white transition shadow-inner" />
+          <button onclick="sendQuickReaction('${celebId}', '❤️')" class="sm:hidden absolute right-3 text-sm text-rose-500 hover:scale-110 transition">❤️</button>
+        </div>
+        <button onclick="sendCelebChatMessage('${celebId}')" class="px-5 py-2.5 sm:py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg flex items-center gap-1.5 active:scale-95 transition cursor-pointer shrink-0">
+          <i class="fa-solid fa-paper-plane text-xs"></i>
+          <span class="hidden sm:inline">Send</span>
         </button>
       </div>
     `;
   }
 
-  // 2. Chat history
   renderCelebChatHistory(celebId);
+}
+
+function sendQuickReaction(celebId = 'usr_celeb_1', emoji = '❤️') {
+  const input = document.getElementById('celeb-chat-input');
+  if (input) input.value = emoji;
+  sendCelebChatMessage(celebId);
 }
 
 function renderCelebChatHistory(celebId = 'usr_celeb_1') {
   const messagesEl = document.getElementById('celeb-chat-messages');
   if (!messagesEl) return;
 
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Dulquer Sithara', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' };
   const storageKey = 'fc_celeb_chat_' + celebId;
   let chatData = [];
   try {
@@ -1346,9 +1782,9 @@ function renderCelebChatHistory(celebId = 'usr_celeb_1') {
       {
         id: 'msg_init',
         sender: 'CELEBRITY',
-        name: 'Dulquer Sithara',
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-        text: 'ഹലോ! ഫ്രണ്ട്സ് കണക്റ്റിലെ എന്റെ ഒഫീഷ്യൽ VIP റൂമിലേക്ക് സ്വാഗതം! ❤️ എന്തൊക്കെയുണ്ട് വിശേഷങ്ങൾ?',
+        name: celeb.name,
+        avatar: celeb.avatar,
+        text: `Hey there! Welcome to my official VIP room! ❤️ How are you doing today?`,
         time: 'Today • 10:00 AM'
       }
     ];
@@ -1360,8 +1796,8 @@ function renderCelebChatHistory(celebId = 'usr_celeb_1') {
     if (isMe) {
       return `
         <div class="flex justify-end gap-2 items-end">
-          <div class="max-w-xs sm:max-w-md bg-gradient-to-r from-blue-600 to-sky-600 text-white p-3 rounded-2xl rounded-br-sm shadow border border-blue-400/30">
-            <p class="text-xs leading-relaxed">${msg.text}</p>
+          <div class="max-w-[78%] sm:max-w-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-2xl rounded-br-sm shadow-md border border-blue-400/30">
+            <p class="text-xs leading-relaxed break-words">${msg.text}</p>
             <span class="text-[9px] text-blue-200 block text-right mt-1 font-mono">${msg.time}</span>
           </div>
         </div>
@@ -1369,10 +1805,10 @@ function renderCelebChatHistory(celebId = 'usr_celeb_1') {
     } else {
       return `
         <div class="flex justify-start gap-2.5 items-end">
-          <img src="${msg.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-8 h-8 rounded-full object-cover border border-white/30 shadow mb-1">
-          <div class="max-w-xs sm:max-w-md bg-white/10 backdrop-blur-md text-slate-100 p-3 rounded-2xl rounded-bl-sm shadow border border-white/20">
-            <span class="text-[10px] text-sky-400 font-bold block mb-0.5">${msg.name}</span>
-            <p class="text-xs leading-relaxed">${msg.text}</p>
+          <img src="${msg.avatar || celeb.avatar}" class="w-8 h-8 rounded-full object-cover border border-white/30 shadow mb-1 shrink-0">
+          <div class="max-w-[78%] sm:max-w-md bg-slate-900/90 backdrop-blur-md text-slate-100 p-3 rounded-2xl rounded-bl-sm shadow border border-white/15">
+            <span class="text-[10px] text-sky-400 font-bold block mb-0.5">${msg.name || celeb.name}</span>
+            <p class="text-xs leading-relaxed break-words">${msg.text}</p>
             <span class="text-[9px] text-slate-400 block text-right mt-1 font-mono">${msg.time}</span>
           </div>
         </div>
@@ -1384,8 +1820,9 @@ function renderCelebChatHistory(celebId = 'usr_celeb_1') {
 }
 
 function sendCelebChatMessage(celebId = 'usr_celeb_1') {
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Dulquer Sithara', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' };
   if (!hasCelebrityFanPass(celebId)) {
-    alert('⚠️ ഈ സെലിബ്രിറ്റിയുമായി ചാറ്റ് ചെയ്യാൻ "Dulquer Sithara VIP Fan Pass" സബ്‌സ്‌ക്രൈബ് ചെയ്യുക!');
+    showCallToast(`⚠️ ${celeb.name} VIP Fan Pass Required`);
     return;
   }
   const input = document.getElementById('celeb-chat-input');
@@ -1415,13 +1852,13 @@ function sendCelebChatMessage(celebId = 'usr_celeb_1') {
   try { localStorage.setItem(storageKey, JSON.stringify(chatData)); } catch {}
   renderCelebChatHistory(celebId);
 
-  // Realistic Celebrity VIP automated response after 1.4 seconds!
+  // Realistic automated reply from this specific celebrity after 1.2 seconds!
   setTimeout(() => {
     const replies = [
-      'താങ്ക് യു സോ മച്ച് ഫോർ ദി മെസ്സേജ്! ❤️ നിങ്ങളുടെ സ്നേഹവും സപ്പോർട്ടും എനിക്ക് ഒരുപാട് വിലപ്പെട്ടതാണ്!',
-      'സുഖമായിരിക്കുന്നു! നിങ്ങളുടെ ഈ പിന്തുണയാണ് എന്റെ ഏറ്റവും വലിയ പ്രചോദനം. അടുത്ത ഷോയിൽ നമുക്ക് നേരിട്ട് കാണാം! 🎶',
-      'താങ്ക്സ് എ ലോട്ട്! 🥰 ഫ്രണ്ട്സ് കണക്റ്റിലൂടെ നിങ്ങളോട് സംസാരിക്കാൻ സാധിച്ചതിൽ വലിയ സന്തോഷം! ലവ് യു ഓൾ ❤️',
-      'ഹായ്! മെസ്സേജിന് വളരെ നന്ദി! പ്രീമിയം ഫാൻ മെമ്പർഷിപ്പിലൂടെ കണക്റ്റ് ചെയ്തതിൽ ഒരുപാട് സന്തോഷം! Stay blessed! ✨'
+      `Thank you so much for the message! ❤️ Your love and support truly mean the world to me!`,
+      `Doing great! Talking to fans like you keeps me inspired. See you at the upcoming shows! 🎶`,
+      `Thanks a lot! 🥰 So thrilled to connect with you directly on Friends Connect! Love you all ❤️`,
+      `Hey! Really appreciate your message and support through the VIP Fan Pass! Stay blessed! ✨`
     ];
     const replyText = replies[Math.floor(Math.random() * replies.length)];
 
@@ -1430,15 +1867,15 @@ function sendCelebChatMessage(celebId = 'usr_celeb_1') {
     current.push({
       id: 'msg_' + Date.now(),
       sender: 'CELEBRITY',
-      name: 'Dulquer Sithara',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      name: celeb.name,
+      avatar: celeb.avatar,
       text: replyText,
       time: timeStr
     });
     try { localStorage.setItem(storageKey, JSON.stringify(current)); } catch {}
     renderCelebChatHistory(celebId);
     playGateBeep(true);
-  }, 1400);
+  }, 1200);
 }
 
 let inChatRingingTimer = null;
@@ -1481,9 +1918,10 @@ function stopInChatRingingTone() {
 }
 
 async function startNormalToCelebCall(celebId, callType) {
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Creator', price: 499, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200' };
   if (!hasCelebrityFanPass(celebId)) {
-    alert('⚠️ ദുൽക്കർ സിത്താരയുമായി സംസാരിക്കാൻ "Dulquer Sithara VIP Fan Pass" സബ്‌സ്‌ക്രൈബ് ചെയ്യുക!\nPlease subscribe to Dulquer Sithara VIP Fan Pass to unlock VIP Calling.');
-    openCelebrityChatScreen(celebId);
+    showCallToast(`⚠️ Please subscribe to ${celeb.name} VIP Fan Pass to unlock VIP Calling.`);
+    openCelebrityCallCard(celebId);
     return;
   }
 
@@ -1491,12 +1929,24 @@ async function startNormalToCelebCall(celebId, callType) {
   isCelebActiveCall = true;
   callerCallState = 'RINGING';
 
-  // Stay INSIDE the celebrity chat screen, do NOT switch to random connect tab
-  openCelebrityChatScreen(celebId);
-  document.getElementById('celeb-chat-messages')?.classList.add('hidden');
-  document.getElementById('celeb-chat-controls')?.classList.add('hidden');
+  // Close VIP call card and display the edge-to-edge call overlay
+  closeCelebrityCallCard();
   const inchatView = document.getElementById('normal-celeb-call-inchat-view');
   if (inchatView) inchatView.classList.remove('hidden');
+
+  // Populate dynamic celebrity identity into fullscreen call HUD
+  const inchatAvatar = document.getElementById('inchat-call-celeb-avatar');
+  if (inchatAvatar) inchatAvatar.src = celeb.avatar;
+  const inchatName = document.getElementById('inchat-call-celeb-name');
+  if (inchatName) inchatName.textContent = celeb.name;
+  const ringingAvatar = document.getElementById('inchat-ringing-celeb-avatar');
+  if (ringingAvatar) ringingAvatar.src = celeb.avatar;
+  const ringingName = document.getElementById('inchat-ringing-celeb-name');
+  if (ringingName) ringingName.textContent = celeb.name;
+  const audioAvatar = document.getElementById('inchat-audio-celeb-avatar');
+  if (audioAvatar) audioAvatar.src = celeb.avatar;
+  const audioName = document.getElementById('inchat-audio-celeb-name');
+  if (audioName) audioName.textContent = `${celeb.name} (VIP Audio Call)`;
 
   // Automatically trigger edge-to-edge auto-fullscreen on call initiation
   triggerAutoFullscreen('normal-celeb-call-inchat-view');
@@ -1521,7 +1971,7 @@ async function startNormalToCelebCall(celebId, callType) {
   document.getElementById('inchat-cam-off-overlay')?.classList.add('hidden');
 
   const statusLabel = document.getElementById('inchat-call-status-label');
-  if (statusLabel) statusLabel.textContent = `Calling Dulquer Sithara (${callType === 'CELEBRITY_VIDEO' ? 'VIP Video' : 'VIP Audio'})...`;
+  if (statusLabel) statusLabel.textContent = `Calling ${celeb.name} (${callType === 'CELEBRITY_VIDEO' ? 'VIP Video' : 'VIP Audio'})...`;
   const timerEl = document.getElementById('inchat-call-timer');
   if (timerEl) timerEl.textContent = '00:00';
 
@@ -1692,8 +2142,13 @@ function startCallerCallStatusPoll() {
             onInChatCallDeclined();
             return;
           } else if (call.status === 'ENDED') {
-            callerCallState = 'ENDED';
-            onInChatCallEnded(call.endedBy);
+            if (callerStatusPollInterval) {
+              clearInterval(callerStatusPollInterval);
+              callerStatusPollInterval = null;
+            }
+            if (callerCallState !== 'ENDED') {
+              onInChatCallEnded(call.endedBy, call.callId);
+            }
             return;
           }
           if (call.answerSdp && rtcPeerConnection && !rtcPeerConnection.remoteDescription) {
@@ -1800,8 +2255,9 @@ async function onInChatCallApproved(call) {
     setSpeakerphoneOutput(false, false);
   }
 
+  const currentCeleb = CELEB_PROFILES[currentActiveChatCelebId] || { name: 'Creator' };
   const statusLabel = document.getElementById('inchat-call-status-label');
-  if (statusLabel) statusLabel.textContent = `VIP ${isVideo ? 'Video' : 'Audio'} Call Active with Dulquer Sithara (Live Connected)`;
+  if (statusLabel) statusLabel.textContent = `VIP ${isVideo ? 'Video' : 'Audio'} Call Active with ${currentCeleb.name} (Live Connected)`;
 
   // Start in-call seconds timer
   inChatCallSeconds = 0;
@@ -1834,14 +2290,17 @@ function onInChatCallDeclined() {
   notifyCallEnded('❌ Dulquer Sithara is currently unavailable / declined the call request.');
 }
 
-function onInChatCallEnded(endedBy = 'CELEBRITY') {
+function onInChatCallEnded(endedBy = 'CELEBRITY', callId = null) {
+  const wasConnected = callerCallState === 'CONNECTED';
   callerCallState = 'ENDED';
-  endNormalInChatCelebCall();
-  notifyCallEnded(`📞 Call ended by ${endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'caller'}.`);
+  const cId = callId || activeServerCallId;
+  endNormalInChatCelebCall(wasConnected);
+  notifyCallEnded(`📞 Call ended by ${endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'caller'}.`, cId);
 }
 
-function endNormalInChatCelebCall() {
+function endNormalInChatCelebCall(wasConnectedOverride = null) {
   try {
+    const wasConnected = wasConnectedOverride !== null ? wasConnectedOverride : (callerCallState === 'CONNECTED');
     isCelebActiveCall = false;
     isVipCallMinimized = false;
     callerCallState = 'IDLE';
@@ -1886,7 +2345,7 @@ function endNormalInChatCelebCall() {
     document.getElementById('inchat-pip-label')?.classList.add('hidden');
     document.getElementById('normal-inchat-remote-video')?.classList.add('hidden');
     document.getElementById('inchat-cam-off-overlay')?.classList.add('hidden');
-    document.getElementById('inchat-call-ringing-card')?.classList.remove('hidden');
+    document.getElementById('inchat-call-ringing-card')?.classList.add('hidden');
     document.getElementById('inchat-call-audio-card')?.classList.add('hidden');
     document.getElementById('btn-inchat-camera')?.classList.remove('hidden');
 
@@ -1914,19 +2373,43 @@ function endNormalInChatCelebCall() {
       }
     } catch (e) {}
 
-    // Inform server API
-    if (activeServerCallId) {
-      fetch('/api/celebrities/call/end', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ callId: activeServerCallId, endedBy: 'NORMAL_USER' })
-      }).catch(() => {});
+    const callIdToEnd = activeServerCallId;
+    const targetCeleb = currentActiveChatCelebId || 'usr_celeb_1';
+
+    // 1. Immediately inform Server API with celebrityId and callerId
+    fetch('/api/celebrities/call/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callId: callIdToEnd,
+        celebrityId: targetCeleb,
+        callerId: currentUser?.id || 'usr_normal_1',
+        endedBy: 'NORMAL_USER'
+      })
+    }).catch(() => {});
+
+    // 2. Remove any lingering incoming call in local storage
+    try {
+      localStorage.removeItem('fc_incoming_celeb_call');
+    } catch {}
+
+    // 3. WebSocket instant signal to terminate celebrity ring immediately
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'CELEB_CALL_ENDED',
+        callId: callIdToEnd,
+        celebrityId: targetCeleb,
+        callerId: currentUser?.id || 'usr_normal_1',
+        endedBy: 'NORMAL_USER'
+      }));
     }
 
-    // Cross tab signal
+    // 4. Cross tab signal
     const endPayload = {
       type: 'CALL_ENDED',
       state: 'ended',
+      callId: callIdToEnd,
+      celebrityId: targetCeleb,
       endedBy: 'NORMAL_USER',
       caller: currentUser?.fullName || 'Arjun Nair',
       time: Date.now()
@@ -1936,18 +2419,266 @@ function endNormalInChatCelebCall() {
     } catch {}
     postCrossTabCallEvent(endPayload);
 
-    // Restore Chat UI
+    // Return cleanly to feed
     document.getElementById('normal-celeb-call-inchat-view')?.classList.add('hidden');
-    document.getElementById('celeb-chat-messages')?.classList.remove('hidden');
-    document.getElementById('celeb-chat-controls')?.classList.remove('hidden');
 
+    const finishedCallId = activeServerCallId;
     activeServerCallId = null;
+
+    // Show 5-star rating modal ONLY if the call was actually connected!
+    if (wasConnected && currentUser?.role === 'NORMAL') {
+      setTimeout(() => {
+        openCallReviewModal(currentActiveChatCelebId || 'usr_celeb_1', finishedCallId);
+      }, 600);
+    }
   } catch (err) {
-    console.error('Error ending in-chat call:', err);
+    console.error('Error ending VIP call:', err);
     document.getElementById('normal-celeb-call-inchat-view')?.classList.add('hidden');
-    document.getElementById('celeb-chat-messages')?.classList.remove('hidden');
-    document.getElementById('celeb-chat-controls')?.classList.remove('hidden');
     activeServerCallId = null;
+  }
+}
+
+// ----------------- FAN SATISFACTION 5-STAR RATING & CALL QUALITY REVIEWS -----------------
+let currentRatingStar = 5;
+let pendingReviewCallId = null;
+let pendingReviewCelebId = 'usr_celeb_1';
+let pendingReviewCallType = 'CELEBRITY_VIDEO';
+const selectedCallReviewTags = new Set();
+
+const RATING_LABELS = {
+  1: '1.0 • Poor Connection / Audio Issue',
+  2: '2.0 • Average Connection',
+  3: '3.0 • Good Conversation',
+  4: '4.0 • Great Audio & Video!',
+  5: '5.0 • Exceptional VIP Experience!'
+};
+
+function toggleReviewTag(btn, tag) {
+  if (selectedCallReviewTags.has(tag)) {
+    selectedCallReviewTags.delete(tag);
+    btn.className = 'review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-blue-500/50 transition cursor-pointer';
+  } else {
+    selectedCallReviewTags.add(tag);
+    const isBug = /bug|issue|cut|noise|glitch|lag|freeze|mute|mic/i.test(tag);
+    btn.className = isBug
+      ? 'review-tag-chip px-2.5 py-1 rounded-full bg-rose-950/60 border border-rose-500/70 text-rose-300 font-bold transition shadow cursor-pointer scale-105'
+      : 'review-tag-chip px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/60 text-amber-300 font-bold transition shadow cursor-pointer scale-105';
+  }
+}
+
+function openCallReviewModal(celebId = 'usr_celeb_1', callId = null, callType = 'CELEBRITY_VIDEO') {
+  const celeb = CELEB_PROFILES[celebId] || { name: 'Dulquer Sithara', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160' };
+  pendingReviewCelebId = celebId;
+  pendingReviewCallId = callId;
+  pendingReviewCallType = callType || inChatCurrentCallType || 'CELEBRITY_VIDEO';
+
+  const avatarEl = document.getElementById('review-modal-celeb-avatar');
+  if (avatarEl) avatarEl.src = celeb.avatar;
+  const nameEl = document.getElementById('review-modal-celeb-name');
+  if (nameEl) nameEl.textContent = celeb.name;
+
+  selectedCallReviewTags.clear();
+  document.querySelectorAll('.review-tag-chip').forEach(btn => {
+    btn.className = 'review-tag-chip px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 hover:border-blue-500/50 transition cursor-pointer';
+  });
+  const feedbackInput = document.getElementById('call-review-feedback');
+  if (feedbackInput) feedbackInput.value = '';
+
+  setCallReviewRating(5);
+  openModal('modal-call-review');
+}
+
+function closeCallReviewModalCleanly() {
+  closeModal('modal-call-review');
+  selectedCallReviewTags.clear();
+  const feedbackInput = document.getElementById('call-review-feedback');
+  if (feedbackInput) feedbackInput.value = '';
+}
+
+function setCallReviewRating(stars) {
+  currentRatingStar = stars;
+  document.querySelectorAll('.star-rating-btn').forEach(btn => {
+    const starNum = parseInt(btn.getAttribute('data-star') || '0', 10);
+    if (starNum <= stars) {
+      btn.className = 'star-rating-btn text-3xl text-amber-400 hover:scale-125 transition-transform';
+    } else {
+      btn.className = 'star-rating-btn text-3xl text-slate-600 hover:scale-125 transition-transform';
+    }
+  });
+
+  const labelEl = document.getElementById('review-modal-rating-label');
+  if (labelEl) labelEl.textContent = RATING_LABELS[stars] || `${stars}.0 Stars`;
+}
+
+async function submitCallReviewRating() {
+  const btn = document.getElementById('btn-submit-review');
+  const orig = btn ? btn.innerHTML : 'Submit Review';
+  if (btn) {
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Submitting...';
+    btn.disabled = true;
+  }
+
+  const feedbackText = document.getElementById('call-review-feedback')?.value.trim() || '';
+  const currentCeleb = CELEB_PROFILES[pendingReviewCelebId] || { name: 'Dulquer Sithara' };
+
+  try {
+    // 4-second timeout promise race so the UI NEVER spins endlessly
+    const fetchPromise = fetch('/api/celebrities/review', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({
+        celebrityId: pendingReviewCelebId,
+        celebrityName: currentCeleb.name,
+        callId: pendingReviewCallId,
+        callType: pendingReviewCallType || 'CELEBRITY_VIDEO',
+        rating: currentRatingStar,
+        issueTags: Array.from(selectedCallReviewTags),
+        feedback: feedbackText,
+        callerId: currentUser?.id || 'usr_normal_1',
+        callerName: currentUser?.fullName || 'Arjun Nair'
+      })
+    });
+
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 4000));
+    await Promise.race([fetchPromise, timeoutPromise]);
+    showCallToast('⭐ Thank you! Your call review & feedback was recorded.');
+  } catch (err) {
+    console.warn('Submit review completed with local record:', err);
+    showCallToast('⭐ Thank you for rating your call experience!');
+  } finally {
+    if (btn) {
+      btn.innerHTML = orig;
+      btn.disabled = false;
+    }
+    closeCallReviewModalCleanly();
+    loadCelebrityAnalytics(pendingReviewCelebId);
+  }
+}
+
+// Super Admin Call Quality Reviews & Bugs Fetcher
+async function loadAdminCallReviews() {
+  const tbody = document.getElementById('admin-reviews-table-body');
+  try {
+    const res = await fetch('/api/admin/call-reviews', {
+      headers: {
+        'Authorization': `Bearer ${currentToken}`
+      }
+    });
+    if (!res.ok) throw new Error('Failed to fetch reviews');
+    const data = await res.json();
+    if (data.success) {
+      const summary = data.summary || {};
+      const countEl = document.getElementById('admin-call-reviews-count');
+      if (countEl) countEl.textContent = `${summary.totalReviews || 0} Reviews`;
+
+      const avgEl = document.getElementById('admin-reviews-avg-rating');
+      if (avgEl) avgEl.innerHTML = `${summary.averageRating || 5.0} <span class="text-xs text-amber-400">★</span>`;
+
+      const totalEl = document.getElementById('admin-reviews-total-count');
+      if (totalEl) totalEl.textContent = String(summary.totalReviews || 0);
+
+      const issuesEl = document.getElementById('admin-reviews-issues-count');
+      if (issuesEl) issuesEl.textContent = String(summary.reportedIssuesCount || 0);
+
+      const perfEl = document.getElementById('admin-reviews-perfection-rate');
+      if (perfEl) perfEl.textContent = `${summary.fiveStarPercentage || 100}%`;
+
+      if (tbody && data.reviews) {
+        if (data.reviews.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No call reviews submitted yet. User reviews after VIP calls will appear here in real-time.</td></tr>';
+        } else {
+          tbody.innerHTML = data.reviews.map(r => {
+            const starsHtml = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+            const isVideo = r.callType === 'CELEBRITY_VIDEO';
+            const tags = Array.isArray(r.issueTags) ? r.issueTags : [];
+            const tagsHtml = tags.length > 0
+              ? tags.map(t => {
+                  const isBug = /bug|issue|cut|noise|glitch|lag|freeze|mute|mic/i.test(t);
+                  return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${isBug ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40' : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'}">${t}</span>`;
+                }).join(' ')
+              : '<span class="text-slate-500 text-[11px]">No tags selected</span>';
+
+            const formattedDate = new Date(r.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+            return `
+              <tr class="hover:bg-slate-900/40 transition">
+                <td class="px-5 py-3 font-semibold text-white">${r.callerName || 'Fan User'}</td>
+                <td class="px-5 py-3 text-slate-300">${r.celebrityName || 'Dulquer Sithara'}</td>
+                <td class="px-5 py-3">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVideo ? 'bg-sky-950/40 text-sky-300 border border-sky-500/30' : 'bg-teal-950/40 text-teal-300 border border-teal-500/30'}">
+                    ${isVideo ? '🎥 Video Call' : '📞 Audio Call'}
+                  </span>
+                </td>
+                <td class="px-5 py-3 font-mono font-bold text-amber-400 text-xs">${starsHtml} (${r.rating}.0)</td>
+                <td class="px-5 py-3"><div class="flex flex-wrap gap-1 max-w-xs">${tagsHtml}</div></td>
+                <td class="px-5 py-3 text-slate-300 max-w-xs truncate" title="${r.feedback || ''}">${r.feedback ? `"${r.feedback}"` : '<span class="text-slate-500">—</span>'}</td>
+                <td class="px-5 py-3 text-right text-slate-400 font-mono text-[11px]">${formattedDate}</td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error loading admin call reviews:', err);
+  }
+}
+
+// ----------------- DYNAMIC CELEBRITY ANALYTICS & REVENUE ENGINE -----------------
+async function loadCelebrityAnalytics(celebId = 'usr_celeb_1') {
+  try {
+    const res = await fetch(`/api/celebrities/analytics?celebrityId=${celebId}`);
+    const data = await res.json();
+    if (data.success && data.analytics) {
+      const a = data.analytics;
+      const earningsFormatted = `₹${Number(a.fanEarnings || 0).toLocaleString('en-IN')}`;
+
+      // 1. Top Header Earnings Indicator
+      const headerEarn = document.getElementById('header-celeb-earnings');
+      if (headerEarn) headerEarn.textContent = earningsFormatted;
+
+      // 2. Celebrity Profile Banner Indicators
+      const profEarn = document.getElementById('celeb-profile-earnings');
+      if (profEarn) profEarn.textContent = earningsFormatted;
+
+      const profLikes = document.getElementById('celeb-profile-likes');
+      if (profLikes) profLikes.textContent = `${a.totalLikes || 0} Likes`;
+
+      // 3. Call Analytics & Revenue Console Cards
+      const statCalls = document.getElementById('celeb-stat-total-calls');
+      if (statCalls) statCalls.textContent = `${a.totalCalls || 0} Calls`;
+
+      const statEarn = document.getElementById('celeb-stat-earnings');
+      if (statEarn) statEarn.textContent = earningsFormatted;
+
+      const statAvg = document.getElementById('celeb-stat-avg-duration');
+      if (statAvg) {
+        statAvg.textContent = a.avgDuration || `${a.avgDurationSec || 0}s`;
+      }
+
+      const statRating = document.getElementById('celeb-stat-rating');
+      if (statRating) statRating.textContent = a.fanSatisfaction || '5.0 / 5.0 ★';
+
+      // 4. Recent Fan Callers Log
+      const callersList = document.getElementById('celeb-recent-callers-list');
+      if (callersList) {
+        if (a.recentCallers && a.recentCallers.length > 0) {
+          callersList.innerHTML = a.recentCallers.map(c => `
+            <div class="flex justify-between items-center text-slate-300 py-1 border-b border-slate-800/40 last:border-none">
+              <span class="font-medium">${c.name || c.callerName || 'VIP Fan'}</span>
+              <span class="text-blue-400 font-mono text-[10px]">${c.duration || '0s'} • ⭐ ${c.rating || 5}</span>
+            </div>
+          `).join('');
+        } else {
+          callersList.innerHTML = `<div class="text-slate-500 py-1 text-center text-xs">No calls logged yet</div>`;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load celebrity analytics:', err);
   }
 }
 
@@ -1972,9 +2703,16 @@ function showCallToast(msg) {
   }, 2500);
 }
 
-function notifyCallEnded(reason = '📞 Call ended / disconnected.') {
+const finalizedCallNotificationIds = new Set();
+
+function notifyCallEnded(reason = '📞 Call ended / disconnected.', callId = null) {
   const now = Date.now();
-  if (now - lastDisconnectNoticeTime < 3500) return;
+  if (callId) {
+    if (finalizedCallNotificationIds.has(callId)) return;
+    finalizedCallNotificationIds.add(callId);
+  }
+  // Global debounce: do not spam duplicate disconnect messages within 5 seconds
+  if (now - lastDisconnectNoticeTime < 5000) return;
   lastDisconnectNoticeTime = now;
   showCallToast(reason);
 }
@@ -2531,7 +3269,10 @@ function switchCelebrityTab(tabId) {
     loadCelebrityTabSupportMessages();
     celebSupportRefreshTimer = setInterval(loadGenericSupportMessages, 3000);
   }
-  if (tabId === 'calls') updateCelebrityCallUI();
+  if (tabId === 'calls') {
+    updateCelebrityCallUI();
+    loadCelebrityAnalytics(currentUser?.id || 'usr_celeb_1');
+  }
 }
 
 async function loadCelebrityTabSupportMessages() {
@@ -2721,17 +3462,43 @@ function updateCelebrityCallUI() {
   }
 }
 
-function toggleCelebrityAvailability() {
+async function toggleCelebrityAvailability() {
   celebAvailable = !celebAvailable;
   localStorage.setItem('fc_celeb_available', celebAvailable ? 'true' : 'false');
   updateCelebrityCallUI();
+
+  const celebId = currentUser?.id || 'usr_celeb_1';
+  celebrityAvailabilityMap[celebId] = celebAvailable;
+  updateCelebrityOnlineOfflineDOM();
+
+  // 1. Broadcast across browser tabs
+  postCrossTabCallEvent({
+    type: 'CELEB_AVAILABILITY_CHANGED',
+    celebrityId: celebId,
+    isAvailable: celebAvailable
+  });
+
+  // 2. Synchronize to Backend Database & WebSockets
+  try {
+    await fetch('/api/celebrities/availability', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`
+      },
+      body: JSON.stringify({ celebrityId: celebId, isAvailable: celebAvailable })
+    });
+  } catch (err) {
+    console.warn('Failed to notify server of availability change:', err);
+  }
+
   if (celebAvailable) {
     startCelebrityIncomingCallPoll();
-    alert('🟢 Status: ONLINE! You are now accepting incoming calls from VIP fans.');
+    showCallToast('🟢 Status: ONLINE! You are now accepting incoming calls from VIP fans.');
   } else {
     stopCelebrityIncomingRingtone();
     stopCelebrityIncomingCallPoll();
-    alert('🔴 Status: OFFLINE! Incoming fan calls are now disabled.');
+    showCallToast('🔴 Status: OFFLINE! Fan calls are now paused.');
   }
 }
 
@@ -2752,7 +3519,7 @@ function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callI
   if (globalCaller) globalCaller.textContent = callerName;
 
   // DYNAMIC BADGE: Audio Call vs Video Call
-  const isAudio = callType === 'CELEBRITY_AUDIO';
+  const isAudio = callType === 'CELEBRITY_AUDIO' || callType === 'AUDIO' || (typeof callType === 'string' && callType.toLowerCase().includes('audio'));
   const badgeWrap = document.getElementById('global-incoming-call-badge-wrap');
   const badgeText = document.getElementById('global-incoming-call-type-badge');
   if (badgeText) {
@@ -2766,6 +3533,11 @@ function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callI
     } else {
       badgeWrap.className = 'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-bold mb-3 shadow';
     }
+  }
+
+  const rateEl = document.getElementById('global-incoming-call-rate');
+  if (rateEl) {
+    rateEl.textContent = isAudio ? '₹50 / min (70% Share)' : '₹150 / min (70% Share)';
   }
 
   // Dashboard widget labels
@@ -2782,6 +3554,28 @@ function simulateIncomingFanCall(callerName = 'Arjun Nair (VIP Gold Fan)', callI
   document.getElementById('incoming-fan-call-box')?.classList.remove('hidden');
   document.getElementById('global-celeb-incoming-modal')?.classList.remove('hidden');
   startCelebrityIncomingRingtone();
+}
+
+function dismissCelebrityIncomingCall(callId = null) {
+  if (callId) handledCallSessions.add(callId);
+  activeServerCallId = null;
+  stopCelebrityIncomingRingtone();
+
+  const modal = document.getElementById('global-celeb-incoming-modal');
+  if (modal) modal.classList.add('hidden');
+
+  const incomingBox = document.getElementById('incoming-fan-call-box');
+  if (incomingBox) incomingBox.classList.add('hidden');
+
+  if (celebAvailable) {
+    document.getElementById('celeb-online-waiting-box')?.classList.remove('hidden');
+  } else {
+    document.getElementById('celeb-offline-box')?.classList.remove('hidden');
+  }
+
+  try {
+    localStorage.removeItem('fc_incoming_celeb_call');
+  } catch {}
 }
 
 let celebIncomingPollInterval = null;
@@ -2812,9 +3606,11 @@ function startCelebrityIncomingCallPoll() {
             }
             if (call.callId) activeServerCallId = call.callId;
             if (call.status === 'ENDED') {
+              const endedId = call.callId || activeServerCallId;
               activeServerCallId = null;
+              if (endedId) handledCallSessions.add(endedId);
               endCelebrityCall(true);
-              notifyCallEnded('📞 Fan ended / disconnected the call.');
+              notifyCallEnded('📞 Fan ended / disconnected the call.', endedId);
               return;
             }
             if (call.offerSdp && (!rtcPeerConnection || !rtcPeerConnection.remoteDescription)) {
@@ -2841,15 +3637,23 @@ function startCelebrityIncomingCallPoll() {
       const res = await fetch('/api/celebrities/call/status?celebrityId=usr_celeb_1');
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.call && data.call.status === 'RINGING') {
-          const callId = data.call.callId;
-          const callType = data.call.callType || 'CELEBRITY_VIDEO';
-          if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
-            return;
+        if (data.success && data.call) {
+          const call = data.call;
+          const callId = call.callId;
+          if (call.status === 'RINGING') {
+            const callType = call.callType || 'CELEBRITY_VIDEO';
+            if (isCelebActiveCall || (callId && handledCallSessions.has(callId))) {
+              return;
+            }
+            activeServerCallId = callId;
+            lastFanCallerName = `${call.callerName || call.caller || 'Arjun Nair'} (VIP Fan)`;
+            simulateIncomingFanCall(lastFanCallerName, callId, callType);
+          } else if (call.status === 'ENDED' || call.status === 'DECLINED') {
+            dismissCelebrityIncomingCall(callId);
           }
-          activeServerCallId = callId;
-          lastFanCallerName = `${data.call.callerName || data.call.caller || 'Arjun Nair'} (VIP Fan)`;
-          simulateIncomingFanCall(lastFanCallerName, callId, callType);
+        } else {
+          // If server has no call, dismiss any stuck incoming pop-up
+          dismissCelebrityIncomingCall();
         }
       }
     } catch (e) {}
@@ -2932,6 +3736,7 @@ function toggleCelebrityCallMute() {
 }
 
 async function approveIncomingFanCall() {
+  preUnlockAudioElements();
   stopCelebrityIncomingRingtone();
   playGateBeep(true);
   isCelebActiveCall = true;
@@ -3013,6 +3818,20 @@ async function approveIncomingFanCall() {
     }
 
     celebStream = await getOrCreateLocalCamera(true);
+    // GUARANTEE: Ensure celebrity microphone is attached & unmuted
+    if (celebStream && celebStream.getAudioTracks().length === 0) {
+      try {
+        const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mic.getAudioTracks().forEach(t => { t.enabled = true; celebStream.addTrack(t); });
+      } catch (e) {
+        console.warn('[Celeb Video] Standalone mic error:', e);
+      }
+    }
+    if (celebStream) {
+      celebStream.getAudioTracks().forEach(t => { t.enabled = true; });
+    }
+    celebLocalStream = celebStream;
+
     const celebPipVid = document.getElementById('celeb-local-video');
     if (celebPipVid && celebStream) {
       celebPipVid.srcObject = celebStream;
@@ -3235,8 +4054,8 @@ async function loadCelebrityOwnFeed() {
       container.innerHTML = data.feed.map(post => {
         const isVideo = post.mediaType === 'VIDEO' || (post.mediaUrl && (post.mediaUrl.startsWith('data:video') || post.mediaUrl.endsWith('.mp4') || post.mediaUrl.endsWith('.webm')));
         const mediaHtml = isVideo
-          ? `<video src="${post.mediaUrl}" controls playsinline class="w-full max-h-80 object-cover bg-black"></video>`
-          : `<img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">`;
+          ? `<video src="${post.mediaUrl}" controls playsinline class="w-full max-h-[520px] object-contain bg-black"></video>`
+          : `<img src="${post.mediaUrl}" class="w-full max-h-[520px] object-contain bg-black">`;
 
         return `
           <div class="bg-[#111928] border border-slate-800 rounded-2xl overflow-hidden shadow">
@@ -3945,26 +4764,117 @@ const DEFAULT_EVENTS_FALLBACK = [
 
 const DEFAULT_CELEB_POSTS_FALLBACK = [
   {
-    id: 'post_1',
+    id: 'post_celeb_1',
     celebrityId: 'usr_celeb_1',
-    celebrityName: 'Dulquer Salmaan',
-    celebrityAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    caption: 'Backstage vibes right before today\'s acoustic live performance in Kochi! Sending lots of love to all fans! ❤️✨',
+    celebrityName: 'Dulquer Sithara',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    caption: 'Backstage vibes right before tonight’s live acoustic performance in Kochi! 🎤✨ Fans can connect with me on VIP video call!',
     mediaUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800',
     mediaType: 'IMAGE',
     likesCount: 1420,
-    createdAt: new Date().toISOString()
+    comments: [
+      { id: 'c1', userName: 'Arjun Nair', content: 'Loved the acoustic set tonight! 🎶❤️' },
+      { id: 'c2', userName: 'Meera Krishna', content: 'Can\'t wait for your next album release!' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 4).toISOString()
   },
   {
-    id: 'post_2',
+    id: 'post_celeb_2',
+    celebrityId: 'usr_celeb_1',
+    celebrityName: 'Dulquer Sithara',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+    caption: 'Quick rehearsal snippet of my new single! Drops next week. What do you all think? 🎶❤️',
+    mediaUrl: 'https://assets.mixkit.co/videos/preview/mixkit-singer-singing-on-stage-with-microphone-41221-large.mp4',
+    mediaType: 'VIDEO',
+    likesCount: 2890,
+    comments: [
+      { id: 'c3', userName: 'Rahul', content: 'Pure goosebumps! Super voice!' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 24).toISOString()
+  },
+  {
+    id: 'post_celeb_3',
     celebrityId: 'usr_celeb_2',
-    celebrityName: 'Sithara Krishnakumar',
-    celebrityAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    caption: 'Studio rehearsals underway for the upcoming Symphony tour! Stay tuned for special announcements 🎵✨',
-    mediaUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800',
+    celebrityName: 'Tovino Thomas',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    caption: 'Day 45 on set! High-octane action scenes wrapped for the new project. Kerala cinema to the moon! 🎬💥💪',
+    mediaUrl: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800',
     mediaType: 'IMAGE',
-    likesCount: 980,
-    createdAt: new Date().toISOString()
+    likesCount: 5240,
+    comments: [
+      { id: 'c4', userName: 'Arjun Nair', content: 'Minnal Murali vibes return! 🔥🔥' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
+  },
+  {
+    id: 'post_celeb_4',
+    celebrityId: 'usr_celeb_3',
+    celebrityName: 'Kalyani Priyadarshan',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    caption: 'Golden hour in Fort Kochi ✨ Wearing handcrafted traditional Kerala weaves for today’s festive campaign.',
+    mediaUrl: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800',
+    mediaType: 'IMAGE',
+    likesCount: 4180,
+    comments: [
+      { id: 'c5', userName: 'Sneha', content: 'Fort Kochi sunsets are unmatched 🌅' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 16).toISOString()
+  },
+  {
+    id: 'post_celeb_5',
+    celebrityId: 'usr_celeb_4',
+    celebrityName: 'Basil Joseph',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    caption: 'Script discussion with the team. When 4 filmmakers gather, 90% is jokes and 10% is actual movie writing! 😂🎥',
+    mediaUrl: 'https://images.unsplash.com/photo-1526478806334-5fd488fcaabc?w=800',
+    mediaType: 'IMAGE',
+    likesCount: 6120,
+    comments: [
+      { id: 'c6', userName: 'Arjun Nair', content: 'Basil ettan\'s combo is always superhit! 🤣' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 20).toISOString()
+  },
+  {
+    id: 'post_celeb_6',
+    celebrityId: 'usr_celeb_5',
+    celebrityName: 'Aparna Balamurali',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+    caption: 'In the studio recording classical melodies with the orchestra. Music is healing. 🎼🕊️',
+    mediaUrl: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=800',
+    mediaType: 'IMAGE',
+    likesCount: 3340,
+    comments: [
+      { id: 'c7', userName: 'Divya', content: 'Soothing as always! Your voice is a blessing.' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 28).toISOString()
+  },
+  {
+    id: 'post_celeb_7',
+    celebrityId: 'usr_celeb_6',
+    celebrityName: 'Arjun Ratan (Arjyou)',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
+    caption: 'New vlog dropping tonight 8 PM! Exploring Kerala street food in Calicut Beach. Get ready for some mouthwatering delights! 🌯🔥',
+    mediaUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
+    mediaType: 'IMAGE',
+    likesCount: 7850,
+    comments: [
+      { id: 'c8', userName: 'Arjun Nair', content: 'Calicut food vlog = peak cinema! 🤤' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 6).toISOString()
+  },
+  {
+    id: 'post_celeb_8',
+    celebrityId: 'usr_celeb_2',
+    celebrityName: 'Tovino Thomas',
+    celebrityAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    caption: 'Late night gym grind. Consistency is the only superpower that matters! 🏋️‍♂️⚡ Stay motivated fam!',
+    mediaUrl: 'https://assets.mixkit.co/videos/preview/mixkit-young-man-training-with-dumbbells-in-a-gym-42654-large.mp4',
+    mediaType: 'VIDEO',
+    likesCount: 9150,
+    comments: [
+      { id: 'c9', userName: 'Pranav', content: 'Beast mode unlocked! 💪🔥' }
+    ],
+    createdAt: new Date(Date.now() - 3600000 * 30).toISOString()
   }
 ];
 
@@ -3999,8 +4909,8 @@ function initWebSocket() {
         alert('Partner skipped to next.');
         setCallState('searching');
       } else if (payload.type === 'END_CALL') {
-        alert('Call ended.');
         setCallState('idle');
+        notifyCallEnded('📞 Call ended.');
       } else if (payload.type === 'INCOMING_CELEB_CALL') {
         if (payload.call) {
           const callId = payload.call.callId;
@@ -4023,9 +4933,14 @@ function initWebSocket() {
           onInChatCallDeclined();
         }
       } else if (payload.type === 'CELEB_CALL_ENDED') {
-        if (currentUser?.role === 'CELEBRITY') {
-          endCelebrityCall(true);
-          notifyCallEnded('📞 Fan disconnected / ended the call.');
+        const isCelebUser = (currentUser && (currentUser.role === 'CELEBRITY' || currentUser.id === 'usr_celeb_1')) || 
+          (document.getElementById('dashboard-celebrity') && !document.getElementById('dashboard-celebrity').classList.contains('hidden'));
+        if (isCelebUser) {
+          dismissCelebrityIncomingCall(payload.callId || payload.call?.callId);
+          if (isCelebActiveCall) {
+            endCelebrityCall(true);
+            notifyCallEnded('📞 Fan disconnected / ended the call.');
+          }
         } else {
           onInChatCallEnded(payload.call?.endedBy || 'CELEBRITY');
         }
@@ -4039,6 +4954,11 @@ function initWebSocket() {
         }
       } else if (payload.type === 'CELEB_VIDEO_FRAME') {
         applyRemoteVideoFrame(payload.frame, payload.fromRole);
+      } else if (payload.type === 'CELEB_AVAILABILITY_CHANGED') {
+        if (payload.celebrityId) {
+          celebrityAvailabilityMap[payload.celebrityId] = payload.isAvailable;
+          updateCelebrityOnlineOfflineDOM();
+        }
       }
     } catch (err) {
       console.error('WS Error:', err);
@@ -4101,7 +5021,25 @@ function filterEventsDistance(r) {
   loadNearbyEvents();
 }
 
-async function loadCelebrityHub() {
+function getStoredLikedPosts() {
+  const key = 'fc_liked_posts_' + (currentUser?.id || 'usr_normal_1');
+  try {
+    const list = JSON.parse(localStorage.getItem(key) || '["post_celeb_1", "post_celeb_3", "post_celeb_7"]');
+    return new Set(list);
+  } catch {
+    return new Set(['post_celeb_1', 'post_celeb_3', 'post_celeb_7']);
+  }
+}
+
+function saveStoredLikedPosts(set) {
+  const key = 'fc_liked_posts_' + (currentUser?.id || 'usr_normal_1');
+  localStorage.setItem(key, JSON.stringify(Array.from(set)));
+}
+
+async function loadCelebrityHub(isBackgroundPoll = false) {
+  fetchCelebrityAvailability();
+  if (!isBackgroundPoll) renderCelebrityStories();
+
   let feedToRender = DEFAULT_CELEB_POSTS_FALLBACK;
   try {
     const res = await fetch('/api/celebrities/feed');
@@ -4112,73 +5050,271 @@ async function loadCelebrityHub() {
       }
     }
   } catch (err) {
-    console.warn('Feed fetch error (using fallback):', err);
+    if (!isBackgroundPoll) console.warn('Feed fetch error (using fallback):', err);
   }
 
-  const container = document.getElementById('celebrity-feed');
+  renderCelebrityFeed(feedToRender);
+
+  if (!window.celebFeedPollInterval) {
+    window.celebFeedPollInterval = setInterval(() => {
+      if (currentUser?.role === 'NORMAL') {
+        const celebTab = document.getElementById('normal-tab-celebrity');
+        if (celebTab && !celebTab.classList.contains('hidden')) {
+          loadCelebrityHub(true);
+        }
+      }
+    }, 8000);
+  }
+}
+
+function renderCelebrityStories() {
+  const container = document.getElementById('celebrity-stories-strip');
   if (!container) return;
-  container.innerHTML = feedToRender.map(post => {
-    const isVideo = post.mediaType === 'VIDEO' || (post.mediaUrl && (post.mediaUrl.startsWith('data:video') || post.mediaUrl.endsWith('.mp4') || post.mediaUrl.endsWith('.webm')));
-    const mediaHtml = isVideo
-      ? `<video src="${post.mediaUrl}" controls playsinline class="w-full max-h-80 object-cover bg-black"></video>`
-      : `<img src="${post.mediaUrl}" class="w-full max-h-80 object-cover">`;
+
+  const creators = Object.entries(CELEB_PROFILES).map(([id, data]) => ({ id, ...data }));
+
+  container.innerHTML = creators.map(creator => {
+    const isOnline = isCelebrityOnline(creator.id);
+    const ringClass = isOnline
+      ? 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 group-hover:scale-105 shadow-md'
+      : 'border-2 border-slate-700 bg-slate-800/80 grayscale opacity-75';
+    const badgeHtml = isOnline
+      ? `<span class="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-black flex items-center justify-center text-[8px] text-white shadow" title="Online • Accepting Calls"><i class="fa-solid fa-check"></i></span>`
+      : `<span class="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-slate-700 border-2 border-black flex items-center justify-center text-[7px] text-slate-400 shadow" title="Offline • Not Accepting Calls"><i class="fa-solid fa-moon"></i></span>`;
 
     return `
-      <div class="fc-glass-card rounded-2xl overflow-hidden shadow-xl border border-white/20">
-        <div class="p-4 flex items-center justify-between border-b border-white/10">
-          <div onclick="openCelebrityChatScreen('${post.celebrityId || 'usr_celeb_1'}')" class="flex items-center gap-3 cursor-pointer group">
-            <div class="relative">
-              <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-11 h-11 rounded-full object-cover border-2 border-white/30 group-hover:border-white shadow transition">
-              <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border border-black"></span>
-            </div>
-            <div>
-              <h4 class="text-xs font-bold text-white flex items-center gap-1.5 group-hover:text-blue-300 transition">
-                <span>${post.celebrityName}</span>
-                <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
-                ${isVideo ? '<span class="px-1.5 py-0.5 rounded text-[9px] bg-pink-950/40 text-pink-300 border border-pink-500/30 font-bold">Video</span>' : ''}
-              </h4>
-              <span class="text-[10px] text-slate-400">${new Date(post.createdAt).toLocaleDateString()} • Verified VIP Artist</span>
-            </div>
+      <div onclick="openCelebrityCallCard('${creator.id}')" class="flex flex-col items-center flex-shrink-0 cursor-pointer group transition active:scale-95">
+        <div class="w-16 h-16 sm:w-18 sm:h-18 p-[2.5px] rounded-full ${ringClass} transition relative">
+          <div class="w-full h-full rounded-full bg-black p-[2px]">
+            <img src="${creator.avatar}" class="w-full h-full rounded-full object-cover" alt="${creator.name}">
           </div>
-
-          <button onclick="openCelebrityChatScreen('${post.celebrityId || 'usr_celeb_1'}')" class="px-3.5 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition shadow">
-            <i class="fa-solid fa-comments text-sky-400"></i>
-            <span>1-on-1 Chat</span>
-          </button>
+          ${badgeHtml}
         </div>
-        ${mediaHtml}
-        <div class="p-4">
-          <p class="text-xs text-slate-200 mb-3 leading-relaxed">${post.caption}</p>
-          <div class="flex items-center justify-between pt-2 border-t border-white/10">
-            <button onclick="likeCelebrityPost('${post.id}')" class="px-3.5 py-1.5 rounded-xl bg-pink-950/40 border border-pink-500/30 text-rose-300 hover:bg-pink-900/40 text-xs font-bold flex items-center gap-1.5 transition">
-              <i class="fa-solid fa-heart text-rose-500"></i>
-              <span id="like-count-${post.id}">${post.likesCount} Likes</span>
-            </button>
-            <button onclick="openCelebrityChatScreen('${post.celebrityId || 'usr_celeb_1'}')" class="text-xs text-sky-400 font-bold hover:underline flex items-center gap-1">
-              <i class="fa-solid fa-paper-plane text-[10px]"></i>
-              <span>Message Artist & Calls</span>
-            </button>
-          </div>
-        </div>
+        <span class="text-[11px] font-medium text-slate-200 mt-1.5 max-w-[75px] truncate text-center group-hover:text-sky-300 transition">
+          ${creator.name.split(' ')[0]}
+        </span>
       </div>
     `;
   }).join('');
 }
 
-async function likeCelebrityPost(postId) {
+function renderCelebrityFeed(posts) {
+  const container = document.getElementById('celebrity-feed');
+  if (!container) return;
+
+  const currentUserId = currentUser?.id || 'usr_normal_1';
+  const likedPosts = getStoredLikedPosts();
+
+  container.innerHTML = posts.map(post => {
+    const isLiked = likedPosts.has(post.id);
+    const isVideo = post.mediaType === 'VIDEO' || (post.mediaUrl && (post.mediaUrl.startsWith('data:video') || post.mediaUrl.endsWith('.mp4') || post.mediaUrl.endsWith('.webm')));
+    const mediaHtml = isVideo
+      ? `<video src="${post.mediaUrl}" controls playsinline class="w-full max-h-[520px] object-contain bg-black"></video>`
+      : `<img src="${post.mediaUrl}" class="w-full max-h-[520px] object-contain bg-black" loading="lazy">`;
+
+    const commentsList = post.comments || [];
+
+    return `
+      <article class="fc-glass-card rounded-2xl overflow-hidden shadow-2xl border border-white/15 bg-slate-950/70 backdrop-blur-xl">
+        <!-- Post Header -->
+        <div class="p-3.5 flex items-center justify-between border-b border-white/10">
+          <div onclick="openCelebrityCallCard('${post.celebrityId || 'usr_celeb_1'}')" class="flex items-center gap-3 cursor-pointer group">
+            <div class="w-10 h-10 p-[2px] rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 group-hover:scale-105 transition shadow-sm">
+              <img src="${post.celebrityAvatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'}" class="w-full h-full rounded-full object-cover">
+            </div>
+            <div>
+              <div class="text-xs font-bold text-white flex items-center gap-1.5 group-hover:text-sky-300 transition">
+                <span>${post.celebrityName}</span>
+                <i class="fa-solid fa-circle-check text-sky-400 text-xs"></i>
+              </div>
+              <span class="text-[10px] text-slate-400 font-normal">Kochi, Kerala • ${timeAgo(post.createdAt)}</span>
+            </div>
+          </div>
+          <button onclick="openCelebrityCallCard('${post.celebrityId || 'usr_celeb_1'}')" class="text-slate-400 hover:text-white p-2 rounded-lg transition cursor-pointer" title="Creator VIP Room">
+            <i class="fa-solid fa-ellipsis"></i>
+          </button>
+        </div>
+
+        <!-- Post Media -->
+        <div class="relative bg-black flex items-center justify-center">
+          ${mediaHtml}
+        </div>
+
+        <!-- Post Action Bar (Clean Instagram Style: Like & Comment only) -->
+        <div class="p-4 pt-3">
+          <div class="flex items-center gap-4 mb-2.5">
+            <!-- Like Button (Toggle) -->
+            <button onclick="togglePostLike('${post.id}')" id="btn-like-${post.id}" class="transition active:scale-125 focus:outline-none cursor-pointer" title="Like">
+              ${isLiked 
+                ? '<i class="fa-solid fa-heart text-rose-500 text-xl"></i>' 
+                : '<i class="fa-regular fa-heart text-white hover:text-rose-400 text-xl"></i>'}
+            </button>
+            <!-- Comment Button -->
+            <button onclick="togglePostComments('${post.id}')" class="transition active:scale-125 text-white hover:text-sky-400 focus:outline-none cursor-pointer" title="Comments">
+              <i class="fa-regular fa-comment text-xl"></i>
+            </button>
+          </div>
+
+          <!-- Likes Count Line -->
+          <div class="text-xs font-bold text-white mb-1.5" id="likes-count-${post.id}">
+            ${post.likesCount.toLocaleString()} likes
+          </div>
+
+          <!-- Caption Line -->
+          <div class="text-xs text-slate-200 leading-relaxed mb-2">
+            <span onclick="openCelebrityCallCard('${post.celebrityId || 'usr_celeb_1'}')" class="font-extrabold text-white mr-1.5 cursor-pointer hover:underline">
+              ${post.celebrityName}
+            </span>
+            <span>${post.caption}</span>
+          </div>
+
+          <!-- Comments Count Link (Click to toggle comments, just like Instagram) -->
+          ${commentsList.length > 0 ? `
+            <div class="text-[11px] text-slate-400 mb-1 cursor-pointer hover:text-slate-200 transition" onclick="togglePostComments('${post.id}')">
+              View all ${commentsList.length} comments
+            </div>
+          ` : `
+            <div class="text-[11px] text-slate-400 mb-1 cursor-pointer hover:text-slate-200 transition" onclick="togglePostComments('${post.id}')">
+              Add a comment...
+            </div>
+          `}
+
+          <!-- Entire Comments Section (Hidden by default; opens ONLY on clicking comment button or link) -->
+          <div id="comments-section-${post.id}" class="hidden mt-2 pt-2 border-t border-white/10 animate-fade-in">
+            <!-- Comments List -->
+            <div id="comments-box-${post.id}" class="space-y-1.5 mb-2.5 max-h-48 overflow-y-auto pr-1">
+              <div id="comments-list-${post.id}" class="space-y-1.5">
+                ${commentsList.map(c => `
+                  <div class="text-xs leading-relaxed flex items-start gap-1.5">
+                    <span class="font-bold text-white shrink-0">${c.userName}:</span>
+                    <span class="text-slate-300">${c.content}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Quick Add Comment Input -->
+            <div class="flex items-center gap-2 mt-2">
+              <input id="comment-input-${post.id}" type="text" placeholder="Add a comment for ${post.celebrityName}..." 
+                onkeydown="if(event.key==='Enter') submitPostComment('${post.id}')"
+                class="flex-1 px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/15 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-white/40 transition" />
+              <button onclick="submitPostComment('${post.id}')" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition active:scale-95 shadow cursor-pointer">
+                Post
+              </button>
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function togglePostLike(postId) {
+  const likedSet = getStoredLikedPosts();
+  const currentlyLiked = likedSet.has(postId);
+  const btn = document.getElementById(`btn-like-${postId}`);
+  const countEl = document.getElementById(`likes-count-${postId}`);
+
+  if (currentlyLiked) {
+    likedSet.delete(postId);
+    if (btn) btn.innerHTML = '<i class="fa-regular fa-heart text-white hover:text-rose-400 text-xl"></i>';
+  } else {
+    likedSet.add(postId);
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-heart text-rose-500 text-xl"></i>';
+  }
+  saveStoredLikedPosts(likedSet);
+
   try {
     const res = await fetch(`/api/celebrities/like/${postId}`, {
-      method: 'POST'
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUser?.id || 'usr_normal_1' })
     });
     const data = await res.json();
-    if (data.success) {
-      const el = document.getElementById(`like-count-${postId}`);
-      if (el) el.textContent = `${data.likes} Likes`;
-      else loadCelebrityHub();
+    if (data.success && countEl) {
+      countEl.textContent = `${data.likes.toLocaleString()} likes`;
     }
   } catch (err) {
-    console.error('Like error:', err);
+    console.warn('Like toggle network error:', err);
   }
+}
+
+function togglePostComments(postId) {
+  const section = document.getElementById(`comments-section-${postId}`);
+  if (!section) return;
+  const isHidden = section.classList.contains('hidden');
+  if (isHidden) {
+    section.classList.remove('hidden');
+    const input = document.getElementById(`comment-input-${postId}`);
+    if (input) {
+      setTimeout(() => input.focus(), 60);
+    }
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+async function submitPostComment(postId) {
+  const input = document.getElementById(`comment-input-${postId}`);
+  if (!input || !input.value.trim()) return;
+  const content = input.value.trim();
+  input.value = '';
+
+  const userName = currentUser?.fullName || 'VIP Fan';
+  const list = document.getElementById(`comments-list-${postId}`);
+  if (list) {
+    const div = document.createElement('div');
+    div.className = 'text-xs leading-relaxed flex items-start gap-1.5 animate-fade-in';
+    div.innerHTML = `<span class="font-bold text-white shrink-0">${userName}:</span><span class="text-slate-200">${content}</span>`;
+    list.appendChild(div);
+  }
+
+  // Ensure comments section is visible
+  const section = document.getElementById(`comments-section-${postId}`);
+  section?.classList.remove('hidden');
+
+  try {
+    await fetch(`/api/celebrities/comment/${postId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentUser?.id || 'usr_normal_1',
+        userName,
+        userAvatar: currentUser?.avatarUrl,
+        content
+      })
+    });
+  } catch (e) {
+    console.warn('Comment post error:', e);
+  }
+}
+
+function shareCelebrityPost(postId) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(window.location.origin + '/#post/' + postId);
+  }
+  alert('🔗 Post link copied to clipboard!');
+}
+
+function bookmarkCelebrityPost(postId) {
+  const btn = document.getElementById(`btn-bookmark-${postId}`);
+  if (btn) {
+    const isSaved = btn.innerHTML.includes('fa-solid');
+    if (isSaved) {
+      btn.innerHTML = '<i class="fa-regular fa-bookmark text-xl"></i>';
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-bookmark text-amber-400 text-xl"></i>';
+    }
+  }
+}
+
+function timeAgo(dateString) {
+  const diff = Date.now() - new Date(dateString).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return 'Just now';
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 async function loadSupportTickets() {
@@ -4414,7 +5550,7 @@ async function renderMyBookings() {
       container.innerHTML = `
         <div class="col-span-2 text-center py-10 bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
           <i class="fa-solid fa-ticket-simple text-3xl text-slate-600 mb-2"></i>
-          <h4 class="text-xs font-bold text-slate-300">നിങ്ങൾ ഇതുവരെ ടിക്കറ്റുകൾ ബുക്ക് ചെയ്തിട്ടില്ല</h4>
+          <h4 class="text-xs font-bold text-slate-300">No Tickets Booked Yet</h4>
           <p class="text-[11px] text-slate-500 mt-1 mb-4">No active tickets found. Book concert passes from the Explore tab!</p>
           <button onclick="toggleEventsSubView('explore')" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow">
             Explore Events Now
@@ -4815,42 +5951,80 @@ function handleEventBannerFileUpload(event) {
 }
 
 // 3. Celebrity Post Direct Device File Upload (Photos & Videos)
-function handleCelebMediaFileUpload(event) {
+function compressImageFile(file, maxDimension = 1200, quality = 0.82) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleCelebMediaFileUpload(event) {
   const file = event.target.files?.[0];
   if (!file) return;
 
   const isVideo = file.type.startsWith('video');
   currentCelebUploadedMediaType = isVideo ? 'VIDEO' : 'IMAGE';
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const dataUrl = e.target.result;
-    const input = document.getElementById('media-input-url');
-    if (input) input.value = dataUrl;
+  let dataUrl = '';
+  if (isVideo) {
+    dataUrl = await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = e => resolve(e.target.result);
+      r.readAsDataURL(file);
+    });
+  } else {
+    dataUrl = await compressImageFile(file, 1200, 0.85);
+  }
 
-    const previewBox = document.getElementById('celeb-media-preview-box');
-    const previewContent = document.getElementById('celeb-media-preview-content');
-    const previewName = document.getElementById('celeb-media-name');
-    const previewBadge = document.getElementById('celeb-media-type-badge');
+  const input = document.getElementById('media-input-url');
+  if (input) input.value = dataUrl;
 
-    if (previewContent) {
-      if (isVideo) {
-        previewContent.innerHTML = `<video src="${dataUrl}" controls playsinline class="w-full max-h-48 rounded-xl object-cover bg-black"></video>`;
-      } else {
-        previewContent.innerHTML = `<img src="${dataUrl}" class="w-full max-h-48 rounded-xl object-cover bg-slate-800">`;
-      }
+  const previewBox = document.getElementById('celeb-media-preview-box');
+  const previewContent = document.getElementById('celeb-media-preview-content');
+  const previewName = document.getElementById('celeb-media-name');
+  const previewBadge = document.getElementById('celeb-media-type-badge');
+
+  if (previewContent) {
+    if (isVideo) {
+      previewContent.innerHTML = `<video src="${dataUrl}" controls playsinline class="w-full max-h-48 rounded-xl object-contain bg-black"></video>`;
+    } else {
+      previewContent.innerHTML = `<img src="${dataUrl}" class="w-full max-h-48 rounded-xl object-contain bg-slate-900">`;
     }
+  }
 
-    if (previewName) previewName.textContent = file.name;
-    if (previewBadge) {
-      previewBadge.textContent = isVideo ? '🎬 Video Clip' : '📷 Photo File';
-      previewBadge.className = isVideo 
-        ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-950/40 text-pink-300 border border-pink-500/30' 
-        : 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/40 text-blue-300 border border-blue-500/30';
-    }
-    previewBox?.classList.remove('hidden');
-  };
-  reader.readAsDataURL(file);
+  if (previewName) previewName.textContent = file.name;
+  if (previewBadge) {
+    previewBadge.textContent = isVideo ? '🎬 Video Clip' : '📷 Photo File (Optimized)';
+    previewBadge.className = isVideo 
+      ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-950/40 text-pink-300 border border-pink-500/30' 
+      : 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-950/40 text-blue-300 border border-blue-500/30';
+  }
+  previewBox?.classList.remove('hidden');
 }
 
 // 4. Multi-tab Celebrity Call Approval, Live Video & Disconnect Sync Engine
@@ -4865,6 +6039,14 @@ async function handleCrossTabCallEvent(data) {
       const first = seenCallMsgIds.values().next().value;
       seenCallMsgIds.delete(first);
     }
+  }
+
+  if (data.type === 'CELEB_AVAILABILITY_CHANGED') {
+    if (data.celebrityId) {
+      celebrityAvailabilityMap[data.celebrityId] = data.isAvailable;
+      updateCelebrityOnlineOfflineDOM();
+    }
+    return;
   }
 
   const isCelebTab = (currentUser && (currentUser.role === 'CELEBRITY' || currentUser.id === 'usr_celeb_1')) || 
@@ -4904,21 +6086,12 @@ async function handleCrossTabCallEvent(data) {
         lastFanCallerName = `${data.caller || 'Arjun Nair'} (VIP Fan)`;
         simulateIncomingFanCall(lastFanCallerName, data.callId, callType);
       }
-    } else if (data.type === 'CALL_ENDED' || data.state === 'ended') {
-      if (data.callId && activeServerCallId && data.callId !== activeServerCallId) {
-        console.log('[CrossTab] Ignoring CALL_ENDED from old call:', data.callId);
-        return;
-      }
-      const activeBox = document.getElementById('celeb-active-call-box');
-      const incomingBox = document.getElementById('incoming-fan-call-box');
-      const wasActive = activeBox && !activeBox.classList.contains('hidden');
-      const wasIncoming = incomingBox && !incomingBox.classList.contains('hidden');
-
+    } else if (data.type === 'CALL_ENDED' || data.state === 'ended' || data.type === 'CELEB_CALL_ENDED') {
+      dismissCelebrityIncomingCall(data.callId);
       closeRtcPeerConnection();
-      endCelebrityCall(true);
-
-      if (wasActive || wasIncoming) {
-        notifyCallEnded(`📞 Fan ${data.caller || 'Arjun Nair'} disconnected / ended the call.`);
+      if (isCelebActiveCall) {
+        endCelebrityCall(true);
+        notifyCallEnded(`📞 Fan ${data.caller || 'Arjun Nair'} disconnected / ended the call.`, data.callId);
       }
     }
   }
@@ -4948,14 +6121,14 @@ async function handleCrossTabCallEvent(data) {
       } else {
         closeRtcPeerConnection();
         setCallState('idle');
-        notifyCallEnded('❌ Dulquer Sithara is currently unavailable / declined the call request.');
+        notifyCallEnded('❌ Dulquer Sithara is currently unavailable / declined the call request.', data.callId);
       }
     } else if (data.type === 'CALL_ENDED' || data.state === 'ended') {
       isCelebActiveCall = false;
       callerCallState = 'ENDED';
       const inchatView = document.getElementById('normal-celeb-call-inchat-view');
       if (inchatView && !inchatView.classList.contains('hidden')) {
-        onInChatCallEnded(data.endedBy || 'CELEBRITY');
+        onInChatCallEnded(data.endedBy || 'CELEBRITY', data.callId);
       } else {
         const activeCall = document.getElementById('call-state-connected');
         const searchingState = document.getElementById('call-state-searching');
@@ -4966,9 +6139,9 @@ async function handleCrossTabCallEvent(data) {
         setCallState('idle');
 
         if (wasActive) {
-          notifyCallEnded(`📞 Call ended by ${data.endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'partner'}.`);
+          notifyCallEnded(`📞 Call ended by ${data.endedBy === 'CELEBRITY' ? 'Dulquer Sithara' : 'partner'}.`, data.callId);
         } else if (wasSearching) {
-          notifyCallEnded('📞 Call disconnected.');
+          notifyCallEnded('📞 Call disconnected.', data.callId);
         }
       }
     }
