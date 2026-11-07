@@ -243,16 +243,77 @@ async function acquireUserMediaSafely() {
 
 async function acquireUserAudioOnlySafely() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error('No mediaDevices support in browser');
+    console.warn('[Audio] No mediaDevices support, using synthetic stream');
+    return createSyntheticSilentAudioStream();
   }
-  return await navigator.mediaDevices.getUserMedia({
-    video: false,
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true
+
+  // Tier 1: Optimized voice constraints
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({
+      video: false,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+    if (s && s.getAudioTracks().length > 0) {
+      s.getAudioTracks().forEach(t => { t.enabled = true; });
+      return s;
     }
-  });
+  } catch (e1) {
+    console.warn('[Audio] Tier 1 mic failed, trying Tier 2:', e1);
+  }
+
+  // Tier 2: Plain unconstrained audio: true
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({
+      video: false,
+      audio: true
+    });
+    if (s && s.getAudioTracks().length > 0) {
+      s.getAudioTracks().forEach(t => { t.enabled = true; });
+      return s;
+    }
+  } catch (e2) {
+    console.warn('[Audio] Tier 2 mic failed, trying Tier 3:', e2);
+  }
+
+  // Tier 3: Basic audio with minimal constraint
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1 }
+    });
+    if (s && s.getAudioTracks().length > 0) {
+      s.getAudioTracks().forEach(t => { t.enabled = true; });
+      return s;
+    }
+  } catch (e3) {
+    console.warn('[Audio] Tier 3 mic failed:', e3);
+  }
+
+  // Tier 4: Synthetic Audio track so PeerJS always has a valid transceiver
+  return createSyntheticSilentAudioStream();
+}
+
+function createSyntheticSilentAudioStream() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtx) {
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const dst = ctx.createMediaStreamDestination();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.001; // nearly silent carrier
+      osc.connect(gain);
+      gain.connect(dst);
+      osc.start();
+      return dst.stream;
+    }
+  } catch (e) {
+    console.warn('[Audio] Synthetic stream error:', e);
+  }
+  return new MediaStream();
 }
 
 let isVipSpeakerOn = false;
@@ -283,15 +344,16 @@ async function setSpeakerphoneOutput(enableSpeaker, showToast = false) {
   const inchatVid = document.getElementById('normal-inchat-remote-video');
   const celebVid = document.getElementById('celeb-remote-video');
 
-  // Volume: 1.0 for loud speaker, 0.35 for earpiece
+  // Volume: Always keep full 1.0 volume for crystal-clear two-way audio
   if (audioEl) {
-    audioEl.volume = enableSpeaker ? 1.0 : 0.35;
+    audioEl.volume = 1.0;
+    audioEl.muted = false;
   }
   if (inchatVid) {
-    inchatVid.volume = enableSpeaker ? 1.0 : 0.35;
+    inchatVid.volume = 1.0;
   }
   if (celebVid) {
-    celebVid.volume = enableSpeaker ? 1.0 : 0.35;
+    celebVid.volume = 1.0;
   }
 
   // Hardware audio sink routing (Android Chrome / Edge / Chrome)
@@ -1191,14 +1253,16 @@ function showDashboard() {
 
     navContainer.innerHTML = `
       <span class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 flex items-center gap-1.5 shadow">
-        <i class="fa-solid fa-headset text-blue-400"></i><span>Helpdesk Executive</span>
+        <i class="fa-solid fa-headset text-blue-400"></i><span>Helpdesk Executive (Rahul)</span>
       </span>
       <span class="text-xs text-slate-400 flex items-center gap-1 py-1.5">
-        <span>Active Live Queries Stream</span>
+        <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping mr-1"></span>
+        <span>VoIP Call Terminal & Queries Active</span>
       </span>
     `;
 
     loadSupportExecutiveDesk();
+    startSupportExecutivePolling();
   }
 
   // 5. SUPER ADMIN
@@ -1239,21 +1303,18 @@ function switchNormalTab(tabId) {
     fetchCelebrityAvailability();
     checkCelebrityHubAccess();
   }
+  if (tabId === 'support') {
+    loadSupportTickets();
+    startSupportChatAutoRefresh();
+  }
 }
 
 function updateNormalPremiumUI() {
+  // Global upgrade button removed as subscriptions are per-celebrity VIP fan passes
   const btnUpgrade = document.getElementById('btn-upgrade-premium');
+  if (btnUpgrade) btnUpgrade.style.display = 'none';
   const badgeActive = document.getElementById('badge-premium-active');
-
-  const isPremium = currentUser?.isPremium || localStorage.getItem('fc_celeb_hub_premium') === 'true';
-
-  if (isPremium) {
-    btnUpgrade?.classList.add('hidden');
-    badgeActive?.classList.remove('hidden');
-  } else {
-    btnUpgrade?.classList.remove('hidden');
-    badgeActive?.classList.add('hidden');
-  }
+  if (badgeActive) badgeActive.style.display = 'none';
 
   if (activeNormalTab === 'celebrity') {
     checkCelebrityHubAccess();
@@ -2521,6 +2582,27 @@ async function submitCallReviewRating() {
   const feedbackText = document.getElementById('call-review-feedback')?.value.trim() || '';
   const currentCeleb = CELEB_PROFILES[pendingReviewCelebId] || { name: 'Dulquer Sithara' };
 
+  const reviewRecord = {
+    id: 'rev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    celebrityId: pendingReviewCelebId,
+    celebrityName: currentCeleb.name,
+    callId: pendingReviewCallId || ('call_' + Date.now()),
+    callType: pendingReviewCallType || 'CELEBRITY_VIDEO',
+    rating: currentRatingStar,
+    issueTags: Array.from(selectedCallReviewTags),
+    feedback: feedbackText,
+    callerId: currentUser?.id || 'usr_normal_1',
+    callerName: currentUser?.fullName || 'Arjun Nair',
+    createdAt: new Date().toISOString()
+  };
+
+  // 1. Immediately store in persistent localStorage
+  try {
+    const stored = JSON.parse(localStorage.getItem('fc_call_reviews') || '[]');
+    stored.unshift(reviewRecord);
+    localStorage.setItem('fc_call_reviews', JSON.stringify(stored.slice(0, 100)));
+  } catch {}
+
   try {
     // 4-second timeout promise race so the UI NEVER spins endlessly
     const fetchPromise = fetch('/api/celebrities/review', {
@@ -2529,24 +2611,14 @@ async function submitCallReviewRating() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentToken}`
       },
-      body: JSON.stringify({
-        celebrityId: pendingReviewCelebId,
-        celebrityName: currentCeleb.name,
-        callId: pendingReviewCallId,
-        callType: pendingReviewCallType || 'CELEBRITY_VIDEO',
-        rating: currentRatingStar,
-        issueTags: Array.from(selectedCallReviewTags),
-        feedback: feedbackText,
-        callerId: currentUser?.id || 'usr_normal_1',
-        callerName: currentUser?.fullName || 'Arjun Nair'
-      })
+      body: JSON.stringify(reviewRecord)
     });
 
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 4000));
     await Promise.race([fetchPromise, timeoutPromise]);
     showCallToast('⭐ Thank you! Your call review & feedback was recorded.');
   } catch (err) {
-    console.warn('Submit review completed with local record:', err);
+    console.warn('Submit review saved locally:', err);
     showCallToast('⭐ Thank you for rating your call experience!');
   } finally {
     if (btn) {
@@ -2561,69 +2633,122 @@ async function submitCallReviewRating() {
 // Super Admin Call Quality Reviews & Bugs Fetcher
 async function loadAdminCallReviews() {
   const tbody = document.getElementById('admin-reviews-table-body');
+  let backendReviews = [];
+  let summary = { totalReviews: 0, averageRating: 5.0, reportedIssuesCount: 0, fiveStarPercentage: 100 };
+
   try {
     const res = await fetch('/api/admin/call-reviews', {
-      headers: {
-        'Authorization': `Bearer ${currentToken}`
-      }
+      headers: { 'Authorization': `Bearer ${currentToken}` }
     });
-    if (!res.ok) throw new Error('Failed to fetch reviews');
-    const data = await res.json();
-    if (data.success) {
-      const summary = data.summary || {};
-      const countEl = document.getElementById('admin-call-reviews-count');
-      if (countEl) countEl.textContent = `${summary.totalReviews || 0} Reviews`;
-
-      const avgEl = document.getElementById('admin-reviews-avg-rating');
-      if (avgEl) avgEl.innerHTML = `${summary.averageRating || 5.0} <span class="text-xs text-amber-400">★</span>`;
-
-      const totalEl = document.getElementById('admin-reviews-total-count');
-      if (totalEl) totalEl.textContent = String(summary.totalReviews || 0);
-
-      const issuesEl = document.getElementById('admin-reviews-issues-count');
-      if (issuesEl) issuesEl.textContent = String(summary.reportedIssuesCount || 0);
-
-      const perfEl = document.getElementById('admin-reviews-perfection-rate');
-      if (perfEl) perfEl.textContent = `${summary.fiveStarPercentage || 100}%`;
-
-      if (tbody && data.reviews) {
-        if (data.reviews.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No call reviews submitted yet. User reviews after VIP calls will appear here in real-time.</td></tr>';
-        } else {
-          tbody.innerHTML = data.reviews.map(r => {
-            const starsHtml = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
-            const isVideo = r.callType === 'CELEBRITY_VIDEO';
-            const tags = Array.isArray(r.issueTags) ? r.issueTags : [];
-            const tagsHtml = tags.length > 0
-              ? tags.map(t => {
-                  const isBug = /bug|issue|cut|noise|glitch|lag|freeze|mute|mic/i.test(t);
-                  return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${isBug ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40' : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'}">${t}</span>`;
-                }).join(' ')
-              : '<span class="text-slate-500 text-[11px]">No tags selected</span>';
-
-            const formattedDate = new Date(r.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-
-            return `
-              <tr class="hover:bg-slate-900/40 transition">
-                <td class="px-5 py-3 font-semibold text-white">${r.callerName || 'Fan User'}</td>
-                <td class="px-5 py-3 text-slate-300">${r.celebrityName || 'Dulquer Sithara'}</td>
-                <td class="px-5 py-3">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVideo ? 'bg-sky-950/40 text-sky-300 border border-sky-500/30' : 'bg-teal-950/40 text-teal-300 border border-teal-500/30'}">
-                    ${isVideo ? '🎥 Video Call' : '📞 Audio Call'}
-                  </span>
-                </td>
-                <td class="px-5 py-3 font-mono font-bold text-amber-400 text-xs">${starsHtml} (${r.rating}.0)</td>
-                <td class="px-5 py-3"><div class="flex flex-wrap gap-1 max-w-xs">${tagsHtml}</div></td>
-                <td class="px-5 py-3 text-slate-300 max-w-xs truncate" title="${r.feedback || ''}">${r.feedback ? `"${r.feedback}"` : '<span class="text-slate-500">—</span>'}</td>
-                <td class="px-5 py-3 text-right text-slate-400 font-mono text-[11px]">${formattedDate}</td>
-              </tr>
-            `;
-          }).join('');
-        }
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        backendReviews = data.reviews || [];
+        if (data.summary) summary = data.summary;
       }
     }
   } catch (err) {
-    console.warn('Error loading admin call reviews:', err);
+    console.warn('Backend call reviews fetch warning (using merged store):', err);
+  }
+
+  // Merge with locally stored reviews
+  let localReviews = [];
+  try {
+    localReviews = JSON.parse(localStorage.getItem('fc_call_reviews') || '[]');
+  } catch {}
+
+  const seenIds = new Set();
+  const mergedReviews = [];
+  for (const r of [...localReviews, ...backendReviews]) {
+    if (r && r.id && !seenIds.has(r.id)) {
+      seenIds.add(r.id);
+      mergedReviews.push(r);
+    }
+  }
+
+  mergedReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Recalculate summary from combined dataset
+  if (mergedReviews.length > 0) {
+    const total = mergedReviews.length;
+    let sum = 0;
+    let fiveStars = 0;
+    let issues = 0;
+    for (const r of mergedReviews) {
+      const val = Number(r.rating || 5);
+      sum += val;
+      if (val >= 5) fiveStars++;
+      if (Array.isArray(r.issueTags) && r.issueTags.some(t => /bug|issue|cut|noise|glitch|lag|freeze|mute|mic/i.test(t))) {
+        issues++;
+      }
+    }
+    summary.totalReviews = total;
+    summary.averageRating = Number((sum / total).toFixed(1));
+    summary.reportedIssuesCount = issues;
+    summary.fiveStarPercentage = Math.round((fiveStars / total) * 100);
+  }
+
+  const countEl = document.getElementById('admin-call-reviews-count');
+  if (countEl) countEl.textContent = `${summary.totalReviews} Reviews`;
+
+  const avgEl = document.getElementById('admin-reviews-avg-rating');
+  if (avgEl) avgEl.innerHTML = `${summary.averageRating} <span class="text-xs text-amber-400">★</span>`;
+
+  const totalEl = document.getElementById('admin-reviews-total-count');
+  if (totalEl) totalEl.textContent = String(summary.totalReviews);
+
+  const issuesEl = document.getElementById('admin-reviews-issues-count');
+  if (issuesEl) issuesEl.textContent = String(summary.reportedIssuesCount);
+
+  const perfEl = document.getElementById('admin-reviews-perfection-rate');
+  if (perfEl) perfEl.textContent = `${summary.fiveStarPercentage}%`;
+
+  if (tbody) {
+    if (mergedReviews.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="px-5 py-8 text-center text-slate-400">No call reviews submitted yet. User reviews after VIP calls will appear here in real-time.</td></tr>';
+    } else {
+      tbody.innerHTML = mergedReviews.map(r => {
+        const starsHtml = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+        const isVideo = r.callType === 'CELEBRITY_VIDEO';
+        const tags = Array.isArray(r.issueTags) ? r.issueTags : [];
+        const tagsHtml = tags.length > 0
+          ? tags.map(t => {
+              const isBug = /bug|issue|cut|noise|glitch|lag|freeze|mute|mic/i.test(t);
+              return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${isBug ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40' : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'}">${t}</span>`;
+            }).join(' ')
+          : '<span class="text-slate-500 text-[11px]">No tags selected</span>';
+
+        const formattedDate = new Date(r.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+
+        return `
+          <tr class="hover:bg-slate-900/40 transition">
+            <td class="px-5 py-3 font-semibold text-white">${r.callerName || 'Fan User'}</td>
+            <td class="px-5 py-3 text-slate-300">${r.celebrityName || 'Dulquer Sithara'}</td>
+            <td class="px-5 py-3">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVideo ? 'bg-sky-950/40 text-sky-300 border border-sky-500/30' : 'bg-teal-950/40 text-teal-300 border border-teal-500/30'}">
+                ${isVideo ? '🎥 Video Call' : '📞 Audio Call'}
+              </span>
+            </td>
+            <td class="px-5 py-3 font-mono font-bold text-amber-400 text-xs">${starsHtml} (${r.rating}.0)</td>
+            <td class="px-5 py-3"><div class="flex flex-wrap gap-1 max-w-xs">${tagsHtml}</div></td>
+            <td class="px-5 py-3 text-slate-300 max-w-xs truncate" title="${r.feedback || ''}">${r.feedback ? `"${r.feedback}"` : '<span class="text-slate-500">—</span>'}</td>
+            <td class="px-5 py-3 text-right text-slate-400 font-mono text-[11px]">${formattedDate}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // 5-second Auto-poll interval when on Super Admin Dashboard
+  if (!window.adminReviewsPollInterval) {
+    window.adminReviewsPollInterval = setInterval(() => {
+      if (currentUser?.role === 'SUPER_ADMIN') {
+        const adminDash = document.getElementById('dashboard-admin');
+        if (adminDash && !adminDash.classList.contains('hidden')) {
+          loadAdminCallReviews();
+        }
+      }
+    }, 5000);
   }
 }
 
@@ -4421,13 +4546,71 @@ async function handleScanTicket() {
 
 // ----------------- SUPPORT EXECUTIVE LOGIC -----------------
 
-let activeExecutiveTicketId = 'ticket_celeb_201';
+let activeExecutiveTicketId = 'ticket_sample_101';
 let executiveAllTickets = [];
+let supportExecutivePollTimer = null;
+let supportIncomingRingtoneTimer = null;
+let supportActiveIncomingCall = null;
+let supportDeskActiveCall = null;
+let isSupportDeskMuted = false;
+let supportDeskCallDuration = 0;
+let supportDeskCallInterval = null;
+let supportDeskLocalStream = null;
+
+// Ringtone generation via Web Audio API
+function playSupportDeskRingChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc1.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.3); // E5
+
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(659.25, ctx.currentTime);
+    osc2.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.3); // G5
+
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start();
+    osc2.start();
+    osc1.stop(ctx.currentTime + 0.4);
+    osc2.stop(ctx.currentTime + 0.4);
+  } catch {}
+}
+
+function startSupportDeskRingtone() {
+  stopSupportDeskRingtone();
+  playSupportDeskRingChime();
+  supportIncomingRingtoneTimer = setInterval(playSupportDeskRingChime, 1500);
+}
+
+function stopSupportDeskRingtone() {
+  if (supportIncomingRingtoneTimer) {
+    clearInterval(supportIncomingRingtoneTimer);
+    supportIncomingRingtoneTimer = null;
+  }
+}
 
 async function loadSupportExecutiveDesk() {
   try {
     const res = await fetch('/api/support/tickets', {
-      headers: { 'Authorization': `Bearer ${currentToken}` }
+      headers: {
+        'Authorization': `Bearer ${currentToken}`,
+        'x-user-role': 'SUPPORT',
+        'x-user-id': currentUser?.id || 'usr_support_1',
+        'x-user-name': currentUser?.fullName || 'Rahul (Customer Care)'
+      }
     });
     const data = await res.json();
     if (data.success && data.tickets) {
@@ -4443,7 +4626,7 @@ async function loadSupportExecutiveDesk() {
           const isSelected = t.id === activeExecutiveTicketId;
           const roleBadgeColor = t.userRole === 'CELEBRITY' ? 'text-pink-400' : t.userRole === 'ORGANIZATION' ? 'text-amber-400' : 'text-blue-400';
           return `
-            <button onclick="selectExecutiveTicket('${t.id}')" class="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${isSelected ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:text-white'}">
+            <button onclick="selectExecutiveTicket('${t.id}')" class="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${isSelected ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-800 text-slate-300 hover:text-white'}">
               <span>${t.userName}</span>
               <span class="text-[10px] font-bold ${isSelected ? 'text-emerald-200' : roleBadgeColor}">(${t.userRole})</span>
             </button>
@@ -4456,13 +4639,13 @@ async function loadSupportExecutiveDesk() {
       const container = document.getElementById('support-desk-messages');
       if (activeTicket && container) {
         if (!activeTicket.messages || activeTicket.messages.length === 0) {
-          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No messages in ticket for ${activeTicket.userName}.</p>`;
+          container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No messages in ticket for ${activeTicket.userName}. Type below to start live assistance.</p>`;
         } else {
           container.innerHTML = activeTicket.messages.map(msg => `
-            <div class="p-3.5 rounded-xl border border-slate-800 ${msg.senderRole === 'SUPPORT' ? 'bg-slate-900 border-l-4 border-l-emerald-500' : 'bg-slate-950 border-l-4 border-l-purple-500'}">
+            <div class="p-3.5 rounded-xl border border-slate-800 mb-2.5 ${msg.senderRole === 'SUPPORT' ? 'bg-slate-900 border-l-4 border-l-emerald-500' : 'bg-slate-950 border-l-4 border-l-purple-500'}">
               <div class="flex justify-between text-[11px] text-slate-400 mb-1.5">
                 <span class="font-bold ${msg.senderRole === 'SUPPORT' ? 'text-emerald-400' : 'text-purple-300'}">
-                  ${msg.senderRole === 'SUPPORT' ? 'Rahul (Support Executive)' : activeTicket.userName + ' (' + activeTicket.userRole + ')'}
+                  ${msg.senderRole === 'SUPPORT' ? 'Rahul (Support Executive)' : activeTicket.userName + ' (' + (msg.senderRole || activeTicket.userRole) + ')'}
                 </span>
                 <span>${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
@@ -4470,16 +4653,11 @@ async function loadSupportExecutiveDesk() {
             </div>
           `).join('');
           container.scrollTop = container.scrollHeight;
-      const tabContainer = document.getElementById('modal-support-messages-list-tab');
-      if (tabContainer) {
-        tabContainer.innerHTML = container.innerHTML;
-        tabContainer.scrollTop = tabContainer.scrollHeight;
-      }
         }
       }
     }
   } catch (err) {
-    console.error('Support desk error:', err);
+    console.error('Support desk load error:', err);
   }
 }
 
@@ -4490,6 +4668,7 @@ function selectExecutiveTicket(ticketId) {
 
 async function sendSupportExecutiveReply() {
   const input = document.getElementById('support-desk-reply');
+  if (!input) return;
   const text = input.value.trim();
   if (!text) return;
 
@@ -4498,18 +4677,213 @@ async function sendSupportExecutiveReply() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentToken}`
+        'Authorization': `Bearer ${currentToken}`,
+        'x-user-role': 'SUPPORT',
+        'x-user-id': currentUser?.id || 'usr_support_1',
+        'x-user-name': currentUser?.fullName || 'Rahul (Customer Care)'
       },
       body: JSON.stringify({
-        ticketId: activeExecutiveTicketId || 'ticket_celeb_201',
+        ticketId: activeExecutiveTicketId || 'ticket_sample_101',
+        senderId: currentUser?.id || 'usr_support_1',
+        senderRole: 'SUPPORT',
         content: text
       })
     });
     input.value = '';
-    loadSupportExecutiveDesk();
+    await loadSupportExecutiveDesk();
   } catch (err) {
-    console.error('Reply error:', err);
+    console.error('Support reply error:', err);
   }
+}
+
+function startSupportExecutivePolling() {
+  if (supportExecutivePollTimer) clearInterval(supportExecutivePollTimer);
+
+  supportExecutivePollTimer = setInterval(async () => {
+    if (!currentUser || currentUser.role !== 'SUPPORT') {
+      clearInterval(supportExecutivePollTimer);
+      return;
+    }
+
+    // 1. Check for incoming VoIP calls
+    try {
+      const res = await fetch('/api/support/call/status', {
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      });
+      const data = await res.json();
+      const call = data.call;
+
+      if (call && call.status === 'RINGING') {
+        supportActiveIncomingCall = call;
+        const incomingBox = document.getElementById('support-incoming-call-box');
+        if (incomingBox && incomingBox.classList.contains('hidden')) {
+          incomingBox.classList.remove('hidden');
+          const callerNameEl = document.getElementById('support-caller-name');
+          const callerRoleEl = document.getElementById('support-caller-role-text');
+          if (callerNameEl) callerNameEl.textContent = call.callerName || 'Fan User';
+          if (callerRoleEl) callerRoleEl.textContent = `${call.callerRole || 'User'} • Requesting Live Voice Assistance`;
+          startSupportDeskRingtone();
+        }
+      } else {
+        // If not ringing, ensure incoming popup is hidden
+        const incomingBox = document.getElementById('support-incoming-call-box');
+        if (incomingBox && !incomingBox.classList.contains('hidden') && !supportDeskActiveCall) {
+          incomingBox.classList.add('hidden');
+          stopSupportDeskRingtone();
+        }
+        if (call && (call.status === 'ENDED' || call.status === 'DECLINED') && supportDeskActiveCall) {
+          endSupportDeskCall(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Support call poll warning:', e);
+    }
+
+    // 2. Refresh active ticket messages every 3s
+    const supportDash = document.getElementById('dashboard-support');
+    if (supportDash && !supportDash.classList.contains('hidden')) {
+      loadSupportExecutiveDesk();
+    }
+  }, 2000);
+}
+
+async function approveSupportIncomingCall() {
+  stopSupportDeskRingtone();
+  const incomingBox = document.getElementById('support-incoming-call-box');
+  const activeBox = document.getElementById('support-active-call-box');
+  if (incomingBox) incomingBox.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/support/call/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+      body: JSON.stringify({
+        callId: supportActiveIncomingCall?.callId,
+        action: 'APPROVE'
+      })
+    });
+    const data = await res.json();
+    supportDeskActiveCall = data.call || supportActiveIncomingCall;
+  } catch (err) {
+    console.error('Call approval error:', err);
+  }
+
+  // Broadcast cross-tab approval
+  localStorage.setItem('fc_support_call_signal', JSON.stringify({
+    type: 'CONNECTED',
+    callId: supportActiveIncomingCall?.callId,
+    timestamp: Date.now()
+  }));
+
+  if (activeBox) activeBox.classList.remove('hidden');
+  const callerNameEl = document.getElementById('support-active-caller-name');
+  if (callerNameEl) callerNameEl.textContent = supportActiveIncomingCall?.callerName || 'Arjun Nair';
+
+  // Acquire Support Executive Microphone
+  try {
+    supportDeskLocalStream = await acquireUserAudioOnlySafely();
+    const audioEl = document.getElementById('support-remote-audio');
+    if (audioEl) {
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
+      audioEl.play().catch(() => {});
+    }
+  } catch (err) {
+    console.warn('Support executive microphone warning:', err);
+  }
+
+  // Live Timer
+  supportDeskCallDuration = 0;
+  const timerEl = document.getElementById('support-desk-call-timer');
+  if (timerEl) timerEl.textContent = '00:00';
+  if (supportDeskCallInterval) clearInterval(supportDeskCallInterval);
+
+  supportDeskCallInterval = setInterval(() => {
+    supportDeskCallDuration++;
+    const mins = String(Math.floor(supportDeskCallDuration / 60)).padStart(2, '0');
+    const secs = String(supportDeskCallDuration % 60).padStart(2, '0');
+    if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+  }, 1000);
+
+  showCallToast('📞 Connected to ' + (supportActiveIncomingCall?.callerName || 'User'));
+}
+
+async function declineSupportIncomingCall() {
+  stopSupportDeskRingtone();
+  const incomingBox = document.getElementById('support-incoming-call-box');
+  if (incomingBox) incomingBox.classList.add('hidden');
+
+  try {
+    await fetch('/api/support/call/respond', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+      body: JSON.stringify({
+        callId: supportActiveIncomingCall?.callId,
+        action: 'DECLINE'
+      })
+    });
+  } catch (err) {}
+
+  localStorage.setItem('fc_support_call_signal', JSON.stringify({
+    type: 'DECLINED',
+    callId: supportActiveIncomingCall?.callId,
+    timestamp: Date.now()
+  }));
+
+  supportActiveIncomingCall = null;
+}
+
+function toggleSupportDeskMute() {
+  isSupportDeskMuted = !isSupportDeskMuted;
+  const btn = document.getElementById('btn-support-desk-mute');
+  if (supportDeskLocalStream) {
+    supportDeskLocalStream.getAudioTracks().forEach(t => { t.enabled = !isSupportDeskMuted; });
+  }
+  if (btn) {
+    if (isSupportDeskMuted) {
+      btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
+      btn.classList.add('bg-rose-950/50', 'border-rose-500/50');
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+      btn.classList.remove('bg-rose-950/50', 'border-rose-500/50');
+    }
+  }
+}
+
+async function endSupportDeskCall(isRemote = false) {
+  if (supportDeskCallInterval) clearInterval(supportDeskCallInterval);
+  const durationSec = supportDeskCallDuration;
+  supportDeskCallDuration = 0;
+
+  const activeBox = document.getElementById('support-active-call-box');
+  if (activeBox) activeBox.classList.add('hidden');
+
+  if (supportDeskLocalStream) {
+    supportDeskLocalStream.getTracks().forEach(t => t.stop());
+    supportDeskLocalStream = null;
+  }
+
+  if (!isRemote && supportDeskActiveCall?.callId) {
+    try {
+      await fetch('/api/support/call/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+        body: JSON.stringify({ callId: supportDeskActiveCall.callId })
+      });
+    } catch {}
+
+    localStorage.setItem('fc_support_call_signal', JSON.stringify({
+      type: 'ENDED',
+      callId: supportDeskActiveCall.callId,
+      timestamp: Date.now()
+    }));
+  }
+
+  const mins = String(Math.floor(durationSec / 60)).padStart(2, '0');
+  const secs = String(durationSec % 60).padStart(2, '0');
+  showCallToast(`Call ended • Duration: ${mins}:${secs}`);
+  supportDeskActiveCall = null;
+  supportActiveIncomingCall = null;
 }
 
 // ----------------- SUPER ADMIN LOGIC -----------------
@@ -5317,36 +5691,105 @@ function timeAgo(dateString) {
   return `${days}d ago`;
 }
 
+let activeUserTicketId = 'ticket_sample_101';
+let userSupportChatPollTimer = null;
+let activeSupportVoipCallId = null;
+let supportVoipStatusPollTimer = null;
+let supportVoipLocalStream = null;
+let isSupportCallMuted = false;
+let supportCallDuration = 0;
+let supportCallInterval = null;
+
 async function loadSupportTickets() {
   if (!currentToken) return;
   try {
-    const res = await fetch('/api/support/tickets', { headers: { 'Authorization': `Bearer ${currentToken}` } });
+    const res = await fetch('/api/support/tickets', {
+      headers: {
+        'Authorization': `Bearer ${currentToken}`,
+        'x-user-id': currentUser?.id || 'usr_normal_1',
+        'x-user-role': currentUser?.role || 'NORMAL',
+        'x-user-name': currentUser?.fullName || 'Arjun Nair'
+      }
+    });
     const data = await res.json();
-    if (data.success && data.tickets.length > 0) {
-      const container = document.getElementById('support-messages-container');
-      container.innerHTML = data.tickets[0].messages.map(msg => `
-        <div class="p-2.5 rounded-xl text-xs ${msg.senderId === currentUser.id ? 'bg-blue-600 ml-auto max-w-xs text-white' : 'bg-slate-800 mr-auto max-w-xs text-slate-200'}">
-          ${msg.content}
-        </div>
-      `).join('');
+    if (data.success && data.tickets && data.tickets.length > 0) {
+      let myTicket = data.tickets.find(t => t.userId === currentUser?.id);
+      if (!myTicket) {
+        if (currentUser?.role === 'CELEBRITY') {
+          myTicket = data.tickets.find(t => t.id === 'ticket_celeb_201') || data.tickets[0];
+        } else if (currentUser?.role === 'ORGANIZATION') {
+          myTicket = data.tickets.find(t => t.id === 'ticket_org_301') || data.tickets[0];
+        } else {
+          myTicket = data.tickets.find(t => t.id === 'ticket_sample_101') || data.tickets[0];
+        }
+      }
+
+      if (myTicket) {
+        activeUserTicketId = myTicket.id;
+        const container = document.getElementById('support-messages-container');
+        if (container && myTicket.messages) {
+          container.innerHTML = myTicket.messages.map(msg => `
+            <div class="p-2.5 rounded-xl text-xs mb-2 transition-all ${
+              msg.senderRole === 'SUPPORT'
+                ? 'bg-slate-800 text-slate-200 mr-auto max-w-xs border border-slate-700/60 shadow-sm'
+                : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white ml-auto max-w-xs shadow-md'
+            }">
+              <div class="flex items-center justify-between text-[10px] opacity-75 mb-1 gap-2">
+                <span class="font-bold">${msg.senderRole === 'SUPPORT' ? 'Rahul (Customer Care)' : 'You'}</span>
+                <span>${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <p class="leading-relaxed">${msg.content}</p>
+            </div>
+          `).join('');
+          container.scrollTop = container.scrollHeight;
+        }
+      }
     }
   } catch (err) {
     console.error('Support tickets error:', err);
   }
 }
 
+function startSupportChatAutoRefresh() {
+  if (userSupportChatPollTimer) clearInterval(userSupportChatPollTimer);
+  userSupportChatPollTimer = setInterval(() => {
+    if (activeNormalTab === 'support') {
+      loadSupportTickets();
+    }
+  }, 3000);
+}
+
 async function sendSupportMessage() {
   const input = document.getElementById('support-message-input');
+  if (!input) return;
   const text = input.value.trim();
   if (!text) return;
+
+  const ticketId = activeUserTicketId || (
+    currentUser?.role === 'CELEBRITY' ? 'ticket_celeb_201' :
+    currentUser?.role === 'ORGANIZATION' ? 'ticket_org_301' : 'ticket_sample_101'
+  );
+
   try {
     await fetch('/api/support/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
-      body: JSON.stringify({ ticketId: 'ticket_sample_101', content: text })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentToken}`,
+        'x-user-id': currentUser?.id || 'usr_normal_1',
+        'x-user-role': currentUser?.role || 'NORMAL',
+        'x-user-name': currentUser?.fullName || 'Arjun Nair'
+      },
+      body: JSON.stringify({
+        ticketId,
+        senderId: currentUser?.id || 'usr_normal_1',
+        senderRole: currentUser?.role || 'NORMAL',
+        senderName: currentUser?.fullName || 'Arjun Nair',
+        content: text
+      })
     });
     input.value = '';
-    loadSupportTickets();
+    await loadSupportTickets();
   } catch (err) {
     console.error('Support send error:', err);
   }
@@ -5354,71 +5797,166 @@ async function sendSupportMessage() {
 
 // ----------------- DEDICATED IN-PLACE CUSTOMER CARE VOIP CALL -----------------
 
-function startSupportVoipCall() {
-  // Reveal the VoIP calling card right inside the Customer Care section
+async function startSupportVoipCall() {
   const callCard = document.getElementById('support-voip-call-card');
   const btnStart = document.getElementById('btn-start-support-voip');
   const statusText = document.getElementById('support-call-status-text');
   const timerEl = document.getElementById('support-call-timer');
   const wavesEl = document.getElementById('support-voice-waves');
 
-  callCard.classList.remove('hidden');
-  btnStart.classList.add('opacity-50', 'pointer-events-none');
+  if (callCard) callCard.classList.remove('hidden');
+  if (btnStart) btnStart.classList.add('opacity-50', 'pointer-events-none');
 
-  statusText.innerHTML = '<i class="fa-solid fa-phone-volume animate-pulse text-amber-400"></i><span>Calling Helpdesk Desk... (Ringing)</span>';
-  wavesEl.classList.add('opacity-40');
-  timerEl.textContent = '00:00';
+  if (statusText) statusText.innerHTML = '<i class="fa-solid fa-phone-volume animate-pulse text-amber-400"></i><span>Calling Helpdesk Desk... (Ringing)</span>';
+  if (wavesEl) wavesEl.classList.add('opacity-40');
+  if (timerEl) timerEl.textContent = '00:00';
   supportCallDuration = 0;
 
-  // Simulate prompt connection to Support Officer (Rahul) after 1.5 seconds
-  setTimeout(() => {
-    statusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping mr-1"></span><span>Connected • HD Voice Audio</span>';
-    wavesEl.classList.remove('opacity-40');
+  const callId = 'call_support_' + Date.now();
+  activeSupportVoipCallId = callId;
 
-    clearInterval(supportCallInterval);
-    supportCallInterval = setInterval(() => {
-      supportCallDuration++;
-      const mins = String(Math.floor(supportCallDuration / 60)).padStart(2, '0');
-      const secs = String(supportCallDuration % 60).padStart(2, '0');
-      timerEl.textContent = `${mins}:${secs}`;
-    }, 1000);
-  }, 1500);
+  // 1. Ring backend support desk
+  try {
+    await fetch('/api/support/call/ring', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+      body: JSON.stringify({
+        callId,
+        callerId: currentUser?.id || 'usr_normal_1',
+        callerName: currentUser?.fullName || 'Arjun Nair',
+        callerRole: currentUser?.role || 'NORMAL'
+      })
+    });
+  } catch (e) {
+    console.warn('VoIP ring error:', e);
+  }
+
+  // Cross-tab broadcast for instant reaction
+  localStorage.setItem('fc_support_call_signal', JSON.stringify({
+    type: 'RING',
+    callId,
+    callerName: currentUser?.fullName || 'Arjun Nair',
+    callerRole: currentUser?.role || 'NORMAL',
+    timestamp: Date.now()
+  }));
+
+  // Acquire Caller Microphone with resilient 4-tier fallback
+  try {
+    supportVoipLocalStream = await acquireUserAudioOnlySafely();
+    const audioEl = document.getElementById('support-user-voip-audio');
+    if (audioEl) {
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
+      audioEl.play().catch(() => {});
+    }
+  } catch (err) {
+    console.warn('Caller mic acquire warning:', err);
+  }
+
+  // Poll call status until CONNECTED, DECLINED, or ENDED
+  if (supportVoipStatusPollTimer) clearInterval(supportVoipStatusPollTimer);
+  supportVoipStatusPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/support/call/status?callId=${callId}`, {
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      });
+      const data = await res.json();
+      const call = data.call;
+
+      if (call && call.status === 'CONNECTED') {
+        clearInterval(supportVoipStatusPollTimer);
+        supportVoipStatusPollTimer = null;
+
+        if (statusText) statusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-ping mr-1"></span><span>Connected • HD Voice Audio</span>';
+        if (wavesEl) wavesEl.classList.remove('opacity-40');
+
+        if (supportCallInterval) clearInterval(supportCallInterval);
+        supportCallInterval = setInterval(() => {
+          supportCallDuration++;
+          const mins = String(Math.floor(supportCallDuration / 60)).padStart(2, '0');
+          const secs = String(supportCallDuration % 60).padStart(2, '0');
+          if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+        }, 1000);
+
+        showCallToast('📞 Connected to Rahul (Helpdesk Executive)');
+      } else if (call && call.status === 'DECLINED') {
+        clearInterval(supportVoipStatusPollTimer);
+        supportVoipStatusPollTimer = null;
+        if (statusText) statusText.innerHTML = '<span class="text-rose-400 font-bold"><i class="fa-solid fa-phone-slash mr-1"></i> Call Declined by Helpdesk</span>';
+        setTimeout(() => endSupportVoipCall(true), 2500);
+      } else if (call && call.status === 'ENDED') {
+        endSupportVoipCall(true);
+      }
+    } catch (e) {}
+  }, 1000);
 }
 
 function toggleSupportCallMute() {
   isSupportCallMuted = !isSupportCallMuted;
   const btn = document.getElementById('btn-support-call-mute');
-  if (isSupportCallMuted) {
-    btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
-    btn.classList.add('bg-rose-950/50', 'border-rose-500/50');
-  } else {
-    btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-    btn.classList.remove('bg-rose-950/50', 'border-rose-500/50');
+  if (supportVoipLocalStream) {
+    supportVoipLocalStream.getAudioTracks().forEach(t => { t.enabled = !isSupportCallMuted; });
+  }
+  if (btn) {
+    if (isSupportCallMuted) {
+      btn.innerHTML = '<i class="fa-solid fa-microphone-slash text-rose-500"></i>';
+      btn.classList.add('bg-rose-950/50', 'border-rose-500/50');
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+      btn.classList.remove('bg-rose-950/50', 'border-rose-500/50');
+    }
   }
 }
 
-function endSupportVoipCall() {
-  clearInterval(supportCallInterval);
+async function endSupportVoipCall(isRemote = false) {
+  if (supportVoipStatusPollTimer) {
+    clearInterval(supportVoipStatusPollTimer);
+    supportVoipStatusPollTimer = null;
+  }
+  if (supportCallInterval) clearInterval(supportCallInterval);
   const durationSec = supportCallDuration;
   supportCallDuration = 0;
 
   const callCard = document.getElementById('support-voip-call-card');
   const btnStart = document.getElementById('btn-start-support-voip');
-  callCard.classList.add('hidden');
-  btnStart.classList.remove('opacity-50', 'pointer-events-none');
+  if (callCard) callCard.classList.add('hidden');
+  if (btnStart) btnStart.classList.remove('opacity-50', 'pointer-events-none');
+
+  if (supportVoipLocalStream) {
+    supportVoipLocalStream.getTracks().forEach(t => t.stop());
+    supportVoipLocalStream = null;
+  }
+
+  if (!isRemote && activeSupportVoipCallId) {
+    try {
+      await fetch('/api/support/call/end', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentToken}` },
+        body: JSON.stringify({ callId: activeSupportVoipCallId })
+      });
+    } catch {}
+
+    localStorage.setItem('fc_support_call_signal', JSON.stringify({
+      type: 'ENDED',
+      callId: activeSupportVoipCallId,
+      timestamp: Date.now()
+    }));
+  }
 
   const mins = String(Math.floor(durationSec / 60)).padStart(2, '0');
   const secs = String(durationSec % 60).padStart(2, '0');
 
-  // Insert a notification bubble in the chat messages
+  // Insert notification bubble in support chat messages
   const container = document.getElementById('support-messages-container');
   if (container) {
     const bubble = document.createElement('div');
-    bubble.className = 'p-2 rounded-xl text-center text-[11px] bg-slate-900 border border-slate-800 text-slate-300 my-2';
+    bubble.className = 'p-2 rounded-xl text-center text-[11px] bg-slate-900 border border-slate-800 text-slate-300 my-2 shadow-sm';
     bubble.innerHTML = `<i class="fa-solid fa-phone text-emerald-400 mr-1.5"></i> Voice Support Call ended • Duration: <span class="font-mono font-bold text-emerald-400">${mins}:${secs}</span>`;
     container.appendChild(bubble);
     container.scrollTop = container.scrollHeight;
   }
+
+  activeSupportVoipCallId = null;
 }
 
 function openBookingModal(eventId) {

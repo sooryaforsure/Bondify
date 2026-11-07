@@ -226,6 +226,134 @@ export class SupportService {
     return msg;
   }
 
+  // Support VoIP Calling System
+  private pendingSupportCalls: Map<string, any> = new Map();
+
+  ringSupport(callerId: string, callerName: string, callerRole: string = 'NORMAL', clientCallId?: string): any {
+    const now = Date.now();
+    for (const [id, c] of this.pendingSupportCalls.entries()) {
+      if (now - c.createdAt > 120000 || c.callerId === callerId) {
+        this.pendingSupportCalls.delete(id);
+      }
+    }
+
+    const callId = clientCallId || `supp_call_${now}_${Math.random().toString(36).slice(2, 6)}`;
+    const call = {
+      callId,
+      callerId,
+      callerName,
+      callerRole,
+      status: 'RINGING',
+      createdAt: now
+    };
+    this.pendingSupportCalls.set(callId, call);
+    return call;
+  }
+
+  getSupportCallStatus(query: { callId?: string; callerId?: string }): any {
+    if (query.callId) {
+      return this.pendingSupportCalls.get(query.callId) || null;
+    }
+    for (const c of this.pendingSupportCalls.values()) {
+      if (c.status === 'RINGING' || c.status === 'CONNECTED') {
+        if (!query.callerId || c.callerId === query.callerId) {
+          return c;
+        }
+      }
+    }
+    return null;
+  }
+
+  respondToSupportCall(callId: string, action: 'APPROVE' | 'DECLINE'): any {
+    let call = this.pendingSupportCalls.get(callId);
+    if (!call) {
+      for (const c of this.pendingSupportCalls.values()) {
+        if (c.status === 'RINGING') {
+          call = c;
+          break;
+        }
+      }
+    }
+    if (!call) return null;
+
+    if (action === 'APPROVE') {
+      call.status = 'CONNECTED';
+      call.approvedAt = Date.now();
+    } else {
+      call.status = 'DECLINED';
+      call.declinedAt = Date.now();
+    }
+    return call;
+  }
+
+  endSupportCall(callId?: string): any {
+    let call = callId ? this.pendingSupportCalls.get(callId) : null;
+    if (!call) {
+      for (const c of this.pendingSupportCalls.values()) {
+        if (c.status === 'RINGING' || c.status === 'CONNECTED') {
+          call = c;
+          break;
+        }
+      }
+    }
+    if (!call) return null;
+    call.status = 'ENDED';
+    call.endedAt = Date.now();
+    return call;
+  }
+
+  async getAllTicketsAsync(): Promise<SupportTicket[]> {
+    if (isDbAvailable()) {
+      try {
+        const ticketRows = await query<any>(
+          `SELECT id, user_id, user_name, user_role, user_phone, status, assigned_agent_id, created_at 
+           FROM support_tickets ORDER BY created_at DESC`
+        );
+        if (ticketRows && ticketRows.length > 0) {
+          const ticketsList: SupportTicket[] = [];
+          for (const tr of ticketRows) {
+            const msgRows = await query<any>(
+              `SELECT id, ticket_id, sender_id, sender_role, content, timestamp 
+               FROM support_messages WHERE ticket_id = $1 ORDER BY timestamp ASC`,
+              [tr.id]
+            );
+            ticketsList.push({
+              id: tr.id,
+              userId: tr.user_id,
+              userName: tr.user_name,
+              userRole: tr.user_role,
+              userPhone: tr.user_phone,
+              status: tr.status,
+              assignedAgentId: tr.assigned_agent_id,
+              createdAt: tr.created_at instanceof Date ? tr.created_at.toISOString() : String(tr.created_at),
+              messages: (msgRows || []).map(m => ({
+                id: m.id,
+                ticketId: m.ticket_id,
+                senderId: m.sender_id,
+                senderRole: m.sender_role,
+                content: m.content,
+                timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp)
+              }))
+            });
+          }
+
+          // Merge seeded in-memory tickets so tickets for Arjun, Dulquer, and Kochi Arena are always present
+          const dbIds = new Set(ticketsList.map(t => t.id));
+          for (const memTicket of this.tickets.values()) {
+            if (!dbIds.has(memTicket.id)) {
+              ticketsList.push(memTicket);
+            }
+          }
+
+          return ticketsList;
+        }
+      } catch (err) {
+        console.warn('[Support] DB ticket load error:', err);
+      }
+    }
+    return this.getAllTickets();
+  }
+
   getAllTickets(): SupportTicket[] {
     return Array.from(this.tickets.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

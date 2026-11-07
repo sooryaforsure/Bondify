@@ -115,16 +115,7 @@
         <div class="flex items-center gap-3">
           
           <!-- Normal User Premium Button / Status -->
-          <div id="normal-user-premium-area" class="hidden">
-            <button onclick="unlockPremiumSubscription()" id="btn-upgrade-premium" class="px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow hover:scale-105 transition flex items-center gap-1.5">
-              <i class="fa-solid fa-crown text-xs"></i>
-              <span>Upgrade to Premium (₹199)</span>
-            </button>
-            <div id="badge-premium-active" class="hidden px-3 py-1 rounded-full bg-blue-950/40 border border-blue-500/40 text-blue-300 text-xs font-bold flex items-center gap-1.5">
-              <i class="fa-solid fa-circle-check text-xs"></i>
-              <span>VIP Premium Active</span>
-            </div>
-          </div>
+          <div id="normal-user-premium-area" class="hidden"></div>
 
           <!-- Celebrity Total Earnings Badge -->
           <div id="celebrity-earnings-area" class="hidden px-3 py-1 rounded-full bg-blue-950/40 border border-blue-500/40 text-blue-300 text-xs font-bold flex items-center gap-1.5">
@@ -1063,6 +1054,71 @@
           <span class="text-xs px-3 py-1 rounded-full bg-blue-950/40 border border-blue-500/30 text-blue-300 font-bold">Online & Active</span>
         </div>
 
+        <!-- Support Incoming VoIP Call Alert Terminal -->
+        <div id="support-incoming-call-box" class="hidden bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 text-center shadow-2xl animate-fade-in relative overflow-hidden mb-4">
+          <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 animate-pulse"></div>
+          
+          <div class="w-16 h-16 rounded-full bg-emerald-600/30 text-emerald-300 flex items-center justify-center mx-auto mb-3 text-2xl animate-pulse border border-emerald-400/40 relative">
+            <i class="fa-solid fa-phone-volume"></i>
+            <div class="absolute -inset-2 rounded-full border-2 border-dashed border-emerald-400 animate-spin"></div>
+          </div>
+
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold mb-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span>Incoming Helpdesk VoIP Audio Call</span>
+          </div>
+
+          <h3 id="support-caller-name" class="text-lg font-extrabold text-white mb-1">Arjun Nair</h3>
+          <p id="support-caller-role-text" class="text-xs text-slate-300 mb-5">User • Requesting Live Voice Assistance</p>
+
+          <div class="flex items-center justify-center gap-3 max-w-xs mx-auto">
+            <button onclick="declineSupportIncomingCall()" class="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-phone-slash"></i>
+              <span>Decline</span>
+            </button>
+            <button onclick="approveSupportIncomingCall()" class="flex-1 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-phone-volume"></i>
+              <span>Accept Call</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Support Active Live VoIP Call Card -->
+        <div id="support-active-call-box" class="hidden bg-slate-900/90 border-2 border-emerald-500/50 rounded-2xl p-5 shadow-2xl relative overflow-hidden transition-all duration-300 mb-4">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 relative z-10">
+            <div class="flex items-center gap-3.5">
+              <div class="relative">
+                <img id="support-active-caller-avatar" src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" class="w-14 h-14 rounded-full object-cover border-2 border-emerald-400 shadow-md">
+                <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-900 rounded-full animate-ping"></span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 id="support-active-caller-name" class="text-sm font-bold text-white">Arjun Nair</h4>
+                  <span id="support-active-caller-badge" class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">User Helpdesk Call</span>
+                </div>
+                <p class="text-xs text-emerald-400 font-semibold mt-0.5 flex items-center gap-1.5">
+                  <i class="fa-solid fa-phone-volume"></i>
+                  <span>Live HD Voice Support Call Connected</span>
+                </p>
+                <div class="text-xs font-mono font-bold text-slate-300 mt-0.5 flex items-center gap-2">
+                  <span>Duration:</span>
+                  <span id="support-desk-call-timer" class="text-emerald-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">00:00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2.5">
+              <button onclick="toggleSupportDeskMute()" id="btn-support-desk-mute" class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-sm shadow cursor-pointer">
+                <i class="fa-solid fa-microphone"></i>
+              </button>
+              <button onclick="endSupportDeskCall()" class="px-4 py-2 rounded-full bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-phone-slash"></i>
+                <span>End Call</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Support Ticket Stream -->
         <div class="fc-glass-card overflow-hidden shadow-2xl flex flex-col h-[520px]">
           <div class="p-3.5 bg-slate-900/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
@@ -1756,8 +1812,10 @@
 
   <!-- Dedicated Unmuted Audio Element for Crystal-Clear Two-Way Audio Calling -->
   <audio id="vip-remote-audio" autoplay playsinline></audio>
+  <audio id="support-remote-audio" autoplay playsinline></audio>
+  <audio id="support-user-voip-audio" autoplay playsinline></audio>
 
   <!-- APPLICATION LOGIC JS -->
-  <script src="/app.js?v=43"></script>
+  <script src="/app.js?v=45"></script>
 </body>
 </html>

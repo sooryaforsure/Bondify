@@ -682,6 +682,149 @@ exports.handler = async (event) => {
     };
   }
 
+  // --- Support Desk & VoIP Calling System ---
+  if ((path === '/support/tickets' || path === '/api/support/tickets') && method === 'GET') {
+    const supportFile = pathModule.join(os.tmpdir(), 'bondify_support_store.json');
+    let tickets = [];
+    try {
+      if (fs.existsSync(supportFile)) {
+        tickets = JSON.parse(fs.readFileSync(supportFile, 'utf8'));
+      }
+    } catch {}
+    if (!tickets || tickets.length === 0) {
+      tickets = [
+        {
+          id: 'ticket_sample_101',
+          userId: 'usr_normal_1',
+          userName: 'Arjun Nair',
+          userRole: 'NORMAL',
+          userPhone: '+919876543210',
+          status: 'IN_PROGRESS',
+          createdAt: new Date(Date.now() - 7200000).toISOString(),
+          messages: [
+            { id: 'msg_1', ticketId: 'ticket_sample_101', senderId: 'usr_normal_1', senderRole: 'NORMAL', content: 'Hello, need assistance with ticket cancellation policy.', timestamp: new Date(Date.now() - 7200000).toISOString() },
+            { id: 'msg_2', ticketId: 'ticket_sample_101', senderId: 'usr_support_1', senderRole: 'SUPPORT', content: 'Hi Arjun! You can cancel up to 48 hours before the event starts.', timestamp: new Date(Date.now() - 3600000).toISOString() }
+          ]
+        },
+        {
+          id: 'ticket_celeb_201',
+          userId: 'usr_celeb_1',
+          userName: 'Dulquer Sithara',
+          userRole: 'CELEBRITY',
+          userPhone: '+919876543212',
+          status: 'IN_PROGRESS',
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          messages: [
+            { id: 'msg_c1', ticketId: 'ticket_celeb_201', senderId: 'usr_celeb_1', senderRole: 'CELEBRITY', content: 'Hi Support Desk, please verify my VIP Fan Line configuration.', timestamp: new Date(Date.now() - 3600000).toISOString() },
+            { id: 'msg_c2', ticketId: 'ticket_celeb_201', senderId: 'usr_support_1', senderRole: 'SUPPORT', content: 'Hi Dulquer! Your VIP line is active and ready for incoming fan calls.', timestamp: new Date(Date.now() - 1800000).toISOString() }
+          ]
+        }
+      ];
+      try { fs.writeFileSync(supportFile, JSON.stringify(tickets), 'utf8'); } catch {}
+    }
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, tickets }) };
+  }
+
+  if ((path === '/support/messages' || path === '/api/support/messages') && method === 'POST') {
+    const supportFile = pathModule.join(os.tmpdir(), 'bondify_support_store.json');
+    let tickets = [];
+    try {
+      if (fs.existsSync(supportFile)) {
+        tickets = JSON.parse(fs.readFileSync(supportFile, 'utf8'));
+      }
+    } catch {}
+
+    const targetTicketId = body.ticketId || 'ticket_sample_101';
+    let ticket = tickets.find(t => t.id === targetTicketId);
+    if (!ticket) {
+      ticket = {
+        id: targetTicketId,
+        userId: body.senderId || 'usr_normal_1',
+        userName: body.senderRole === 'SUPPORT' ? 'Support Desk' : 'Arjun Nair',
+        userRole: body.senderRole || 'NORMAL',
+        userPhone: '+919876543210',
+        status: 'IN_PROGRESS',
+        createdAt: new Date().toISOString(),
+        messages: []
+      };
+      tickets.push(ticket);
+    }
+
+    const newMsg = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      ticketId: targetTicketId,
+      senderId: body.senderId || (body.senderRole === 'SUPPORT' ? 'usr_support_1' : 'usr_normal_1'),
+      senderRole: body.senderRole || 'NORMAL',
+      content: body.content || '',
+      timestamp: new Date().toISOString()
+    };
+    if (!ticket.messages) ticket.messages = [];
+    ticket.messages.push(newMsg);
+
+    try { fs.writeFileSync(supportFile, JSON.stringify(tickets), 'utf8'); } catch {}
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, message: newMsg, ticketId: targetTicketId }) };
+  }
+
+  // Support VoIP Calling Signaling
+  if ((path === '/support/call/ring' || path === '/api/support/call/ring') && method === 'POST') {
+    const callFile = pathModule.join(os.tmpdir(), 'bondify_support_calls.json');
+    const callId = body.callId || `supp_${Date.now()}`;
+    const call = {
+      callId,
+      callerId: body.callerId || 'usr_normal_1',
+      callerName: body.callerName || 'Arjun Nair',
+      callerRole: body.callerRole || 'NORMAL',
+      status: 'RINGING',
+      createdAt: Date.now()
+    };
+    try { fs.writeFileSync(callFile, JSON.stringify(call), 'utf8'); } catch {}
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
+  if ((path === '/support/call/status' || path === '/api/support/call/status') && method === 'GET') {
+    const callFile = pathModule.join(os.tmpdir(), 'bondify_support_calls.json');
+    let call = null;
+    try {
+      if (fs.existsSync(callFile)) {
+        call = JSON.parse(fs.readFileSync(callFile, 'utf8'));
+      }
+    } catch {}
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
+  if ((path === '/support/call/respond' || path === '/api/support/call/respond') && method === 'POST') {
+    const callFile = pathModule.join(os.tmpdir(), 'bondify_support_calls.json');
+    let call = null;
+    try {
+      if (fs.existsSync(callFile)) {
+        call = JSON.parse(fs.readFileSync(callFile, 'utf8'));
+        if (body.action === 'APPROVE') {
+          call.status = 'CONNECTED';
+          call.approvedAt = Date.now();
+        } else {
+          call.status = 'DECLINED';
+          call.declinedAt = Date.now();
+        }
+        fs.writeFileSync(callFile, JSON.stringify(call), 'utf8');
+      }
+    } catch {}
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
+  if ((path === '/support/call/end' || path === '/api/support/call/end') && method === 'POST') {
+    const callFile = pathModule.join(os.tmpdir(), 'bondify_support_calls.json');
+    let call = null;
+    try {
+      if (fs.existsSync(callFile)) {
+        call = JSON.parse(fs.readFileSync(callFile, 'utf8'));
+        call.status = 'ENDED';
+        call.endedAt = Date.now();
+        fs.writeFileSync(callFile, JSON.stringify(call), 'utf8');
+      }
+    } catch {}
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, call }) };
+  }
+
   if (path === '/admin/ban' && method === 'POST') {
     const user = users.find(u => u.id === body.userId);
     if (user) user.isBanned = body.isBanned;
